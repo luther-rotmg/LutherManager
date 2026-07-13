@@ -109,6 +109,19 @@ export class Combat {
         throw new Error('Must be run inside Hive client');
     }
 
+    /** Allow locally fired projectiles to pass through cover objects. */
+    static enableProjectileNoclip(): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    static disableProjectileNoclip(): void {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    static isProjectileNoclipEnabled(): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
     /**
      * Shot accuracy since tracking began (or since the last reset).
      * Returns a 0–1 fraction (multiply by 100 for a percentage).

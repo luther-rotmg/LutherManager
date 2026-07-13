@@ -75,10 +75,16 @@ function sdkMatchesPackaged(packagedSdkDir: string, targetDir: string, packagedV
     join('dist', 'events.js'),
     join('dist', 'types', 'events.d.ts'),
     join('dist', 'types', 'index.d.ts'),
+    join('dist', 'combat', 'Combat.js'),
+    join('dist', 'types', 'combat', 'Combat.d.ts'),
+    join('dist', 'walking', 'Walking.js'),
+    join('dist', 'types', 'walking', 'Walking.d.ts'),
     join('dist', 'ui', 'Panel.js'),
     join('dist', 'types', 'ui', 'Panel.d.ts'),
     join('src', 'events.ts'),
     join('src', 'types', 'events.ts'),
+    join('src', 'combat', 'Combat.ts'),
+    join('src', 'walking', 'Walking.ts'),
     join('src', 'ui', 'Panel.ts'),
   ];
 

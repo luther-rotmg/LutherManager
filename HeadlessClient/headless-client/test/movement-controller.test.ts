@@ -35,3 +35,33 @@ test('MovementController emits reached target and clears target state', () => {
   assert.deepEqual(update.reached, { x: 1, y: 1 });
   assert.equal(movement.hasTarget(), false);
 });
+
+test('MovementController waits for authoritative position before confirming a waypoint', () => {
+  const movement = new MovementController();
+  movement.setTarget({ x: 1, y: 0 }, 0.1);
+
+  const predicted = movement.update(
+    {
+      localPos: { x: 0, y: 0 },
+      serverPos: { x: 0, y: 0 },
+      playerSpeed: 75,
+      playerSpeedBoost: 0,
+    },
+    1000,
+  );
+  assert.deepEqual(predicted.pos, { x: 1, y: 0 });
+  assert.equal(predicted.reached, undefined);
+  assert.equal(movement.hasTarget(), true);
+
+  const confirmed = movement.update(
+    {
+      localPos: predicted.pos,
+      serverPos: { x: 1, y: 0 },
+      playerSpeed: 75,
+      playerSpeedBoost: 0,
+    },
+    100,
+  );
+  assert.deepEqual(confirmed.reached, { x: 1, y: 0 });
+  assert.equal(movement.hasTarget(), false);
+});

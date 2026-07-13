@@ -58,6 +58,13 @@ export type {
   CombatTile,
   CombatWorldSnapshot,
 } from './combat-tracker';
+export { ExplorativePathfinder } from './explorative-pathfinder';
+export type {
+  PathfindingDataProvider,
+  PathfindingStep,
+  PathPoint,
+  PathTarget,
+} from './explorative-pathfinder';
 export { AutoCombatController } from './auto-combat';
 export type {
   AutoAbilityOptions,

@@ -888,7 +888,7 @@ const packetDefinitions: DefsFile = {
         },
         {
           "name": "originType",
-          "type": "int16"
+          "type": "uint16"
         },
         {
           "name": "color",

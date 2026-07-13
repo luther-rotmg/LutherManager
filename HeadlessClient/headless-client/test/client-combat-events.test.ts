@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DamagePacket, Packet, PlayerData } from 'realmlib';
+import { DamagePacket, Packet, PlayerData, PlayerShootPacket } from 'realmlib';
 import {
   Client,
   type ClientDamageTakenEvent,
@@ -21,6 +21,24 @@ test('local shots emit their projectile details', () => {
     attackIndex: -1,
     angle: 0,
   });
+});
+
+test('shots use the authoritative server position when local movement has drifted', () => {
+  const client = harness();
+  const sent: Packet[] = [];
+  Object.assign(client as unknown as Record<string, unknown>, {
+    io: { send: (packet: Packet) => sent.push(packet) },
+    pos: { x: 20, y: 20 },
+    serverPos: { x: 4, y: 4 },
+  });
+
+  assert.equal(client.shootAt({ x: 5, y: 4 }, 0), true);
+  const shot = sent.find((packet): packet is PlayerShootPacket => packet instanceof PlayerShootPacket);
+  assert.ok(shot);
+  assert.deepEqual({ x: shot.playerPos.x, y: shot.playerPos.y }, { x: 4, y: 4 });
+  assert.ok(Math.abs(shot.startingPos.x - 4.3) < 1e-9);
+  assert.equal(shot.startingPos.y, 4);
+  assert.equal(shot.angle, 0);
 });
 
 test('predicted damage emits once when the server confirms the same projectile', () => {

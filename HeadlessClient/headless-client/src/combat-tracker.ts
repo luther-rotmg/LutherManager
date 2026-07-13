@@ -84,6 +84,7 @@ export interface CombatDataProvider {
   getObject(type: number): CombatObjectDefinition | undefined;
   getProjectile(objectType: number, projectileId: number): CombatProjectileDefinition | undefined;
   getTileDamage?(tileType: number): number | undefined;
+  tileIsBlockingWalk?(tileType: number): boolean;
 }
 
 export interface CombatEntity {
@@ -152,6 +153,7 @@ export class CombatTracker {
   private readonly projectiles = new Map<string, ActiveProjectile>();
   private readonly shotTimes: number[] = [];
   private readonly hitTimes: number[] = [];
+  private projectileNoclipEnabled = false;
 
   constructor(
     private readonly data: CombatDataProvider,
@@ -161,6 +163,14 @@ export class CombatTracker {
 
   clear(): void {
     this.projectiles.clear();
+  }
+
+  setProjectileNoclip(enabled: boolean): void {
+    this.projectileNoclipEnabled = enabled;
+  }
+
+  isProjectileNoclipEnabled(): boolean {
+    return this.projectileNoclipEnabled;
   }
 
   removeOwner(ownerId: number): void {
@@ -385,20 +395,25 @@ export class CombatTracker {
       return true;
     }
 
-    for (const cover of world.covers.get(tileKey(tileX, tileY)) ?? []) {
-      if (cover.objectId === projectile.ownerId) {
-        continue;
-      }
-      const definition = this.data.getObject(cover.type);
-      if (!definition) {
-        continue;
-      }
-      const blocksOwnShot = projectile.side !== 'own' || !definition.isEnemy;
-      const blocksProjectile = !!definition.enemyOccupySquare
-        || (!projectile.definition.passesCover && definition.occupySquare);
-      if (blocksOwnShot && blocksProjectile) {
-        this.sendOtherHit(projectile, time, cover.objectId);
-        return true;
+    const skipsCover = this.projectileNoclipEnabled
+      && projectile.side === 'own'
+      && projectile.ownerId === world.snapshot.playerId;
+    if (!skipsCover) {
+      for (const cover of world.covers.get(tileKey(tileX, tileY)) ?? []) {
+        if (cover.objectId === projectile.ownerId) {
+          continue;
+        }
+        const definition = this.data.getObject(cover.type);
+        if (!definition) {
+          continue;
+        }
+        const blocksOwnShot = projectile.side !== 'own' || !definition.isEnemy;
+        const blocksProjectile = !!definition.enemyOccupySquare
+          || (!projectile.definition.passesCover && definition.occupySquare);
+        if (blocksOwnShot && blocksProjectile) {
+          this.sendOtherHit(projectile, time, cover.objectId);
+          return true;
+        }
       }
     }
 

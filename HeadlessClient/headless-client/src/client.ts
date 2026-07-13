@@ -78,6 +78,7 @@ import { CombatTracker } from './combat-tracker';
 import { BUILD_VERSION, GAME_ID, GAME_PORT, HELLO_TOKEN } from './constants';
 import { config } from './config';
 import { ClientEvent } from './events';
+import { ExplorativePathfinder } from './explorative-pathfinder';
 import { MovementController } from './movement-controller';
 import { RealmPortal, ClientOptions, ClientServer, TrackedObject, TrackedTile } from './models';
 import { PortalTracker } from './portal-tracker';
@@ -91,6 +92,40 @@ export const VAULT_CHEST_OBJECT_TYPE = 1284;
 export const POTION_VAULT_OBJECT_TYPE = 1859;
 export const MAIN_INVENTORY_SLOT_IDS = [4, 5, 6, 7, 8, 9, 10, 11] as const;
 export const BACKPACK_SLOT_IDS = [12, 13, 14, 15, 16, 17, 18, 19] as const;
+
+enum AoeEffectId {
+  Quiet = 2,
+  Weak = 3,
+  Slowed = 4,
+  Sick = 5,
+  Dazed = 6,
+  Stunned = 7,
+  Blind = 8,
+  Hallucinating = 9,
+  Drunk = 10,
+  Confused = 11,
+  StunImmune = 12,
+  Invisible = 13,
+  Paralyzed = 14,
+  Speedy = 15,
+  Bleeding = 16,
+  Stasis = 22,
+  StasisImmune = 23,
+  ArmorBroken = 27,
+  Hexed = 28,
+  NinjaSpeedy = 29,
+  Unstable = 30,
+  Darkness = 31,
+  Petrified = 35,
+  PetrifiedImmune = 36,
+  Curse = 38,
+  Silenced = 48,
+}
+
+/** Effects ProdMafia applies locally from AOE before the authoritative NEWTICK. */
+const LOCALLY_APPLIED_AOE_EFFECTS = new Set<number>(Object.values(AoeEffectId).filter(
+  (value): value is number => typeof value === 'number',
+));
 
 export interface PacketTraffic {
   direction: 'incoming' | 'outgoing';
@@ -189,6 +224,7 @@ export class Client extends EventEmitter {
   private readonly lifecycle = new ClientLifecycle();
   private readonly timers = new TimerBag();
   private readonly movement = new MovementController();
+  private readonly pathfinder: ExplorativePathfinder;
   private readonly portalTracker = new PortalTracker();
   private readonly autoNexus: AutoNexusMonitor;
   private readonly combat: CombatTracker | undefined;
@@ -196,7 +232,9 @@ export class Client extends EventEmitter {
   private readonly commands = new CommandSender(() => ({
     io: this.io,
     time: this.time(),
-    pos: this.pos,
+    // Gameplay commands must originate where the server last placed us. Local
+    // dead reckoning can be ahead when movement stalls or crosses a map portal.
+    pos: this.serverPos ?? this.pos,
     objectId: this.objectId,
     player: this.player,
     nextBulletId: () => this.nextBulletId++ % 128,
@@ -265,7 +303,8 @@ export class Client extends EventEmitter {
   private posKnown = false;
   /** Latest authoritative self-position the server reported via NewTick. Drives movement so we never outrun the server. */
   private serverPos: { x: number; y: number } | undefined;
-  private connectStart = 0;
+  /** Gameplay-clock epoch. It intentionally survives every socket/map reconnect. */
+  private connectStart = Date.now();
   private lastFrameTime = 0;
   private lastGroundDamageAt = 0;
   private tickCount = 0;
@@ -336,6 +375,7 @@ export class Client extends EventEmitter {
     this.accessToken = opts.accessToken;
     this.clientToken = opts.clientToken;
     this.wantVault = opts.autoEnterVault ?? config.autoEnterVault;
+    this.pathfinder = new ExplorativePathfinder(opts.combatData);
     this.autoNexus = new AutoNexusMonitor((trigger) => {
       console.warn(
         `${this.tag} autonexus at ${trigger.hp}/${trigger.maxHp} HP ` +
@@ -445,9 +485,36 @@ export class Client extends EventEmitter {
     this.commands.say(message);
   }
 
-  /** Walks the player toward a position (cleared on arrival, emits 'reachedTarget'). */
-  moveTo(target: { x: number; y: number }, arriveThreshold = config.arriveThreshold): void {
+  /** Walks directly toward a position without pathfinding. */
+  moveTo(target: { x: number; y: number }, arriveThreshold = config.arriveThreshold): boolean {
+    if (!validMoveTarget(target, arriveThreshold)) {
+      return false;
+    }
+    this.pathfinder.clearTarget();
     this.movement.setTarget(target, arriveThreshold);
+    return true;
+  }
+
+  /** Optimistically pathfinds toward a position using streamed map knowledge. */
+  pathfindingWalkTo(target: { x: number; y: number }, arriveThreshold = config.arriveThreshold): boolean {
+    if (!this.pathfinder.setTarget(target, arriveThreshold)) {
+      return false;
+    }
+    this.movement.clear();
+    return true;
+  }
+
+  stopMoving(): void {
+    this.pathfinder.clearTarget();
+    this.movement.clear();
+  }
+
+  isMoving(): boolean {
+    return this.pathfinder.hasTarget() || this.movement.hasTarget();
+  }
+
+  getNavigationPath(): Array<{ x: number; y: number }> {
+    return this.pathfinder.getRemainingPath();
   }
 
   /** Short account label used in logs and console commands. */
@@ -507,7 +574,8 @@ export class Client extends EventEmitter {
   debugInfo(): Record<string, unknown> {
     const player = this.player;
     const now = Date.now();
-    const target = this.movement.getTarget();
+    const target = this.pathfinder.getTarget() ?? this.movement.getTarget();
+    const waypoint = this.movement.getTarget();
     return {
       alias: this.opts.alias,
       lifecycle: this.lifecycle.current,
@@ -526,6 +594,8 @@ export class Client extends EventEmitter {
       stalledDroppedPackets: this.stallQueueDropped,
       movementTarget: target,
       movementDistance: target ? Math.hypot(target.x - this.pos.x, target.y - this.pos.y) : undefined,
+      movementWaypoint: waypoint,
+      navigationWaypoints: this.pathfinder.getRemainingPath().length,
       localPos: `(${this.pos.x.toFixed(2)}, ${this.pos.y.toFixed(2)})`,
       serverPos: this.serverPos ? `(${this.serverPos.x.toFixed(2)}, ${this.serverPos.y.toFixed(2)})` : 'unknown',
       positionDrift: this.serverPos ? Math.hypot(this.pos.x - this.serverPos.x, this.pos.y - this.serverPos.y) : undefined,
@@ -687,8 +757,7 @@ export class Client extends EventEmitter {
   moveToObject(objectId: number, arriveThreshold = config.arriveThreshold): boolean {
     const object = this.objects.get(objectId);
     if (!object) return false;
-    this.moveTo({ x: object.x, y: object.y }, arriveThreshold);
-    return true;
+    return this.moveTo({ x: object.x, y: object.y }, arriveThreshold);
   }
 
   /** Realm portal by name (case-insensitive), if currently visible. */
@@ -1392,6 +1461,26 @@ export class Client extends EventEmitter {
     return this.autoCombat?.getState();
   }
 
+  enableProjectileNoclip(): boolean {
+    return this.setProjectileNoclip(true);
+  }
+
+  disableProjectileNoclip(): void {
+    this.combat?.setProjectileNoclip(false);
+  }
+
+  setProjectileNoclip(enabled: boolean): boolean {
+    if (!this.combat) {
+      return false;
+    }
+    this.combat.setProjectileNoclip(enabled);
+    return true;
+  }
+
+  isProjectileNoclipEnabled(): boolean {
+    return this.combat?.isProjectileNoclipEnabled() ?? false;
+  }
+
   accuracy(): number {
     return this.combat?.accuracy() ?? 0;
   }
@@ -1829,7 +1918,7 @@ export class Client extends EventEmitter {
     return `[${this.opts.alias}]`;
   }
 
-  /** Milliseconds since the current socket connected. */
+  /** Milliseconds since this client instance started, matching Flash getTimer(). */
   private time(): number {
     return Date.now() - this.connectStart;
   }
@@ -1876,8 +1965,11 @@ export class Client extends EventEmitter {
     this.lastGroundDamageAt = 0;
     this.objects.clear();
     this.tiles.clear();
+    this.pathfinder.resetMap();
     this.recentObjectTypes.clear();
     this.predictedPlayerDamage.clear();
+    this.nextBulletId = 1;
+    this.commands.resetMap();
     this.autoNexus.reset();
     this.autoNexus.setSafeMap(true);
     this.combat?.clear();
@@ -1888,6 +1980,7 @@ export class Client extends EventEmitter {
   /** Clears vault navigation progress (target, portal id, retry counters). */
   private clearNavState(): void {
     this.movement.clear();
+    this.pathfinder.clearTarget();
     this.vaultPortalId = undefined;
     this.usePortalAttempts = 0;
     this.lastUsePortalTick = -100;
@@ -1982,7 +2075,7 @@ export class Client extends EventEmitter {
     const found = this.portalTracker.findVaultPortal(this.objects);
     if (found) {
       this.vaultPortalId = found.id;
-      this.movement.setTarget({ x: found.object.x, y: found.object.y }, config.arriveThreshold);
+      this.moveTo({ x: found.object.x, y: found.object.y }, config.arriveThreshold);
       console.log(
         `${this.tag} found vault portal "${found.object.name}" (id ${found.id}, type ${found.object.type}) ` +
           `at (${found.object.x.toFixed(1)}, ${found.object.y.toFixed(1)}) → navigating`,
@@ -1999,7 +2092,7 @@ export class Client extends EventEmitter {
     const found = this.portalTracker.findPortalByType(this.objects, nav.type);
     if (found) {
       nav.portalId = found.id;
-      this.movement.setTarget({ x: found.object.x, y: found.object.y }, config.arriveThreshold);
+      this.moveTo({ x: found.object.x, y: found.object.y }, config.arriveThreshold);
       console.log(
         `${this.tag} found ${nav.label} portal "${found.object.name}" (id ${found.id}, type ${found.object.type}) ` +
           `at (${found.object.x.toFixed(1)}, ${found.object.y.toFixed(1)}) → navigating`,
@@ -2145,7 +2238,6 @@ export class Client extends EventEmitter {
       return; // stopped, reconnected, or watchdog-killed while awaiting the refresh
     }
     this.lifecycle.transition(ClientLifecycleState.Connected);
-    this.connectStart = Date.now();
     // Note: lastActivityAt stays 0 until the server actually sends a packet, so
     // the handshake timeout bounds "connected but server never replied to Hello".
     console.log(`${this.tag} socket connected → sending Hello (gameId ${this.gameId})`);
@@ -2320,6 +2412,7 @@ export class Client extends EventEmitter {
     this.mapName = p.name;
     this.mapWidth = p.width;
     this.mapHeight = p.height;
+    this.pathfinder.setMapBounds(p.width, p.height);
     this.enteringVault = false;
     this.inVault = /vault/i.test(p.name);
     this.autoNexus.reset();
@@ -2359,7 +2452,7 @@ export class Client extends EventEmitter {
     }
   }
 
-  /** Records the assigned player object id and enables ally shot visibility. */
+  /** Records the assigned player object id and initializes ally-shot visibility. */
   private handleCreateSuccess(p: CreateSuccessPacket): void {
     this.lifecycle.transition(ClientLifecycleState.InWorld);
     this.reconnectAttempts = 0; // a successful entry resets the backoff ramp
@@ -2367,7 +2460,8 @@ export class Client extends EventEmitter {
     this.lastFrameTime = this.time();
     console.log(`${this.tag} ✓✓ IN-WORLD as objectId ${p.objectId}`);
     const show = new ChangeAllyShootPacket();
-    show.toggle = 1;
+    // ProdMafia and Exalt send 0 for the normal "show ally shots" preference.
+    show.toggle = 0;
     this.io.send(show);
     this.emit(ClientEvent.Ready, p.objectId);
   }
@@ -2381,6 +2475,7 @@ export class Client extends EventEmitter {
     }
     for (const tile of p.tiles) {
       this.tiles.set(`${tile.x},${tile.y}`, { x: tile.x, y: tile.y, type: tile.type });
+      this.pathfinder.observeTile(tile.x, tile.y, tile.type);
     }
     for (const obj of p.newObjects) {
       if (obj.status.objectId === this.objectId) {
@@ -2401,6 +2496,12 @@ export class Client extends EventEmitter {
           player: processObject(obj),
           rawStats: this.rawStats(obj.status.stats),
         });
+        this.pathfinder.upsertObject(
+          obj.status.objectId,
+          obj.objectType,
+          obj.status.pos.x,
+          obj.status.pos.y,
+        );
         this.recentObjectTypes.set(obj.status.objectId, obj.objectType);
         if (obj.objectType === PortalType.RealmPortal) {
           this.trackRealmPortal(obj.status);
@@ -2409,6 +2510,7 @@ export class Client extends EventEmitter {
     }
     for (const id of p.drops) {
       this.objects.delete(id);
+      this.pathfinder.removeObject(id);
       this.portalTracker.delete(id);
     }
     this.maybeDumpObjects();
@@ -2438,7 +2540,7 @@ export class Client extends EventEmitter {
   private updateCombat(now: number): void {
     this.combat?.update(now, {
       playerId: this.objectId,
-      playerPos: this.pos,
+      playerPos: this.serverPos ?? this.pos,
       mapWidth: this.mapWidth,
       mapHeight: this.mapHeight,
       entities: this.objects.values(),
@@ -2501,8 +2603,56 @@ export class Client extends EventEmitter {
 
   /** Advances the local position toward a requested movement target. */
   private updateTarget(dt: number): void {
-    if (!this.movement.hasTarget()) {
+    if (!this.pathfinder.hasTarget()) {
+      if (!this.movement.hasTarget()) {
+        return;
+      }
+      const direct = this.movement.update(
+        {
+          localPos: this.pos,
+          serverPos: this.serverPos,
+          playerSpeed: this.player?.spd ?? 0,
+          playerSpeedBoost: this.player?.spdBoost ?? 0,
+        },
+        dt,
+      );
+      this.pos = direct.pos;
+      if (direct.stalled && this.serverPos) {
+        console.warn(
+          `${this.tag} direct movement stalled - server stuck ${direct.stalled.distance.toFixed(1)} tiles from target ` +
+            `at (${this.serverPos.x.toFixed(2)},${this.serverPos.y.toFixed(2)})`,
+        );
+      }
+      if (direct.reached) {
+        console.log(`${this.tag} reached move target`);
+        this.emit(ClientEvent.ReachedTarget, direct.reached);
+      }
       return;
+    }
+    const authoritativePos = this.serverPos ?? this.pos;
+    const navigation = this.pathfinder.next(authoritativePos);
+    if (navigation.reached) {
+      this.movement.clear();
+      console.log(`${this.tag} reached move target`);
+      this.emit(ClientEvent.ReachedTarget, navigation.reached);
+      return;
+    }
+    if (!navigation.waypoint || navigation.waypointThreshold === undefined) {
+      this.movement.clear();
+      if (navigation.noPath && navigation.replanned) {
+        const target = this.pathfinder.getTarget();
+        console.warn(
+          `${this.tag} no path to (${target?.x.toFixed(2)},${target?.y.toFixed(2)}) with current map knowledge`,
+        );
+      }
+      return;
+    }
+    const activeWaypoint = this.movement.getTarget();
+    if (!activeWaypoint
+      || activeWaypoint.x !== navigation.waypoint.x
+      || activeWaypoint.y !== navigation.waypoint.y
+      || activeWaypoint.threshold !== navigation.waypointThreshold) {
+      this.movement.setTarget(navigation.waypoint, navigation.waypointThreshold);
     }
     const update = this.movement.update(
       {
@@ -2515,15 +2665,12 @@ export class Client extends EventEmitter {
     );
     this.pos = update.pos;
     if (update.stalled && this.serverPos) {
+      this.pathfinder.reportStall(this.serverPos);
+      this.movement.clear();
       console.warn(
-        `${this.tag} ⚠ movement stalled — server stuck ${update.stalled.distance.toFixed(1)} tiles from target ` +
-          `at (${this.serverPos.x.toFixed(2)},${this.serverPos.y.toFixed(2)}); likely a blocked path`,
+        `${this.tag} movement stalled ${update.stalled.distance.toFixed(1)} tiles from waypoint at ` +
+          `(${this.serverPos.x.toFixed(2)},${this.serverPos.y.toFixed(2)}); marking the next tile blocked and replanning`,
       );
-    }
-    if (update.reached) {
-      console.log(`${this.tag} reached move target`);
-      const reached = update.reached;
-      this.emit(ClientEvent.ReachedTarget, reached);
     }
   }
 
@@ -2556,6 +2703,7 @@ export class Client extends EventEmitter {
         if (tracked) {
           tracked.x = status.pos.x;
           tracked.y = status.pos.y;
+          this.pathfinder.upsertObject(status.objectId, tracked.type, tracked.x, tracked.y);
           tracked.player = processObjectStatus(status, tracked.player);
           Object.assign(tracked.rawStats ??= {}, this.rawStats(status.stats));
         }
@@ -2619,7 +2767,7 @@ export class Client extends EventEmitter {
   private tryUseVaultPortal(): void {
     if (
       this.vaultPortalId === undefined ||
-      this.movement.hasTarget() ||
+      this.pathfinder.hasTarget() ||
       this.inVault ||
       this.enteringVault ||
       this.usePortalAttempts >= 5 ||
@@ -2644,7 +2792,7 @@ export class Client extends EventEmitter {
     if (
       !nav ||
       nav.portalId === undefined ||
-      this.movement.hasTarget() ||
+      this.pathfinder.hasTarget() ||
       nav.attempts >= 5 ||
       this.tickCount - nav.lastTick < 4
     ) {
@@ -2716,23 +2864,58 @@ export class Client extends EventEmitter {
     this.combat?.trackEnemyShoot(p, ownerType, this.time());
   }
 
-  /** Acknowledges an area attack with the position the server currently knows. */
+  /** Processes and acknowledges an area attack using the current local frame state. */
   private handleAoe(p: AoePacket): void {
-    const playerPos = this.serverPos ?? this.pos;
-    if (
-      this.posKnown &&
-      Math.hypot(playerPos.x - p.pos.x, playerPos.y - p.pos.y) < p.radius &&
-      this.applyPredictedDamage(p.damage, p.armorPiercing, 'aoe')
-    ) {
+    const ackTime = this.time();
+    const ack = new AoeAckPacket();
+    ack.time = ackTime;
+
+    if (!this.player) {
+      this.io.send(ack);
       return;
     }
-    const ack = new AoeAckPacket();
-    ack.time = this.lastFrameTime;
-    if (this.posKnown) {
-      ack.position.x = this.pos.x;
-      ack.position.y = this.pos.y;
+
+    ack.position.x = this.pos.x;
+    ack.position.y = this.pos.y;
+    if ((this.player.condition & ConditionEffectBits.INVINCIBLE) !== 0) {
+      this.io.send(ack);
+      return;
+    }
+
+    if (Math.hypot(this.pos.x - p.pos.x, this.pos.y - p.pos.y) < p.radius) {
+      if (this.applyPredictedDamage(p.damage, p.armorPiercing, 'aoe')) {
+        return;
+      }
+      this.applyAoeCondition(p.effect);
     }
     this.io.send(ack);
+  }
+
+  /** Mirrors the local condition mutation performed by ProdMafia's GameObject.damage. */
+  private applyAoeCondition(effect: number): void {
+    const player = this.player;
+    const effectId = Math.trunc(effect);
+    if (!player || !LOCALLY_APPLIED_AOE_EFFECTS.has(effectId)) return;
+
+    if (effectId === AoeEffectId.Quiet) player.mp = 0;
+    const condition = player.condition >>> 0;
+    const condition2 = player.condition2 >>> 0;
+    const immune =
+      (effectId === AoeEffectId.Slowed && (condition2 & ConditionEffectBits2.SLOWED_IMMUNE) !== 0)
+      || (effectId === AoeEffectId.Dazed && (condition2 & ConditionEffectBits2.DAZED_IMMUNE) !== 0)
+      || (effectId === AoeEffectId.Stunned && (condition & ConditionEffectBits.STUN_IMMUNE) !== 0)
+      || (effectId === AoeEffectId.Paralyzed && (condition2 & ConditionEffectBits2.PARALYZED_IMMUNE) !== 0)
+      || (effectId === AoeEffectId.Stasis && (condition & ConditionEffectBits.STASIS_IMMUNE) !== 0)
+      || (effectId === AoeEffectId.ArmorBroken && (condition & ConditionEffectBits.ARMOR_BROKEN_IMMUNE) !== 0)
+      || (effectId === AoeEffectId.Petrified && (condition2 & ConditionEffectBits2.PETRIFIED_IMMUNE) !== 0)
+      || (effectId === AoeEffectId.Curse && (condition2 & ConditionEffectBits2.CURSE_IMMUNE) !== 0);
+    if (immune) return;
+
+    if (effectId < 32) {
+      player.condition = (condition | (1 << (effectId - 1))) >>> 0;
+    } else {
+      player.condition2 = (condition2 | (1 << (effectId - 32))) >>> 0;
+    }
   }
 
   /** Applies ProdMafia's local player-damage formula before hit acknowledgements. */
@@ -2969,6 +3152,13 @@ export class Client extends EventEmitter {
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function validMoveTarget(target: { x: number; y: number }, threshold: number): boolean {
+  return Number.isFinite(target.x)
+    && Number.isFinite(target.y)
+    && Number.isFinite(threshold)
+    && threshold >= 0;
 }
 
 function sameNumberArray(a: number[], b: number[]): boolean {

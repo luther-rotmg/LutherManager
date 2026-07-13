@@ -150,8 +150,9 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   Hive.world.getObject = World.getObject;
   Hive.world.getNearestObject = World.getNearestObject;
 
-  Walking.walkTo = (x: number, y: number) => { active(deps).moveTo({ x, y }); return true; };
-  Walking.walkToPosition = (position: Position) => { active(deps).moveTo(position); return true; };
+  Walking.walkTo = (x: number, y: number) => active(deps).moveTo({ x, y });
+  Walking.pathfindingWalkTo = (x: number, y: number) => active(deps).pathfindingWalkTo({ x, y });
+  Walking.walkToPosition = (position: Position) => active(deps).moveTo(position);
   Walking.walkToPortal = (name: string) => {
     const client = active(deps);
     const portal = client.getRealmPortal(name) ?? client.visibleObjects().find((object) => object.name?.toLowerCase() === name.toLowerCase());
@@ -168,6 +169,8 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   Walking.enterGuildHall = () => active(deps).enterGuildHall();
   Walking.enterDailyQuestRoom = () => active(deps).enterDailyQuestRoom();
   Walking.nexus = () => active(deps).escape();
+  Walking.stopMoving = () => active(deps).stopMoving();
+  Walking.isMoving = () => optional(deps)?.isMoving() ?? false;
   Walking.hasReached = (position: Position, tolerance = 0.5) => (optional(deps)?.distanceTo(position) ?? Infinity) <= tolerance;
 
   chat.say = (message: string) => active(deps).say(message);

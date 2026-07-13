@@ -203,9 +203,47 @@ test('cover resolves an own projectile with OTHERHIT before an enemy target', ()
   assert.equal(sent[0].targetId, 40);
 });
 
-test('projectile leaving map bounds reports SQUAREHIT', () => {
+test('projectile noclip lets a local projectile pass cover and hit an enemy', () => {
   const sent: Packet[] = [];
   const tracker = new CombatTracker(data(), (packet) => sent.push(packet));
+  assert.equal(tracker.isProjectileNoclipEnabled(), false);
+  tracker.setProjectileNoclip(true);
+  tracker.clear();
+  assert.equal(tracker.isProjectileNoclipEnabled(), true);
+  tracker.trackOwnShoot(ownShot(), 0);
+
+  tracker.update(600, world({
+    entities: [
+      { objectId: 40, type: 200, x: 3, y: 1 },
+      { objectId: 30, type: 100, x: 5, y: 1 },
+    ],
+  }));
+
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0] instanceof EnemyHitPacket);
+  assert.equal(sent[0].targetId, 30);
+});
+
+test('projectile noclip does not let enemy projectiles pass cover', () => {
+  const sent: Packet[] = [];
+  const tracker = new CombatTracker(data(), (packet) => sent.push(packet));
+  tracker.setProjectileNoclip(true);
+  tracker.trackEnemyShoot(enemyShot(), 100, 0);
+
+  tracker.update(600, world({
+    playerPos: { x: 5, y: 1 },
+    entities: [{ objectId: 40, type: 200, x: 3, y: 1 }],
+  }));
+
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0] instanceof OtherHitPacket);
+  assert.equal(sent[0].targetId, 40);
+});
+
+test('projectile noclip does not bypass map bounds', () => {
+  const sent: Packet[] = [];
+  const tracker = new CombatTracker(data(), (packet) => sent.push(packet));
+  tracker.setProjectileNoclip(true);
   const shot = ownShot();
   shot.startingPos.x = 9;
   tracker.trackOwnShoot(shot, 0);

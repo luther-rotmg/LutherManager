@@ -73,6 +73,13 @@ export interface PacketSink {
 export class CommandSender {
   constructor(private readonly state: () => CommandState) {}
 
+  /** Resets firing cadence and pattern state when a new player/map is loaded. */
+  resetMap(): void {
+    this.attackStart = -Infinity;
+    this.subattackStates.clear();
+    this.nextAbilityAt = -Infinity;
+  }
+
   send(packet: Packet): void {
     this.state().io?.send(packet);
   }

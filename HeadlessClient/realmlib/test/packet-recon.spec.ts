@@ -54,6 +54,8 @@ import {
   EmotePacket,
   StatsPacket,
   InvResultPacket,
+  AoePacket,
+  AoeAckPacket,
 } from '../src';
 
 /** Builds a Reader positioned at 0 over the given hex bytes. */
@@ -325,6 +327,34 @@ describe('RealmShark-reconciled packet round trips', () => {
 });
 
 describe('current-build packets reconciled from captured bytes', () => {
+  it('AoePacket consumes the ProdMafia field layout with no leftover bytes', () => {
+    const reader = hexReader('3fc00000c0100000406000001234ff40200000abcd0102030401');
+    const p = new AoePacket();
+    p.read(reader);
+    expect(p.pos.x).to.equal(1.5);
+    expect(p.pos.y).to.equal(-2.25);
+    expect(p.radius).to.equal(3.5);
+    expect(p.damage).to.equal(0x1234);
+    expect(p.effect).to.equal(0xff);
+    expect(p.duration).to.equal(2.5);
+    expect(p.origType).to.equal(0xabcd);
+    expect(p.color).to.equal(0x01020304);
+    expect(p.armorPiercing).to.equal(true);
+    expect(reader.remaining).to.equal(0);
+  });
+
+  it('AoeAckPacket writes the ProdMafia 12-byte payload', () => {
+    const p = new AoeAckPacket();
+    p.time = 0x01020304;
+    p.position.x = 1.5;
+    p.position.y = -2.25;
+    const writer = new Writer();
+    p.write(writer);
+    expect(writer.index).to.equal(12);
+    expect(writer.buffer.subarray(0, writer.index).toString('hex'))
+      .to.equal('010203043fc00000c0100000');
+  });
+
   it('ShootAckPacket reads the trailing short (no leftover)', () => {
     const reader = hexReader('00024d7d0001');
     const p = new ShootAckPacket();

@@ -45,6 +45,10 @@ export function installHeadlessCombatBridge(deps: BridgeDeps): void {
   Combat.setAutoAbility = (options: AutoAbilityOptions) => active(deps).configureAutoAbility(options);
   Combat.disableAutoAbility = () => active(deps).disableAutoAbility();
 
+  Combat.enableProjectileNoclip = () => active(deps).enableProjectileNoclip();
+  Combat.disableProjectileNoclip = () => active(deps).disableProjectileNoclip();
+  Combat.isProjectileNoclipEnabled = () => optional(deps)?.isProjectileNoclipEnabled() ?? false;
+
   Combat.accuracy = () => optional(deps)?.accuracy() ?? 0;
   Combat.recentAccuracy = (minutes) => optional(deps)?.recentAccuracy(minutes) ?? 0;
   Combat.resetAccuracy = () => active(deps).resetAccuracy();

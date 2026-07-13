@@ -3,10 +3,18 @@ import { Enemy } from '../types/entities/Enemy';
 
 export class Walking {
     /**
-     * Request movement toward a tile. Pass world **X** and **Y** as two separate numbers
+     * Walk directly toward a tile without pathfinding. Pass world **X** and **Y** as two separate numbers
      * (same units as engine/player world coordinates, e.g. from `Hive.self.getX()` / `getY()`).
      */
     static walkTo(x: number, y: number): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    /**
+     * Pathfind toward a tile. Unknown map space remains traversable while observed
+     * blocking ground and objects are routed around.
+     */
+    static pathfindingWalkTo(x: number, y: number): boolean {
         throw new Error('Must be run inside Hive client');
     }
 

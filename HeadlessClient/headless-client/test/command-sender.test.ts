@@ -106,6 +106,29 @@ test('CommandSender sends real subattack metadata and advances DefaultAngleIncr 
   assert.ok(Math.abs(sent[1]!.angle - 15 * Math.PI / 180) < 1e-6);
 });
 
+test('CommandSender resets firing cadence on map changes', () => {
+  const sent: PlayerShootPacket[] = [];
+  const commands = new CommandSender(() => ({
+    io: { send: (packet: Packet) => {
+      if (packet instanceof PlayerShootPacket) sent.push(packet);
+    } },
+    time: 1_000,
+    pos: { x: 1, y: 1 },
+    objectId: 77,
+    player: player([100]),
+    nextBulletId: () => sent.length,
+    weapon: () => ({ rateOfFire: 1, numProjectiles: 1, arcGap: 11.25 }),
+    ability: () => ({ usable: true, mpCost: 0, cooldownMs: 550, activateEffects: [] }),
+    trackShot: () => undefined,
+  }));
+
+  assert.equal(commands.shootAt({ x: 2, y: 1 }), true);
+  assert.equal(commands.shootAt({ x: 2, y: 1 }), false);
+  commands.resetMap();
+  assert.equal(commands.shootAt({ x: 2, y: 1 }), true);
+  assert.equal(sent.length, 2);
+});
+
 test('CommandSender does not shoot while petrified', () => {
   const sent: Packet[] = [];
   const petrified = player([100]);

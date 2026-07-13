@@ -58,7 +58,8 @@ export class MovementController {
     }
     const pos = this.stepToward(snapshot, dt);
     const stalled = this.detectStall(snapshot.serverPos, dt);
-    if (Math.hypot(this.target.x - pos.x, this.target.y - pos.y) < this.target.threshold) {
+    const confirmedPos = snapshot.serverPos ?? pos;
+    if (Math.hypot(this.target.x - confirmedPos.x, this.target.y - confirmedPos.y) < this.target.threshold) {
       const reached = { x: this.target.x, y: this.target.y };
       this.clear();
       return { pos, reached, stalled };
