@@ -1,0 +1,13 @@
+[
+  {
+    "guid": "your-email@example.com",
+    "password": "your-password",
+    "alias": "main",
+    "enterVault": false,
+    "plugins": ["ChatLogger"],
+    "createChar": {
+      "class": "Wizard",
+      "seasonal": true
+    }
+  }
+]

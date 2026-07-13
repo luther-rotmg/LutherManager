@@ -1,0 +1,112 @@
+/** Stat type IDs used in StatData. */
+export const StatType = {
+  MaxHP: 0,
+  HP: 1,
+  Size: 2,
+  MaxMP: 3,
+  MP: 4,
+  NextLevelExp: 5,
+  Exp: 6,
+  Level: 7,
+  // Inventory slots (8-19)
+  Inventory0: 8,
+  Inventory1: 9,
+  Inventory2: 10,
+  Inventory3: 11,
+  Inventory4: 12,
+  Inventory5: 13,
+  Inventory6: 14,
+  Inventory7: 15,
+  Inventory8: 16,
+  Inventory9: 17,
+  Inventory10: 18,
+  Inventory11: 19,
+  Attack: 20,
+  Defense: 21,
+  Speed: 22,
+  /** 24–25: Texture / unused in game protocol */
+  Vitality: 26,
+  Wisdom: 27,
+  Dexterity: 28,
+  Effects: 29,
+  Stars: 30,
+  Name: 31,
+  Texture1: 32,
+  NameStat: 31,
+  Texture2: 33,
+  Credits: 34,
+  AccountId: 38,
+  CurrentFame: 39,
+  /** Combined gear + exalt max-HP boost (subtract `WireExaltMaxHP` 111 for gear-only). */
+  HpBoost: 46,
+  /** Combined gear + exalt max-MP boost (subtract `WireExaltMaxMP` 112). */
+  MpBoost: 47,
+  /** Combined gear + exalt ATK bonus (subtract `WireExaltAttack` 105). */
+  AttackBonus: 48,
+  /** Combined gear + exalt DEF bonus (subtract `WireExaltDefense` 106). */
+  DefenseBonus: 49,
+  /** Combined gear + exalt SPD bonus (subtract `WireExaltSpeed` 107). */
+  SpeedBonus: 50,
+  /** Combined gear + exalt VIT bonus (subtract `WireExaltVitality` 108). */
+  VitalityBonus: 51,
+  /** Combined gear + exalt WIS bonus (subtract `WireExaltWisdom` 110). */
+  WisdomBonus: 52,
+  /** Combined gear + exalt DEX bonus (subtract `WireExaltDexterity` 109). */
+  DexterityBonus: 53,
+  OwnerAccountId: 54,
+  /** Current character alive fame (distinct from account `CurrentFame` 39). */
+  CharacterAliveFame: 57,
+  GuildName: 62,
+  GuildRank: 63,
+  OxygenBar: 64,
+  HealthStackCount: 73,
+  MagicStackCount: 74,
+  HasBackpack: 75,
+  Skin: 76,
+  PetInstanceId: 77,
+  Effects2: 95,
+  /**
+   * Player Status: exaltation-only slice folded into combined bonuses (see PlayerData gear split).
+   * These replace 123–126, 129–132 for combat/max-HP/max-MP exalt slices on the wire we see.
+   */
+  WireExaltAttack: 105,
+  WireExaltDefense: 106,
+  WireExaltSpeed: 107,
+  WireExaltVitality: 108,
+  WireExaltDexterity: 109,
+  WireExaltWisdom: 110,
+  WireExaltMaxHP: 111,
+  WireExaltMaxMP: 112,
+  ExaltedAttack: 123,
+  /** Player power level (stat 124). Exalted DEF on wire is `WireExaltDefense` 106. */
+  PowerLevel: 124,
+  ExaltedSpeed: 125,
+  ExaltedVitality: 126,
+  ExaltedWisdom: 129,
+  /** Seasonal / client: 0 = no backpack, 8 = backpack unlocked, 16 = backpack + extender (see `PlayerData`). */
+  BackpackTier: 130,
+  ExaltedMaxHP: 131,
+  ExaltedMaxMP: 132,
+  ExaltationDamageMultiplier: 133,
+  SinkLevel: 134,
+  // Live capture observed on this client: quick slots (116-118), backpack (131-138), extender (139-146)
+  QuickSlot0: 116,
+  QuickSlot1: 117,
+  QuickSlot2: 118,
+  Backpack0: 131,
+  Backpack1: 132,
+  Backpack2: 133,
+  Backpack3: 134,
+  Backpack4: 135,
+  Backpack5: 136,
+  Backpack6: 137,
+  Backpack7: 138,
+  Backpack8: 139,
+  Backpack9: 140,
+  Backpack10: 141,
+  Backpack11: 142,
+  Backpack12: 143,
+  Backpack13: 144,
+  Backpack14: 145,
+  Backpack15: 146,
+} as const;

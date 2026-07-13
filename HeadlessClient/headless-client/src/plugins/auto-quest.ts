@@ -1,0 +1,271 @@
+import { Classes, PortalType, QuestObjectIdPacket } from 'realmlib';
+import { Client } from '../client';
+import { ClientEvent } from '../events';
+import { RealmPortal, TrackedObject } from '../models';
+import { PluginRuntime } from '../plugin-runtime';
+import { EventHook, PacketHook, Plugin } from './decorators';
+
+type AutoQuestState =
+  | 'idle'
+  | 'walkingPortalArea'
+  | 'seekingPortal'
+  | 'walkingPortal'
+  | 'awaitingRealm'
+  | 'questing'
+  | 'stopped';
+
+const PORTAL_AREA = { x: 130, y: 110 };
+const DEFAULT_SHOOT_RANGE = 6;
+const DEFAULT_SHOOT_INTERVAL_MS = 450;
+const DEFAULT_QUEST_REFRESH_MS = 1200;
+const DEFAULT_MAX_SHOTS = 3;
+const DEFAULT_PORTAL_RETRY_MS = 1200;
+const DEFAULT_PORTAL_MAX_ATTEMPTS = 6;
+const DEFAULT_PORTAL_ARRIVE_THRESHOLD = 0.05;
+
+const PLAYER_TYPES = new Set<number>(Object.values(Classes).filter((value): value is number => typeof value === 'number'));
+const PORTAL_TYPES = new Set<number>(Object.values(PortalType).filter((value): value is number => typeof value === 'number'));
+
+/**
+ * Enters an open realm, tracks the current quest object, walks toward it, and
+ * periodically aims at nearby enemy-like objects.
+ */
+@Plugin({
+  name: 'AutoQuest',
+  description: 'Walks into a realm, follows QUESTOBJID targets, and shoots nearby enemies.',
+  author: 'realmlib',
+  version: '1.0.0',
+})
+export class AutoQuest {
+  private state: AutoQuestState = 'idle';
+  private targetPortal: RealmPortal | undefined;
+  private questObjectId = -1;
+  private lastShotAt = 0;
+  private lastQuestMoveAt = 0;
+  private lastPortalUseAt = 0;
+  private portalUseAttempts = 0;
+  private readonly failedPortalIds = new Set<number>();
+  private readonly shootRange = readPositiveNumber('AUTO_QUEST_SHOOT_RANGE', DEFAULT_SHOOT_RANGE);
+  private readonly shootIntervalMs = readPositiveInt('AUTO_QUEST_SHOOT_INTERVAL_MS', DEFAULT_SHOOT_INTERVAL_MS);
+  private readonly questRefreshMs = readPositiveInt('AUTO_QUEST_REFRESH_MS', DEFAULT_QUEST_REFRESH_MS);
+  private readonly maxShots = readPositiveInt('AUTO_QUEST_MAX_SHOTS', DEFAULT_MAX_SHOTS);
+  private readonly portalRetryMs = readPositiveInt('AUTO_QUEST_PORTAL_RETRY_MS', DEFAULT_PORTAL_RETRY_MS);
+  private readonly portalMaxAttempts = readPositiveInt('AUTO_QUEST_PORTAL_MAX_ATTEMPTS', DEFAULT_PORTAL_MAX_ATTEMPTS);
+  private readonly portalArriveThreshold = readPositiveNumber(
+    'AUTO_QUEST_PORTAL_ARRIVE_THRESHOLD',
+    DEFAULT_PORTAL_ARRIVE_THRESHOLD,
+  );
+
+  /**
+   * (Re)starts the run whenever the client reaches the Nexus — including after
+   * escaping back from a realm or the vault. EnterNexus fires once per nexus
+   * entry, so we re-arm unconditionally; the old `state === 'idle'` guard left
+   * the plugin permanently stuck after its first cycle (state never returns to
+   * 'idle'). A hard `stopped` is the one state we don't override.
+   */
+  @EventHook(ClientEvent.EnterNexus)
+  onEnterNexus(client: Client): void {
+    if (this.state === 'stopped') {
+      return;
+    }
+    this.failedPortalIds.clear();
+    this.targetPortal = undefined;
+    this.portalUseAttempts = 0;
+    this.questObjectId = -1;
+    this.state = 'walkingPortalArea';
+    console.log(`[${client.alias}] AutoQuest: walking to realm portal area`);
+    client.moveTo(PORTAL_AREA);
+  }
+
+  /** Re-evaluates visible realm portals as Nexus portal stats update. */
+  @EventHook(ClientEvent.RealmPortal)
+  onRealmPortal(client: Client): void {
+    this.stepTowardPortal(client);
+  }
+
+  /** Enters the selected realm portal once movement reaches it. */
+  @EventHook(ClientEvent.ReachedTarget)
+  onReachedTarget(client: Client, target: { x: number; y: number }, runtime: PluginRuntime): void {
+    if (this.state === 'walkingPortalArea' && distance(target, PORTAL_AREA) <= 0.1) {
+      this.state = 'seekingPortal';
+      console.log(`[${client.alias}] AutoQuest: looking for an open realm portal`);
+      this.stepTowardPortal(client);
+      return;
+    }
+    if (this.state !== 'walkingPortal' || !this.targetPortal) {
+      return;
+    }
+    this.state = 'awaitingRealm';
+    console.log(`[${client.alias}] AutoQuest: entering ${this.targetPortal.name}`);
+    this.portalUseAttempts = 0;
+    this.lastPortalUseAt = 0;
+    this.queuePortalUse(client, runtime);
+  }
+
+  /** Marks the realm as active after leaving Nexus. */
+  @EventHook(ClientEvent.MapChange)
+  onMapChange(client: Client, mapName: string): void {
+    if (this.state === 'awaitingRealm' && mapName !== 'Nexus') {
+      this.state = 'questing';
+      console.log(`[${client.alias}] AutoQuest: questing in ${mapName}`);
+    }
+  }
+
+  /** Stores the current server-selected quest object id. */
+  @PacketHook()
+  onQuestObjectId(client: Client, packet: QuestObjectIdPacket): void {
+    this.questObjectId = packet.objectId;
+    if (packet.objectId > 0) {
+      console.log(`[${client.alias}] AutoQuest: quest target object ${packet.objectId}`);
+    }
+  }
+
+  /** Drives portal selection, quest movement, and nearby shooting. */
+  @EventHook(ClientEvent.Tick)
+  onTick(client: Client): void {
+    if (this.state === 'seekingPortal') {
+      this.stepTowardPortal(client);
+    } else if (this.state === 'awaitingRealm') {
+      this.tryUsePortal(client);
+    } else if (this.state === 'questing') {
+      this.followQuest(client);
+      this.shootNearby(client);
+    }
+  }
+
+  /** Current plugin state for console inspection/tests. */
+  status(): { state: AutoQuestState; questObjectId: number; targetPortal?: string } {
+    return { state: this.state, questObjectId: this.questObjectId, targetPortal: this.targetPortal?.name };
+  }
+
+  private stepTowardPortal(client: Client): void {
+    if (this.state !== 'seekingPortal') {
+      return;
+    }
+    const portal = AutoQuest.pickPortal(client.realmPortals(), this.failedPortalIds);
+    if (!portal) {
+      return;
+    }
+    this.targetPortal = portal;
+    this.state = 'walkingPortal';
+    console.log(`[${client.alias}] AutoQuest: walking to ${portal.name} (${portal.players}/${portal.maxPlayers})`);
+    client.moveTo({ x: portal.x, y: portal.y }, this.portalArriveThreshold);
+  }
+
+  private queuePortalUse(client: Client, runtime: PluginRuntime): void {
+    // ReachedTarget fires before the current tick's MOVE is sent. Defer so the
+    // server first sees the player at the portal position.
+    runtime.setTimeout(() => this.tryUsePortal(client, true), 0);
+  }
+
+  private tryUsePortal(client: Client, force = false): void {
+    if (this.state !== 'awaitingRealm' || !this.targetPortal) {
+      return;
+    }
+    if (!force && Date.now() - this.lastPortalUseAt < this.portalRetryMs) {
+      return;
+    }
+    if (this.portalUseAttempts >= this.portalMaxAttempts) {
+      console.warn(
+        `[${client.alias}] AutoQuest: ${this.targetPortal.name} did not transition after ${this.portalUseAttempts} use attempts`,
+      );
+      this.failedPortalIds.add(this.targetPortal.objectId);
+      this.targetPortal = undefined;
+      this.portalUseAttempts = 0;
+      this.state = 'seekingPortal';
+      this.stepTowardPortal(client);
+      return;
+    }
+    // Re-resolve the portal from the live list by name: realm portals can be
+    // dropped and re-added (with a fresh objectId) as realms cycle, so the id
+    // captured when we picked it ~10s ago may be stale. UsePortal against a
+    // stale id is silently ignored by the server.
+    const live = client.realmPortals().find((p) => p.name === this.targetPortal!.name);
+    if (live) {
+      this.targetPortal = live;
+    }
+    this.portalUseAttempts++;
+    this.lastPortalUseAt = Date.now();
+    const useId = this.portalUseId(this.targetPortal, this.portalUseAttempts);
+    const pos = client.getPosition();
+    const sp = client.getServerPosition();
+    console.log(
+      `[${client.alias}] AutoQuest: UsePortal(${useId}) ` +
+        `for ${this.targetPortal.name} (attempt ${this.portalUseAttempts}, ` +
+        `objectId ${this.targetPortal.objectId}, ` +
+        `local ${pos.x.toFixed(2)},${pos.y.toFixed(2)}, ` +
+        `server ${sp ? `${sp.x.toFixed(2)},${sp.y.toFixed(2)}` : '?'}, ` +
+        `portal ${this.targetPortal.x.toFixed(2)},${this.targetPortal.y.toFixed(2)})`,
+    );
+    client.usePortal(useId);
+  }
+
+  private portalUseId(portal: RealmPortal, attempt: number): number {
+    const candidates = [portal.objectId, portal.connectId, portal.connectValueTwo]
+      .filter((value): value is number => value !== undefined && Number.isInteger(value) && value > 0);
+    const unique = [...new Set(candidates)];
+    return unique[(attempt - 1) % unique.length] ?? portal.objectId;
+  }
+
+  private followQuest(client: Client): void {
+    if (this.questObjectId <= 0 || Date.now() - this.lastQuestMoveAt < this.questRefreshMs) {
+      return;
+    }
+    const quest = client.getVisibleObject(this.questObjectId);
+    if (!quest) {
+      return;
+    }
+    this.lastQuestMoveAt = Date.now();
+    client.moveTo({ x: quest.x, y: quest.y });
+  }
+
+  private shootNearby(client: Client): void {
+    if (Date.now() - this.lastShotAt < this.shootIntervalMs) {
+      return;
+    }
+    const targets = client.findVisibleObjects((object) => this.isShootable(object))
+      .map((object) => ({ object, distance: client.distanceTo(object) }))
+      .filter((entry) => entry.distance <= this.shootRange)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, this.maxShots);
+
+    if (targets.length === 0) {
+      return;
+    }
+    this.lastShotAt = Date.now();
+    for (const { object } of targets) {
+      client.shootAt({ x: object.x, y: object.y });
+    }
+  }
+
+  private isShootable(object: TrackedObject): boolean {
+    if (object.objectId === this.questObjectId) {
+      return true;
+    }
+    if (PORTAL_TYPES.has(object.type) || PLAYER_TYPES.has(object.type)) {
+      return false;
+    }
+    return !/portal|nexus|vault|bazaar|quest room/i.test(object.name ?? '');
+  }
+
+  /** Selects the least-populated open realm portal. */
+  static pickPortal(portals: RealmPortal[], ignored = new Set<number>()): RealmPortal | undefined {
+    return portals
+      .filter((portal) => portal.players < portal.maxPlayers && !ignored.has(portal.objectId))
+      .sort((a, b) => a.players - b.players || a.openedAt - b.openedAt)[0];
+  }
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function readPositiveInt(name: string, fallback: number): number {
+  const value = Number(process.env[name] ?? '');
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function readPositiveNumber(name: string, fallback: number): number {
+  const value = Number(process.env[name] ?? '');
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}

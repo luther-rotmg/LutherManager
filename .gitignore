@@ -1,0 +1,25 @@
+# Dependencies and generated output
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/*.tsbuildinfo
+**/*.log
+
+# Local authentication and account data
+**/.env
+**/.env.*
+!**/.env.example
+**/.token-cache.json
+**/accounts.json
+**/credentials.json
+
+# Editor and operating-system state
+**/.idea/
+**/.vscode/
+**/.DS_Store
+**/Thumbs.db
+
+# Preserved histories from repositories imported into this monorepo
+**/.git.upstream/
+

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "world.hive.app",
+  "productName": "Hive",
+  "publish": [
+    {
+      "provider": "generic",
+      "url": "https://api.hive.world/api/releases/win",
+      "channel": "latest"
+    }
+  ],
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "electron/**/*",
+    "dist/app.cjs",
+    "dist/integrity.json",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "data",
+      "to": "data",
+      "filter": [
+        "**/*",
+        "!packet-definitions.json",
+        "!stat-types.json",
+        "!servers.json"
+      ]
+    },
+    { "from": "assets", "to": "assets" },
+    { "from": "dist/public", "to": "src/dev/public" },
+    { "from": "packages/sdk", "to": "sdk" }
+  ],
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/koffi/**/*",
+    "node_modules/sharp/**/*",
+    "node_modules/@img/**/*",
+    "electron/native/build/Release/*.node"
+  ],
+  "win": {
+    "icon": "assets/app-icon.png",
+    "target": [
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "portable", "arch": ["x64"] }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "Hive"
+  }
+}

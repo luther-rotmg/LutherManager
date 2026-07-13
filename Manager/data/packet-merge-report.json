@@ -1,0 +1,290 @@
+{
+  "added_count": 33,
+  "reconciled_name_count": 10,
+  "removed_name_only_count": 10,
+  "added": [
+    {
+      "id": 3,
+      "name": "CLAIMDAILYLOGINREWARD",
+      "direction": "client",
+      "fields": 2,
+      "from": "CLAIMDAILYLOGINREWARD"
+    },
+    {
+      "id": 4,
+      "name": "DELETEPETMESSAGE",
+      "direction": "server",
+      "fields": 0,
+      "from": "DELETEPET"
+    },
+    {
+      "id": 17,
+      "name": "ENTERARENA",
+      "direction": "server",
+      "fields": 0,
+      "from": "ENTERARENA"
+    },
+    {
+      "id": 19,
+      "name": "INVDROP",
+      "direction": "client",
+      "fields": 2,
+      "from": "INVDROP"
+    },
+    {
+      "id": 39,
+      "name": "VERIFYEMAIL",
+      "direction": "server",
+      "fields": 0,
+      "from": "VERIFYEMAIL"
+    },
+    {
+      "id": 41,
+      "name": "NEWABILITYMESSAGE",
+      "direction": "server",
+      "fields": 1,
+      "from": "NEWABILITY"
+    },
+    {
+      "id": 50,
+      "name": "IMMINENTARENAWAVE",
+      "direction": "server",
+      "fields": 0,
+      "from": "IMMINENTARENAWAVE"
+    },
+    {
+      "id": 53,
+      "name": "PETCHANGEFORMMSG",
+      "direction": "server",
+      "fields": 0,
+      "from": "PETCHANGEFORMMSG"
+    },
+    {
+      "id": 57,
+      "name": "CREATE",
+      "direction": "client",
+      "fields": 4,
+      "from": "CREATE"
+    },
+    {
+      "id": 66,
+      "name": "GLOBALNOTIFICATION",
+      "direction": "server",
+      "fields": 2,
+      "from": "GLOBALNOTIFICATION"
+    },
+    {
+      "id": 68,
+      "name": "ARENADEATH",
+      "direction": "server",
+      "fields": 0,
+      "from": "ARENADEATH"
+    },
+    {
+      "id": 80,
+      "name": "ACCEPTARENADEATH",
+      "direction": "server",
+      "fields": 0,
+      "from": "ACCEPTARENADEATH"
+    },
+    {
+      "id": 82,
+      "name": "QUESTOBJECTID",
+      "direction": "server",
+      "fields": 1,
+      "from": "QUESTOBJID"
+    },
+    {
+      "id": 84,
+      "name": "REALMHEROESRESPONSE",
+      "direction": "server",
+      "fields": 1,
+      "from": "REALMHEROESRESPONSE"
+    },
+    {
+      "id": 87,
+      "name": "EVOLVEPET",
+      "direction": "server",
+      "fields": 0,
+      "from": "EVOLVEPET"
+    },
+    {
+      "id": 93,
+      "name": "CLAIMDAILYLOGINRESPONSE",
+      "direction": "server",
+      "fields": 3,
+      "from": "CLAIMDAILYLOGINRESPONSE"
+    },
+    {
+      "id": 95,
+      "name": "INVRESULT",
+      "direction": "server",
+      "fields": 6,
+      "from": "INVRESULT"
+    },
+    {
+      "id": 100,
+      "name": "SHOOTACK",
+      "direction": "client",
+      "fields": 1,
+      "from": "SHOOTACK"
+    },
+    {
+      "id": 107,
+      "name": "RESKINUNLOCK",
+      "direction": "server",
+      "fields": 1,
+      "from": "RESKINUNLOCK"
+    },
+    {
+      "id": 109,
+      "name": "UNLOCKINFORMATION",
+      "direction": "server",
+      "fields": 0,
+      "from": "UNLOCKINFORMATION"
+    },
+    {
+      "id": 112,
+      "name": "QUEUEMESSAGE",
+      "direction": "server",
+      "fields": 2,
+      "from": "QUEUEINFORMATION"
+    },
+    {
+      "id": 114,
+      "name": "EXALTATIONBONUSCHANGED",
+      "direction": "server",
+      "fields": 9,
+      "from": "EXALTATIONUPDATE"
+    },
+    {
+      "id": 120,
+      "name": "FORGEUNLOCKEDBLUEPRINTS",
+      "direction": "server",
+      "fields": 2,
+      "from": "BLUEPRINTINFO"
+    },
+    {
+      "id": 122,
+      "name": "SHOWALLYSHOOT",
+      "direction": "client",
+      "fields": 1,
+      "from": "SHOWALLYSHOOT"
+    },
+    {
+      "id": 139,
+      "name": "UNKNOWN139",
+      "direction": "server",
+      "fields": 5,
+      "from": "UNKNOWN139"
+    },
+    {
+      "id": 149,
+      "name": "CLAIMBATTLEPASS",
+      "direction": "client",
+      "fields": 1,
+      "from": "CLAIMBATTLEPASS"
+    },
+    {
+      "id": 150,
+      "name": "CLAIMBATTLEPASSRESPONSE",
+      "direction": "server",
+      "fields": 1,
+      "from": "CLAIMBATTLEPASSRESPONSE"
+    },
+    {
+      "id": 159,
+      "name": "SENDEMOTE",
+      "direction": "client",
+      "fields": 3,
+      "from": "SENDEMOTE"
+    },
+    {
+      "id": 165,
+      "name": "UNKNOWN165",
+      "direction": "server",
+      "fields": 1,
+      "from": "UNKNOWN165"
+    },
+    {
+      "id": 169,
+      "name": "REALMSCOREUPDATE",
+      "direction": "server",
+      "fields": 1,
+      "from": "REALMSCORE"
+    },
+    {
+      "id": 182,
+      "name": "ACTIVATECRUCIBLEMESSAGE",
+      "direction": "client",
+      "fields": 4,
+      "from": "CRUCIBLEREQUEST"
+    },
+    {
+      "id": 183,
+      "name": "ACTIVATECRUCIBLERESULTMESSAGE",
+      "direction": "server",
+      "fields": 7,
+      "from": "CRUCIBLERESPONSE"
+    },
+    {
+      "id": 200,
+      "name": "CREATEPARTYMESSAGE",
+      "direction": "client",
+      "fields": 6,
+      "from": "CREATEPARTY"
+    }
+  ],
+  "reconciled": [
+    {
+      "id": 4,
+      "famefarm": "DELETEPET",
+      "sauce_name_used": "DELETEPETMESSAGE"
+    },
+    {
+      "id": 41,
+      "famefarm": "NEWABILITY",
+      "sauce_name_used": "NEWABILITYMESSAGE"
+    },
+    {
+      "id": 82,
+      "famefarm": "QUESTOBJID",
+      "sauce_name_used": "QUESTOBJECTID"
+    },
+    {
+      "id": 112,
+      "famefarm": "QUEUEINFORMATION",
+      "sauce_name_used": "QUEUEMESSAGE"
+    },
+    {
+      "id": 114,
+      "famefarm": "EXALTATIONUPDATE",
+      "sauce_name_used": "EXALTATIONBONUSCHANGED"
+    },
+    {
+      "id": 120,
+      "famefarm": "BLUEPRINTINFO",
+      "sauce_name_used": "FORGEUNLOCKEDBLUEPRINTS"
+    },
+    {
+      "id": 169,
+      "famefarm": "REALMSCORE",
+      "sauce_name_used": "REALMSCOREUPDATE"
+    },
+    {
+      "id": 182,
+      "famefarm": "CRUCIBLEREQUEST",
+      "sauce_name_used": "ACTIVATECRUCIBLEMESSAGE"
+    },
+    {
+      "id": 183,
+      "famefarm": "CRUCIBLERESPONSE",
+      "sauce_name_used": "ACTIVATECRUCIBLERESULTMESSAGE"
+    },
+    {
+      "id": 200,
+      "famefarm": "CREATEPARTY",
+      "sauce_name_used": "CREATEPARTYMESSAGE"
+    }
+  ]
+}

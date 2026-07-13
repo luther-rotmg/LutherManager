@@ -1,0 +1,13 @@
+---
+description: Do not build or package the Electron app unless the user explicitly asks
+alwaysApply: true
+---
+
+# No Electron / bot-client packaging by default
+
+- **Do not** run Electron production builds or packaging for this repo unless the user **explicitly** requests it (e.g. “build the installer”, “run dist”).
+- Avoid commands such as `npm run dist:portable`, `electron-builder`, or similar that produce a packaged app, installers, or NSIS artifacts.
+
+**Allowed without asking:** normal development (`npm run dev`, `tsx`, `tsc`), targeted scripts, tests, and lint—anything that does **not** package Electron.
+
+If the task truly requires a packaged build, **confirm with the user first** before running those commands.

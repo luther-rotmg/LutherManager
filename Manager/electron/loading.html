@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hive</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .logo { width: 80px; height: 80px; margin-bottom: 28px; animation: pulse 2s ease-in-out infinite; }
+    .title { font-size: 22px; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .status {
+      font-size: 13px;
+      color: #8b949e;
+      margin-bottom: 32px;
+      min-height: 18px;
+      transition: color 0.3s;
+    }
+    .status.error { color: #f85149; }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid #21262d;
+      border-top-color: #3fb950;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .spinner.hidden { display: none; }
+    .debug { position: fixed; bottom: 8px; left: 12px; font-size: 10px; color: #484f58; -webkit-app-region: no-drag; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+    #window-controls {
+      position: fixed; top: 0; right: 0;
+      display: flex; -webkit-app-region: no-drag;
+    }
+    .win-btn {
+      width: 46px; height: 32px; border: none; background: transparent;
+      color: #8b949e; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .win-btn:hover { background: #21262d; color: #e6edf3; }
+    .win-btn-close:hover { background: #da3633; color: #fff; }
+  </style>
+</head>
+<body>
+  <img class="logo" id="logo" alt="" onerror="this.style.display='none'">
+  <div class="title">Hive</div>
+  <div class="status" id="status">Starting...</div>
+  <div class="spinner" id="spinner"></div>
+  <div class="debug" id="debug">loading</div>
+
+  <div id="window-controls">
+    <button class="win-btn" id="btn-minimize" title="Minimize">
+      <svg viewBox="0 0 12 12" width="12" height="12"><rect y="5" width="12" height="1.5" fill="currentColor"/></svg>
+    </button>
+    <button class="win-btn" id="btn-maximize" title="Maximize">
+      <svg viewBox="0 0 12 12" width="12" height="12"><rect x="1" y="1" width="10" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+    <button class="win-btn win-btn-close" id="btn-close" title="Close">
+      <svg viewBox="0 0 12 12" width="12" height="12"><path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <script>
+    document.getElementById('btn-minimize').onclick = function() { window.electronAPI.minimize(); };
+    document.getElementById('btn-maximize').onclick = function() { window.electronAPI.maximize(); };
+    document.getElementById('btn-close').onclick = function() { window.electronAPI.close(); };
+
+    // Self-contained timer — if main process never updates us, show elapsed + fallback error
+    var startTime = Date.now();
+    var dbg = document.getElementById('debug');
+    var statusEl = document.getElementById('status');
+    var timer = setInterval(function() {
+      var elapsed = Math.round((Date.now() - startTime) / 1000);
+      if (dbg) dbg.textContent = 'loading | ' + elapsed + 's';
+      // If still on "Starting..." after 15s, something is wrong
+      if (elapsed >= 15 && statusEl && statusEl.textContent === 'Starting...') {
+        statusEl.textContent = 'Taking longer than expected... proxy may have crashed.';
+        statusEl.className = 'status error';
+      }
+      // Hard timeout at 45s
+      if (elapsed >= 45 && statusEl) {
+        statusEl.textContent = 'Timed out. Close and check logs.';
+        statusEl.className = 'status error';
+        var sp = document.getElementById('spinner');
+        if (sp) sp.className = 'spinner hidden';
+        clearInterval(timer);
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

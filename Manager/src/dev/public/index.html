@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hive</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="api-docs.css">
+  <link rel="stylesheet" href="game-wiki.css">
+</head>
+<body>
+  <!-- View-as override banner — visible only when admin is previewing as another user -->
+  <div id="view-as-banner" class="view-as-banner" style="display:none;">
+    <span class="view-as-banner-icon">🔍</span>
+    <span>Viewing as: <strong id="view-as-banner-label">—</strong></span>
+    <button id="view-as-banner-reset" type="button" class="view-as-banner-reset">Reset</button>
+  </div>
+
+  <!-- Custom titlebar (doubles as drag region in Electron) -->
+  <header id="titlebar">
+    <div class="titlebar-drag">
+      <div class="header-left">
+        <div class="titlebar-icon" aria-hidden="true">
+          <img src="LogoWNoBackground.png" alt="" width="22" height="22" />
+        </div>
+        <h1>Hive</h1>
+      </div>
+      <div class="header-right">
+        <button id="btn-settings" class="icon-btn" title="Settings">&#9881;</button>
+      </div>
+    </div>
+    <div id="window-controls">
+      <button id="btn-minimize" class="win-btn" title="Minimize">
+        <svg viewBox="0 0 12 12" width="12" height="12"><rect y="5" width="12" height="1.5" fill="currentColor"/></svg>
+      </button>
+      <button id="btn-maximize" class="win-btn" title="Maximize">
+        <svg viewBox="0 0 12 12" width="12" height="12"><rect x="1" y="1" width="10" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button id="btn-close" class="win-btn win-btn-close" title="Close">
+        <svg viewBox="0 0 12 12" width="12" height="12"><path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main content -->
+  <div id="main">
+    <!-- Player card (left) -->
+    <div id="player-card">
+      <!-- Account / balance summary has moved to the Settings tab. Two hidden
+           spans remain so existing live-update code that writes the balance
+           and plan name doesn't have to null-check. -->
+      <span id="titlebar-gems" hidden>0</span>
+      <span id="titlebar-plan" hidden>Free</span>
+
+      <div id="player-identity">
+        <div id="player-avatar">?</div>
+        <div id="player-name-info">
+              <span id="player-name" data-i18n="player.notConnected">Not Connected</span>
+              <span id="player-class" data-i18n="player.waitingForGame">Waiting for game...</span>
+        </div>
+      </div>
+
+      <div id="player-bars">
+        <div class="stat-bar">
+          <div class="bar-label">HP</div>
+          <div class="bar-track hp-track">
+            <div class="bar-fill hp-fill" id="hp-bar" style="width:0%"></div>
+            <div class="bar-value bar-value-row" id="hp-text">
+              <div class="bar-value-center">
+                <span id="hp-main">-- / --</span>
+                <span id="hp-bonus" class="bar-bonus"></span>
+              </div>
+              <div id="hp-regen" class="bar-value-right"></div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-bar">
+          <div class="bar-label">MP</div>
+          <div class="bar-track mp-track">
+            <div class="bar-fill mp-fill" id="mp-bar" style="width:0%"></div>
+            <div class="bar-value bar-value-row" id="mp-text">
+              <div class="bar-value-center">
+                <span id="mp-main">-- / --</span>
+                <span id="mp-bonus" class="bar-bonus"></span>
+              </div>
+              <div id="mp-regen" class="bar-value-right"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="player-stats-grid">
+        <div class="mini-stat"><span class="stat-icon">ATK</span><span id="stat-atk" class="stat-val">--</span></div>
+        <div class="mini-stat"><span class="stat-icon">DEF</span><span id="stat-def" class="stat-val">--</span></div>
+        <div class="mini-stat"><span class="stat-icon">SPD</span><span id="stat-spd" class="stat-val">--</span></div>
+        <div class="mini-stat"><span class="stat-icon">DEX</span><span id="stat-dex" class="stat-val">--</span></div>
+        <div class="mini-stat"><span class="stat-icon">VIT</span><span id="stat-vit" class="stat-val">--</span></div>
+        <div class="mini-stat"><span class="stat-icon">WIS</span><span id="stat-wis" class="stat-val">--</span></div>
+      </div>
+
+      <div id="player-details">
+        <div class="detail-row"><span data-i18n="detail.level">Level</span><span id="detail-level">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.stars">Stars</span><span id="detail-stars">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.fame">Fame</span><span id="detail-fame">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.guild">Guild</span><span id="detail-guild">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.map">Map</span><span id="detail-map">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.gameid">GameId</span><span id="detail-gameid">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.objectid">ObjectId</span><span id="detail-objectid">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.objecttype">ObjectType</span><span id="detail-objecttype">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.position">Position</span><span id="detail-pos">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.questTargetId">Quest target ID</span><span id="detail-questtargetid">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.questTargetType">Quest target type</span><span id="detail-questtargettype">--</span></div>
+        <div class="detail-row"><span data-i18n="detail.server">Server</span><span id="detail-server">--</span></div>
+        <div id="player-details-raw-stats-wrap">
+          <button type="button" class="setting-btn setting-btn-secondary" id="btn-copy-all-players-raw-stats">Copy all players raw stats</button>
+          <button type="button" class="setting-btn setting-btn-secondary" id="btn-copy-vault-data">Copy vault data</button>
+        </div>
+      </div>
+
+      <div id="sidebar-controls">
+        <div id="sidebar-server-switch">
+          <div class="sidebar-section-label" data-i18n="sidebar.server">Server</div>
+          <select id="server-select">
+            <option value="">-- Select Server --</option>
+          </select>
+        </div>
+        <div id="sidebar-ip-connect">
+          <div class="sidebar-section-label" data-i18n="sidebar.ipConnect">IP Connect</div>
+          <div class="ip-connect-row">
+            <input type="text" id="ip-input" placeholder="e.g. 54.241.208.233">
+            <button id="ip-connect-btn" class="setting-btn" data-i18n="btn.connect">Connect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="single-account-dock" class="single-account-dock hidden minimized" aria-live="polite">
+      <button type="button" id="single-account-dock-toggle" class="single-account-dock-toggle" aria-expanded="false" aria-label="Toggle connected account panel">
+        <span id="single-account-dock-avatar" class="single-account-dock-avatar">?</span>
+        <span class="single-account-dock-summary">
+          <span id="single-account-dock-name" class="single-account-dock-name">No account</span>
+          <span id="single-account-dock-meta" class="single-account-dock-meta">Disconnected</span>
+        </span>
+        <span id="single-account-dock-chevron" class="single-account-dock-chevron">⌃</span>
+      </button>
+      <div id="single-account-dock-panel" class="single-account-dock-panel">
+        <div class="single-account-dock-head">
+          <span>Connected Account</span>
+          <button type="button" id="single-account-dock-minimize" class="single-account-dock-minimize" aria-label="Minimize connected account panel">−</button>
+        </div>
+        <div id="single-account-dock-card-slot"></div>
+      </div>
+    </div>
+
+    <!-- Multi-account sidebar (hidden unless multi-account view is on) -->
+    <div id="multi-account-panel" class="hidden">
+      <div class="multi-account-mode-toggle" role="tablist" aria-label="Multi account sidebar mode">
+        <button type="button" id="multi-sidebar-mode-connected" class="multi-account-mode-btn active" role="tab" aria-selected="true">Connected</button>
+        <button type="button" id="multi-sidebar-mode-launch" class="multi-account-mode-btn" role="tab" aria-selected="false">Launch</button>
+      </div>
+      <div id="multi-account-connected-list"></div>
+      <div id="multi-account-launch-panel" class="hidden mac-launch-panel">
+        <div class="mac-launch-toolbar">
+          <button type="button" id="mac-launch-sort-btn" class="mac-launch-sort-btn setting-btn setting-btn-secondary" aria-expanded="false" aria-haspopup="dialog" aria-controls="mac-launch-sort-popout">
+            <span data-i18n="mac.launch.sortTrigger">Sort &amp; filter</span>
+          </button>
+          <div id="mac-launch-sort-popout" class="mac-launch-sort-popout hidden" role="dialog" aria-modal="false" aria-label="Launch list sort and filter">
+            <div class="mac-launch-sort-field">
+              <label for="mac-launch-sort-mode" data-i18n="mac.launch.sortBy">Sort by</label>
+              <select id="mac-launch-sort-mode" class="mac-launch-sort-select">
+                <option value="newest" data-i18n="mac.launch.sortOpt.newest">Newest saved</option>
+                <option value="oldest" data-i18n="mac.launch.sortOpt.oldest">Oldest saved</option>
+                <option value="alphabetical" data-i18n="mac.launch.sortOpt.alpha">A → Z</option>
+                <option value="fame_high" data-i18n="mac.launch.sortOpt.fameHigh">Best fame (high)</option>
+                <option value="fame_low" data-i18n="mac.launch.sortOpt.fameLow">Best fame (low)</option>
+              </select>
+            </div>
+            <div class="mac-launch-sort-field">
+              <label for="mac-launch-season-filter" data-i18n="mac.launch.filterSeason">Seasonal</label>
+              <select id="mac-launch-season-filter" class="mac-launch-sort-select">
+                <option value="any" data-i18n="mac.launch.filter.any">Any</option>
+                <option value="yes" data-i18n="mac.launch.filter.yes">Yes</option>
+                <option value="no" data-i18n="mac.launch.filter.no">No</option>
+              </select>
+            </div>
+            <div class="mac-launch-sort-field">
+              <label for="mac-launch-min-fame" data-i18n="mac.launch.minBestFame">Min best-char fame</label>
+              <input type="number" id="mac-launch-min-fame" class="mac-launch-num-input" inputmode="numeric" min="0" step="1" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+        <div id="mac-launch-sort-summary" class="mac-launch-sort-summary" aria-hidden="true"></div>
+        <div id="mac-launch-groups-section" class="mac-launch-groups-section">
+          <div class="mac-launch-groups-toolbar">
+            <span class="mac-launch-groups-label" data-i18n="mac.launch.groupsTitle">Launch groups</span>
+            <button type="button" id="mac-launch-group-add" class="setting-btn setting-btn-secondary mac-launch-group-add-btn" data-i18n-title="mac.launch.groupsNewTitle" title="Save a new group">+</button>
+          </div>
+          <div id="mac-launch-groups-list" class="mac-launch-groups-list" role="list"></div>
+        </div>
+        <div id="multi-account-launch-list"></div>
+      </div>
+    </div>
+
+    <!-- Multi-account stats popout -->
+    <div id="multi-account-popout" class="hidden" role="dialog" aria-modal="true">
+      <div id="multi-account-popout-inner">
+        <button id="multi-account-popout-close" class="mac-popout-close" aria-label="Close">×</button>
+        <div id="multi-account-popout-body"></div>
+      </div>
+    </div>
+
+    <!-- Script-defined popout panel (Hive.ui.panel) -->
+    <div id="script-panel-popout" class="hidden script-panel-popout" role="dialog" aria-modal="true">
+      <div id="script-panel-popout-inner" class="script-panel-popout-inner">
+        <header class="script-panel-popout-header">
+          <div class="script-panel-popout-titles">
+            <div id="script-panel-popout-title" class="script-panel-popout-title">Script panel</div>
+            <div id="script-panel-popout-subtitle" class="script-panel-popout-subtitle"></div>
+          </div>
+          <button id="script-panel-popout-close" class="mac-popout-close" aria-label="Close">×</button>
+        </header>
+        <div id="script-panel-popout-body" class="script-panel-popout-body"></div>
+      </div>
+    </div>
+
+    <!-- Tabbed content area (center) -->
+    <div id="content-area">
+      <div id="content-tabs">
+        <button class="content-tab" data-tab="clients" data-icon="C" data-label="Clients" data-i18n="tab.clients">Clients</button>
+        <button class="content-tab active" data-tab="accounts" data-icon="A" data-label="Accounts" data-i18n="tab.accounts">Accounts</button>
+        <button class="content-tab" data-tab="scripts" data-icon="S" data-label="Scripts" data-i18n="tab.scripts">Scripts</button>
+        <button class="content-tab" data-tab="api" data-icon="A" data-label="API" data-i18n="tab.api">API</button>
+        <button class="content-tab" data-tab="game-wiki" data-icon="W" data-label="Wiki" data-i18n="tab.gameWiki">Wiki</button>
+        <button class="content-tab" data-tab="objects" data-icon="O" data-label="Objects" data-i18n="tab.objects">Objects</button>
+        <button class="content-tab" data-tab="nearby" data-icon="P" data-label="Nearby Players" data-i18n="tab.nearby">Nearby Players</button>
+        <button class="content-tab" data-tab="tilemap" data-icon="T" data-label="Tilemap" data-i18n="tab.tilemap">Tilemap</button>
+      </div>
+
+      <div id="tab-clients" class="tab-panel" style="display:none;">
+        <div id="home-toolbar">
+          <button id="home-edit-btn" class="icon-btn" data-i18n-title="home.edit.title" title="Edit layout">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/>
+            </svg>
+          </button>
+          <div id="home-edit-actions" class="home-edit-actions hidden">
+            <button id="home-edit-save" class="setting-btn" data-i18n="btn.save">Save</button>
+            <button id="home-edit-cancel" class="setting-btn setting-btn-secondary" data-i18n="btn.cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="home-connected-layout" class="home-layout hs-layout">
+
+          <!-- Hidden status nodes required by JS -->
+          <span id="home-conn-dot" hidden></span>
+          <span id="home-conn-state" hidden></span>
+          <span id="home-action-status" hidden></span>
+          <button id="home-quick-launch-btn" hidden></button>
+
+          <!-- Body: left column (Character + Script) | right column (Accounts) -->
+          <div class="hs-body-grid">
+
+            <div class="hs-left-col">
+              <div class="hs-card">
+                <div class="hs-card-label">Character</div>
+                <div class="hs-char-top">
+                  <div id="hs-char-portrait" class="hs-portrait"></div>
+                  <div class="hs-char-info">
+                    <div id="home-char-name" class="hs-char-name">No character</div>
+                    <div id="home-char-meta" class="hs-char-meta">Waiting for connection</div>
+                    <div class="hs-bars">
+                      <div class="hs-bar-row">
+                        <span class="hs-blabel">HP</span>
+                        <div class="hs-bar-track"><div id="home-char-hp-fill" class="hs-bar-fill hs-hp"></div></div>
+                        <span id="home-char-hp-text" class="hs-btext">-- / --</span>
+                      </div>
+                      <div class="hs-bar-row">
+                        <span class="hs-blabel">MP</span>
+                        <div class="hs-bar-track"><div id="home-char-mp-fill" class="hs-bar-fill hs-mp"></div></div>
+                        <span id="home-char-mp-text" class="hs-btext">-- / --</span>
+                      </div>
+                    </div>
+                    <div class="hs-meta-row">
+                      <span>Map: <strong id="home-char-map">--</strong></span>
+                      <span>Fame: <strong id="home-char-fame">--</strong></span>
+                      <span>Guild: <strong id="home-char-guild">--</strong></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="hs-equip-label">Equipment</div>
+                <div id="hs-char-equip" class="hs-char-equip"></div>
+                <div class="hs-equip-label">Inventory</div>
+                <div id="hs-char-inventory" class="hs-char-inventory"></div>
+                <span id="home-char-pos" hidden></span>
+                <span id="home-char-server" hidden></span>
+                <div id="home-char-stats" hidden></div>
+                <div id="home-char-effects" hidden></div>
+              </div>
+
+              <div class="hs-card">
+                <div class="hs-card-label">Script</div>
+                <div id="home-script-current-name" class="hs-script-name">No script selected</div>
+                <div class="hs-script-btns">
+                  <button id="home-script-primary-btn" class="hs-run-btn">Run</button>
+                  <button id="home-script-pause-toggle-btn" class="hs-stop-btn">Stop</button>
+                  <button type="button" class="hs-browse-btn" data-launcher-tab="scripts">Browse</button>
+                </div>
+                <div class="hs-stats-grid">
+                  <div class="hs-stat">
+                    <span class="hs-stat-label">Time Online</span>
+                    <span id="home-stat-uptime" class="hs-stat-value">0s</span>
+                  </div>
+                  <div class="hs-stat">
+                    <span class="hs-stat-label">White Bags</span>
+                    <span id="home-stat-white-bags" class="hs-stat-value">0</span>
+                  </div>
+                  <div class="hs-stat">
+                    <span class="hs-stat-label">Fame Gained</span>
+                    <span id="home-stat-fame-gained" class="hs-stat-value">0</span>
+                  </div>
+                  <div class="hs-stat">
+                    <span class="hs-stat-label">Avg FPM</span>
+                    <span id="home-stat-average-fpm" class="hs-stat-value">0</span>
+                  </div>
+                </div>
+                <span id="home-script-current-status" hidden></span>
+                <span id="home-script-runtime" hidden></span>
+                <span id="home-script-status" hidden></span>
+                <div id="home-script-note" hidden></div>
+                <button id="home-script-browse-btn" hidden></button>
+              </div>
+            </div>
+
+            <div class="hs-card hs-accounts-col">
+              <div class="hs-card-hdr">
+                <span class="hs-card-label">Your Accounts</span>
+                <select id="home-accounts-sort" class="hs-sort-sel">
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="alphabetical">A–Z</option>
+                  <option value="fame">Fame</option>
+                </select>
+              </div>
+              <input type="search" id="hs-accounts-search" class="hs-accounts-search" placeholder="Search accounts…" autocomplete="off" spellcheck="false">
+              <div id="home-accounts-roster" class="hs-roster"></div>
+            </div>
+
+          </div>
+
+          <!-- JS-required hidden nodes -->
+          <button id="home-conn-launch-btn" hidden></button>
+          <button id="home-conn-reconnect-btn" hidden></button>
+          <button id="home-feed-open-logs-btn" hidden></button>
+          <button id="home-feed-clear-btn" hidden></button>
+          <div id="home-feed-list" hidden></div>
+          <span id="home-conn-proxy" hidden></span>
+          <span id="home-conn-client" hidden></span>
+          <span id="home-conn-server" hidden></span>
+          <span id="home-conn-uptime" hidden></span>
+          <span id="home-stat-events-killed" hidden></span>
+          <span id="home-stat-dungeons-ran" hidden></span>
+          <span id="home-last-session" hidden></span>
+          <span id="home-last-ended" hidden></span>
+        </div>
+        <div id="home-multibox-placeholder" class="home-layout home-multibox-placeholder hidden" aria-hidden="true"></div>
+        <div id="home-multi-layout" class="home-layout home-multi-layout hidden">
+          <section class="home-card home-multi-hero home-card--span-2">
+            <div class="home-multi-hero-head">
+              <div class="home-multi-hero-title-wrap">
+                <div class="home-card-title">Multi Account Command</div>
+                <h2 class="home-multi-hero-title">Operations Overview</h2>
+              </div>
+              <div class="home-multi-hero-status">
+                <span id="home-multi-live-status" class="home-status-pill">No live sessions</span>
+                <span id="home-multi-primary-server" class="home-multi-primary-server">Primary server: --</span>
+              </div>
+            </div>
+
+            <div class="home-multi-metric-grid">
+              <div class="home-multi-metric-card">
+                <span class="home-multi-metric-label">Live Sessions</span>
+                <span id="home-multi-connected-count" class="home-multi-metric-value">0</span>
+              </div>
+              <div class="home-multi-metric-card">
+                <span class="home-multi-metric-label">Total Fame Gained</span>
+                <span id="home-multi-fame-gained" class="home-multi-metric-value">0</span>
+              </div>
+              <div class="home-multi-metric-card">
+                <span class="home-multi-metric-label">Average FPM</span>
+                <span id="home-multi-average-fpm" class="home-multi-metric-value">0</span>
+              </div>
+              <div class="home-multi-metric-card">
+                <span class="home-multi-metric-label">Runtime</span>
+                <span id="home-multi-runtime" class="home-multi-metric-value">0s</span>
+              </div>
+            </div>
+
+          </section>
+
+          <div id="home-multi-connected-cards-grid" class="home-multi-connected-cards-grid home-card--span-3"></div>
+
+        </div>
+      </div>
+
+
+      <div id="tab-market" class="tab-panel admin-only" style="display:none;">
+        <div class="market-layout">
+          <aside class="market-sidebar">
+            <div class="market-brand">
+              <span class="market-brand-title">Realm Market</span>
+            </div>
+            <nav class="market-nav" id="market-nav">
+              <button type="button" class="market-nav-btn active" data-market-sub="scripts" data-i18n="tab.scripts">Scripts</button>
+              <button type="button" class="market-nav-btn" data-market-sub="maxing">Maxing</button>
+            </nav>
+            <div class="market-cart-panel">
+              <div class="market-cart-head">Cart <span id="market-cart-count" class="market-cart-badge">0</span></div>
+              <div id="market-cart-items" class="market-cart-items"></div>
+              <div class="market-cart-foot">
+                <div class="market-cart-total">Total <span id="market-cart-total-gems">0</span><span class="market-gem-label">G</span></div>
+                <button type="button" id="market-checkout-btn" class="setting-btn market-checkout-btn">Checkout</button>
+                <button type="button" id="market-cart-clear-btn" class="setting-btn setting-btn-secondary market-cart-clear">Clear</button>
+              </div>
+            </div>
+          </aside>
+          <main class="market-main">
+            <div id="market-loading" class="market-loading">Loading catalog…</div>
+            <div id="market-error" class="market-error" style="display:none;"></div>
+            <div id="market-content" class="market-content" style="display:none;">
+              <div id="market-toolbar" class="market-toolbar"></div>
+              <div id="market-body" class="market-body"></div>
+            </div>
+          </main>
+        </div>
+        <div id="market-script-buy-modal" class="market-modal" style="display:none" aria-hidden="true">
+          <div class="market-modal-backdrop" data-market-modal-close></div>
+          <div class="market-modal-panel" role="dialog" aria-modal="true" aria-labelledby="market-script-buy-modal-title">
+            <h4 id="market-script-buy-modal-title" class="market-modal-title"></h4>
+            <p class="market-modal-sub">Choose billing. Prices are in gems (G). <strong>100 gems = $1</strong> (1 gem = 1¢).</p>
+            <div id="market-script-buy-modal-actions" class="market-modal-actions"></div>
+            <button type="button" class="setting-btn setting-btn-secondary market-modal-cancel" data-market-modal-close>Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-accounts" class="tab-panel active">
+        <!-- Empty-state setup (shown when zero accounts) -->
+        <div id="accounts-setup" class="accounts-setup" style="display:none;">
+          <div class="accounts-setup-card">
+
+            <!-- ───── STEP 1 — pick login method ───── -->
+            <div id="accounts-setup-step1" class="accounts-setup-step">
+              <div class="accounts-setup-stepbar">
+                <span class="accounts-setup-step-label">Step 1 of 2</span>
+              </div>
+              <div class="accounts-setup-title">How do you sign in to RotMG?</div>
+              <div class="accounts-setup-subtitle">Pick a method below. You can change this later.</div>
+              <div class="setup-method-grid">
+                <button type="button" class="setup-method-card" data-method="email">
+                  <div class="setup-method-icon">📧</div>
+                  <div class="setup-method-name">Email &amp; Password</div>
+                  <div class="setup-method-desc">Sign in with your Deca email + password</div>
+                </button>
+                <button type="button" class="setup-method-card" data-method="import">
+                  <div class="setup-method-icon">📥</div>
+                  <div class="setup-method-name">Import existing</div>
+                  <div class="setup-method-desc">From the RotMG Exalt launcher on this PC</div>
+                </button>
+              </div>
+            </div>
+
+            <!-- ───── STEP 2 — fill form (variant per method) ───── -->
+            <div id="accounts-setup-step2" class="accounts-setup-step" style="display:none;">
+              <div class="accounts-setup-stepbar">
+                <button id="accounts-setup-back-btn" type="button" class="setup-back-btn">← Back</button>
+                <span class="accounts-setup-step-label">Step 2 of 2 · <span id="accounts-setup-method-label">Email &amp; Password</span></span>
+              </div>
+
+              <!-- EMAIL VARIANT -->
+              <div class="accounts-setup-variant" data-variant="email" style="display:none;">
+                <div class="accounts-setup-title">Enter your Deca login</div>
+                <div class="accounts-setup-subtitle">Use the email + password you set when you registered with Deca.</div>
+                <div class="accounts-form">
+                  <div class="accounts-field">
+                    <label for="accounts-setup-alias-email">Alias <span class="accounts-field-hint">(optional display name)</span></label>
+                    <input id="accounts-setup-alias-email" class="accounts-setup-alias-input" type="text" placeholder="Display name (optional)" />
+                  </div>
+                  <div class="accounts-field">
+                    <label for="accounts-setup-email-email">Email</label>
+                    <input id="accounts-setup-email-email" class="accounts-setup-email-input" type="text" placeholder="name@example.com" />
+                  </div>
+                  <div class="accounts-field">
+                    <label for="accounts-setup-password-email">Password</label>
+                    <div class="accounts-password-row">
+                      <input id="accounts-setup-password-email" class="accounts-setup-password-input" type="password" placeholder="Password" />
+                      <button class="setting-btn setting-btn-secondary accounts-password-toggle accounts-setup-password-vis" type="button">Show</button>
+                    </div>
+                  </div>
+                  <div class="accounts-field">
+                    <label for="accounts-setup-server-email">Server</label>
+                    <select id="accounts-setup-server-email" class="accounts-setup-server-select"></select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- IMPORT VARIANT -->
+              <div class="accounts-setup-variant" data-variant="import" style="display:none;">
+                <div class="accounts-setup-title">Import existing accounts</div>
+                <div class="accounts-setup-subtitle">Pull email credentials from the RotMG Exalt launcher on this PC.</div>
+                <div class="accounts-form">
+                  <div class="setup-substep">
+                    <div class="setup-substep-head"><span class="setup-substep-num">1</span><span class="setup-substep-title">From the official RotMG Launcher</span></div>
+                    <div class="setup-substep-desc">Pulls the email + password currently saved in the launcher's Unity PlayerPrefs. Adds one account.</div>
+                    <button id="accounts-setup-import-launcher-btn-2" class="setting-btn setting-btn-secondary" type="button">
+                      📥 Import from Launcher
+                    </button>
+                  </div>
+                  <span id="accounts-setup-import-status-2" class="accounts-field-hint" style="display:none;"></span>
+                </div>
+              </div>
+
+              <div class="accounts-setup-actions">
+                <button id="accounts-setup-add-btn" class="setting-btn" data-i18n="accounts.btn.addFirst">Add Account</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Main accounts UI (hidden when zero accounts) -->
+        <div id="accounts-main" class="accounts-main">
+        <div class="accounts-toolbar">
+          <div class="accounts-search-wrap">
+            <input id="accounts-search" class="accounts-search" type="text" placeholder="Search alias, email, server..." data-i18n-placeholder="accounts.search.placeholder" />
+            <div id="accounts-count" class="accounts-count">0 accounts</div>
+          </div>
+          <div class="accounts-toolbar-actions">
+            <button id="accounts-launch-btn" class="setting-btn" data-i18n="btn.launch">Launch</button>
+          </div>
+        </div>
+        <div id="accounts-layout" class="accounts-layout">
+          <div class="accounts-list-panel">
+            <div class="accounts-panel-title accounts-list-titlebar">
+              <span data-i18n="accounts.list.title">Stored Accounts</span>
+              <div class="accounts-list-titlebar-actions">
+                <select id="accounts-sort" class="accounts-sort-select" aria-label="Sort accounts" data-i18n-aria-label="accounts.sort.aria">
+                  <option value="newest" data-i18n="accounts.sort.newest">Newest</option>
+                  <option value="oldest" data-i18n="accounts.sort.oldest">Oldest</option>
+                  <option value="alphabetical" data-i18n="accounts.sort.alpha">Alphabetical</option>
+                  <option value="fame" data-i18n="accounts.sort.fame">Fame</option>
+                </select>
+                <button id="accounts-ctx-btn" class="accounts-ctx-btn" type="button" title="More actions" data-i18n-title="accounts.ctx.more">&hellip;</button>
+              </div>
+              <!-- Context menu -->
+              <div id="accounts-ctx-menu" class="accounts-ctx-menu" style="display:none;">
+                <button type="button" class="accounts-ctx-item" data-action="refresh-all" data-i18n="accounts.ctx.refreshAll">Refresh All Accounts</button>
+                <button type="button" class="accounts-ctx-item" data-action="refresh-hwid">Refresh HWID</button>
+                <button type="button" class="accounts-ctx-item" data-action="reorder" data-i18n="accounts.ctx.reorder">Reorder Accounts</button>
+                <button type="button" class="accounts-ctx-item accounts-ctx-item--danger" data-action="delete" data-i18n="accounts.ctx.delete">Delete Account</button>
+              </div>
+            </div>
+            <div id="accounts-list" class="accounts-list"></div>
+            <div id="accounts-empty" class="empty-state" data-i18n="accounts.empty">No accounts saved yet.</div>
+            <button id="accounts-new-btn" class="accounts-add-btn" type="button" data-i18n="accounts.btn.addNew">+ Add Account</button>
+          </div>
+          <div id="accounts-editor-panel" class="accounts-editor-panel">
+
+            <!-- Editor header -->
+            <div class="accounts-editor-header">
+              <div class="accounts-editor-avatar" id="accounts-editor-avatar">A</div>
+              <div class="accounts-editor-identity">
+                <span class="accounts-editor-display-name" id="accounts-editor-display-name">Select an account</span>
+                <span class="accounts-editor-display-sub" id="accounts-editor-display-sub"></span>
+              </div>
+              <div class="accounts-editor-tabs">
+                <button type="button" class="accounts-editor-tab active" data-editor-tab="credentials">Credentials</button>
+                <button type="button" class="accounts-editor-tab" data-editor-tab="overview">Overview</button>
+              </div>
+            </div>
+
+            <!-- Credentials tab -->
+            <div id="accounts-login-section" class="accounts-editor-tab-panel">
+
+              <div class="acct-section acct-section--identity">
+                <div class="acct-section-head"><span class="acct-section-title">Identity</span></div>
+                <div class="accounts-row">
+                  <div class="accounts-field">
+                    <label for="accounts-alias" data-i18n="accounts.label.alias">Alias</label>
+                    <input type="text" id="accounts-alias" placeholder="Display name" autocomplete="off" spellcheck="false" data-i18n-placeholder="accounts.placeholder.alias">
+                  </div>
+                  <div class="accounts-field">
+                    <label for="accounts-server" data-i18n="accounts.label.server">Server</label>
+                    <select id="accounts-server"></select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="acct-section acct-section--login">
+                <div class="acct-section-head">
+                  <span class="acct-section-title">Login</span>
+                  <div class="accounts-import-launcher-btns">
+                    <button type="button" id="accounts-import-launcher-btn" class="setting-btn setting-btn-secondary accounts-import-launcher-btn" title="Import credentials from the RotMG Exalt Launcher">Import Launcher Credentials</button>
+                    <span id="accounts-import-launcher-status" class="accounts-import-status" style="display:none;"></span>
+                  </div>
+                </div>
+                <div id="accounts-login-creds" class="accounts-login-creds">
+                  <div class="accounts-row">
+                    <div class="accounts-field">
+                      <label id="accounts-email-label" for="accounts-email" data-i18n="accounts.label.email">Email</label>
+                      <input type="text" id="accounts-email" placeholder="name@example.com" autocomplete="off" spellcheck="false">
+                    </div>
+                    <div class="accounts-field">
+                      <label id="accounts-password-label" for="accounts-password" data-i18n="accounts.label.password">Password</label>
+                      <div class="accounts-password-row">
+                        <input type="password" id="accounts-password" autocomplete="new-password" spellcheck="false" data-i18n-placeholder="accounts.placeholder.password">
+                        <button type="button" id="accounts-password-visibility-btn" class="setting-btn setting-btn-secondary accounts-password-toggle" data-i18n="accounts.btn.show">Show</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="acct-section acct-section--proxy">
+                <div class="acct-section-head"><span class="acct-section-title">Proxy</span></div>
+                <div class="accounts-field">
+                  <label for="accounts-proxy">Host:Port <span class="accounts-field-hint">optional</span></label>
+                  <input type="text" id="accounts-proxy" placeholder="e.g. 127.0.0.1:1080" autocomplete="off" spellcheck="false">
+                </div>
+                <div id="accounts-proxy-auth-wrap" class="accounts-field-subsection" style="display:none;">
+                  <div class="accounts-field">
+                    <label for="accounts-proxy-username">Proxy Username</label>
+                    <input type="text" id="accounts-proxy-username" placeholder="Optional" autocomplete="off" spellcheck="false">
+                  </div>
+                  <div class="accounts-field">
+                    <label for="accounts-proxy-password">Proxy Password</label>
+                    <input type="password" id="accounts-proxy-password" placeholder="Optional" autocomplete="new-password">
+                  </div>
+                </div>
+              </div>
+
+              <div class="accounts-credentials-actions">
+                <button type="button" id="accounts-save-btn" class="accounts-save-inline-btn setting-btn" disabled>Save &amp; Verify</button>
+                <span id="accounts-verify-status" class="accounts-status"></span>
+                <span id="accounts-status" class="accounts-status"></span>
+              </div>
+
+            </div><!-- /credentials tab -->
+
+            <!-- Overview tab -->
+            <div class="accounts-editor-tab-panel accounts-overview-section" id="accounts-editor-overview-panel" style="display:none;">
+              <div class="accounts-overview-toolbar">
+                <div>
+                  <div class="accounts-overview-title" data-i18n="accounts.overview.title">Character Overview</div>
+                  <div id="accounts-overview-summary" class="accounts-overview-summary" data-i18n="accounts.overview.summary.pickChars">Select an account to inspect its characters.</div>
+                </div>
+                <div class="accounts-overview-toolbar-actions">
+                  <button id="accounts-overview-refresh-btn" class="setting-btn setting-btn-secondary" data-i18n="accounts.overview.refreshAccount">Refresh Account</button>
+                </div>
+              </div>
+              <div id="accounts-overview-status" class="accounts-overview-status"></div>
+              <div id="accounts-overview-tabs" class="accounts-overview-tabs">
+                <button type="button" class="accounts-overview-tab active" data-accounts-overview-tab="characters" data-i18n="accounts.overview.tab.chars">Characters</button>
+                <button type="button" class="accounts-overview-tab" data-accounts-overview-tab="vault" data-i18n="accounts.overview.tab.vault">Vault</button>
+                <button type="button" class="accounts-overview-tab" data-accounts-overview-tab="gifts" data-i18n="accounts.overview.tab.gifts">Gifts</button>
+                <button type="button" class="accounts-overview-tab" data-accounts-overview-tab="potions" data-i18n="accounts.overview.tab.potions">Potions</button>
+                <button type="button" class="accounts-overview-tab" data-accounts-overview-tab="totals" data-i18n="accounts.overview.tab.totals">Total Inventory</button>
+              </div>
+              <div id="accounts-overview-layout" class="accounts-overview-layout">
+                <div class="accounts-characters-panel">
+                  <div id="accounts-characters-list" class="accounts-characters-list"></div>
+                  <div id="accounts-characters-empty" class="empty-state" data-i18n="accounts.overview.emptyChars">No character data loaded.</div>
+                </div>
+                <div id="accounts-character-detail" class="accounts-character-detail">
+                  <div class="accounts-character-placeholder" data-i18n="accounts.overview.selectChar">Select a character to inspect its equipment and stats.</div>
+                </div>
+              </div>
+            </div><!-- /overview tab -->
+
+          </div>
+        </div>
+        </div><!-- /accounts-main -->
+        <!-- Right-click context menu for account cards -->
+        <div id="accounts-card-ctx-menu" class="accounts-card-ctx-menu" style="display:none;" role="menu">
+          <button type="button" class="accounts-ctx-item" data-card-action="edit">Edit</button>
+          <button type="button" class="accounts-ctx-item" data-card-action="duplicate">Duplicate</button>
+          <button type="button" class="accounts-ctx-item accounts-ctx-item--danger" data-card-action="delete">Delete</button>
+        </div>
+        <!-- Delete confirmation modal -->
+        <div id="accounts-delete-modal" class="accounts-modal-overlay" style="display:none;">
+          <div class="accounts-modal-backdrop"></div>
+          <div class="accounts-modal-panel">
+            <div class="accounts-modal-title" data-i18n="accounts.modal.delete.title">Delete Account</div>
+            <div id="accounts-delete-modal-msg" class="accounts-modal-msg" data-i18n="accounts.modal.delete.msg">Are you sure you want to delete this account?</div>
+            <div class="accounts-modal-actions">
+              <button id="accounts-delete-confirm-btn" class="setting-btn accounts-modal-danger-btn" data-i18n="accounts.modal.delete.confirm">Delete</button>
+              <button id="accounts-delete-cancel-btn" class="setting-btn setting-btn-secondary" data-i18n="btn.cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <!-- Edit-locked modal -->
+        <div id="accounts-locked-modal" class="accounts-modal-overlay" style="display:none;">
+          <div class="accounts-modal-backdrop"></div>
+          <div class="accounts-modal-panel">
+            <div class="accounts-modal-title" data-i18n="accounts.modal.locked.title">Account In Use</div>
+            <div class="accounts-modal-msg" data-i18n="accounts.modal.locked.msg">You must disconnect from the game before editing this account.</div>
+            <div class="accounts-modal-actions">
+              <button id="accounts-locked-ok-btn" class="setting-btn" data-i18n="accounts.modal.locked.ok">OK</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-logs" class="tab-panel admin-only" style="display:none;">
+        <div class="objects-toolbar">
+          <button id="logs-clear-btn" class="setting-btn setting-btn-secondary">Clear Logs</button>
+        </div>
+        <div id="logs-list" class="logs-list"></div>
+        <div id="logs-empty" class="empty-state">No logs yet.</div>
+      </div>
+
+      <div id="tab-packet-lab" class="tab-panel admin-only" style="display:none;">
+        <div class="lab-subtabs-row">
+          <div class="lab-subtabs">
+            <button type="button" class="lab-subtab active" data-lab-subtab="working">Working</button>
+            <button type="button" class="lab-subtab" data-lab-subtab="need-work">Need work</button>
+            <button type="button" class="lab-subtab" data-lab-subtab="unknowns">Unknowns</button>
+            <button type="button" class="lab-subtab" data-lab-subtab="byte-tool">Byte tool</button>
+          </div>
+          <div id="lab-packet-toolbar" class="lab-packet-toolbar">
+            <div id="lab-packet-search-wrap" class="lab-packet-search-wrap">
+              <input type="search" id="lab-packet-search" class="lab-packet-search" placeholder="Search name or id…" autocomplete="off" spellcheck="false" />
+            </div>
+            <div id="lab-defined-filter-wrap" class="lab-defined-filter-wrap hidden">
+              <label class="lab-filter-label" for="lab-defined-direction">Direction</label>
+              <select id="lab-defined-direction" class="lab-filter-select">
+                <option value="all">All</option>
+                <option value="incoming">Incoming (S→C)</option>
+                <option value="outgoing">Outgoing (C→S)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="lab-panel-working" class="lab-panel">
+          <div class="lab-body">
+            <div class="lab-types" id="lab-defined-list-working"><div class="lab-empty">Loading...</div></div>
+            <div class="lab-detail" id="lab-defined-detail-working"><div class="lab-empty">Select a packet to view structure.</div></div>
+          </div>
+        </div>
+        <div id="lab-panel-need-work" class="lab-panel hidden">
+          <div class="lab-body">
+            <div class="lab-types" id="lab-defined-list-need-work"><div class="lab-empty">Loading...</div></div>
+            <div class="lab-detail" id="lab-defined-detail-need-work"><div class="lab-empty">Select a packet to view structure.</div></div>
+          </div>
+        </div>
+        <div id="lab-panel-unknowns" class="lab-panel hidden">
+          <div class="lab-probe-bar">
+            <input id="lab-id" placeholder="ID or name (e.g. 169, REALMSCORE)" />
+            <input id="lab-spec" placeholder='Field spec (e.g. "int32" or "string compressedInt")' />
+            <button id="lab-probe-btn">Probe</button>
+          </div>
+          <div class="lab-body">
+            <div class="lab-types" id="lab-type-list"><div class="lab-empty">No unknown packets captured yet.</div></div>
+            <div class="lab-detail" id="lab-detail"><div class="lab-empty">Select a packet type to analyze.</div></div>
+          </div>
+        </div>
+        <div id="lab-panel-byte-tool" class="lab-panel hidden">
+          <div class="lab-byte-tool-bar">
+            <input id="lab-byte-input" placeholder="Paste big-endian packet bytes (hex). Example: 00 11 7F A3 40 49 0F DB" />
+            <button id="lab-byte-load-btn">Load</button>
+            <button id="lab-byte-clear-btn" class="lab-byte-clear">Clear selection</button>
+          </div>
+          <div class="lab-byte-tool-main">
+            <div id="lab-byte-grid" class="lab-byte-grid">
+              <div class="lab-empty">Paste bytes above and press Enter or click Load.</div>
+            </div>
+            <div class="lab-byte-meta">
+              <span id="lab-byte-selection">Selection: none</span>
+              <span class="lab-byte-meta-sep">|</span>
+              <span id="lab-byte-count">Total bytes: 0</span>
+            </div>
+            <div id="lab-byte-results" class="lab-byte-results"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-multibox" class="tab-panel admin-only multibox-tab coming-soon" data-coming-soon="Coming soon&#10;&#10;Multiboxing is in active development and will be available in a future update." style="display:none;">
+        <div class="multibox-toolbar">
+          <div class="multibox-toolbar-text">
+            <span class="multibox-toolbar-title" data-i18n="multibox.toolbar.title">Multibox layout</span>
+            <span class="multibox-toolbar-hint" data-i18n="multibox.toolbar.hint">Placeholder tiles — drag a panel to move, drag the corner to resize. Presets approximate tools like KronkBoxer: large focus window top-right, narrow stack on the left, extras along the bottom.</span>
+          </div>
+          <button type="button" id="multibox-add-client" class="setting-btn multibox-add-btn" data-i18n="multibox.addClient">Add client</button>
+        </div>
+        <div class="multibox-presets" role="group" aria-labelledby="multibox-presets-label">
+          <span id="multibox-presets-label" class="multibox-presets-label" data-i18n="multibox.presets.label">Layout presets</span>
+          <div class="multibox-presets-btns">
+            <button type="button" class="setting-btn setting-btn-secondary multibox-preset-btn" data-multibox-preset="4" data-i18n-title="multibox.presetTitle4">4</button>
+            <button type="button" class="setting-btn setting-btn-secondary multibox-preset-btn multibox-preset-btn--primary" data-multibox-preset="6" data-i18n-title="multibox.presetTitle6">6</button>
+            <button type="button" class="setting-btn setting-btn-secondary multibox-preset-btn" data-multibox-preset="8" data-i18n-title="multibox.presetTitle8">8</button>
+          </div>
+        </div>
+        <div id="multibox-stage" class="multibox-stage" aria-label="Placeholder multibox layout">
+          <div id="multibox-empty" class="multibox-empty hidden" data-i18n="multibox.empty">No clients. Click Add client to create a placeholder window.</div>
+          <div class="multibox-window" data-client-index="1" style="left:24px;top:28px;width:220px;height:160px;">
+            <div class="multibox-window-head">
+              <span class="multibox-window-title">Client 1</span>
+              <button type="button" class="multibox-window-remove" data-i18n-aria-label="multibox.removeClient" data-i18n-title="multibox.removeClient">&times;</button>
+            </div>
+            <div class="multibox-window-body"><span data-i18n="multibox.placeholder">Placeholder</span></div>
+            <div class="multibox-resize-handle" tabindex="-1" aria-hidden="true" title="Resize"></div>
+          </div>
+          <div class="multibox-window" data-client-index="2" style="left:264px;top:48px;width:200px;height:140px;">
+            <div class="multibox-window-head">
+              <span class="multibox-window-title">Client 2</span>
+              <button type="button" class="multibox-window-remove" data-i18n-aria-label="multibox.removeClient" data-i18n-title="multibox.removeClient">&times;</button>
+            </div>
+            <div class="multibox-window-body"><span data-i18n="multibox.placeholder">Placeholder</span></div>
+            <div class="multibox-resize-handle" tabindex="-1" aria-hidden="true" title="Resize"></div>
+          </div>
+          <div class="multibox-window" data-client-index="3" style="left:120px;top:220px;width:260px;height:120px;">
+            <div class="multibox-window-head">
+              <span class="multibox-window-title">Client 3</span>
+              <button type="button" class="multibox-window-remove" data-i18n-aria-label="multibox.removeClient" data-i18n-title="multibox.removeClient">&times;</button>
+            </div>
+            <div class="multibox-window-body"><span data-i18n="multibox.placeholder">Placeholder</span></div>
+            <div class="multibox-resize-handle" tabindex="-1" aria-hidden="true" title="Resize"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-damage" class="tab-panel" style="display:none;">
+        <div id="damage-settings-bar"></div>
+        <div id="damage-content">
+          <div id="damage-empty" class="empty-state" data-i18n="damage.empty">No damage recorded yet. Hit something!</div>
+          <div id="damage-split" class="damage-split" style="display:none;">
+            <div class="damage-left">
+              <div class="damage-panel-title">Runs</div>
+              <div id="damage-run-list" class="damage-run-list"></div>
+            </div>
+            <div class="damage-right">
+              <div class="damage-toolbar">
+                <label class="damage-toolbar-label" for="damage-filter">Filter</label>
+                <select id="damage-filter" class="damage-select">
+                  <option value="all">All</option>
+                  <option value="boss">Boss</option>
+                  <option value="miniboss">Miniboss</option>
+                </select>
+                <label class="damage-toolbar-label" for="damage-sort">Sort</label>
+                <select id="damage-sort" class="damage-select">
+                  <option value="lastHit">Recent</option>
+                  <option value="damage">Damage</option>
+                  <option value="duration">Duration</option>
+                  <option value="name">Name</option>
+                </select>
+                <div class="damage-toolbar-spacer"></div>
+                <button id="damage-copy-image-btn" class="setting-btn damage-copy-image-btn" type="button" title="Copy RealmShark-style image to clipboard">Copy Image</button>
+                <div id="damage-context" class="damage-context"></div>
+              </div>
+              <div class="damage-right-body">
+                <div class="damage-targets">
+                  <div class="damage-panel-title">Targets</div>
+                  <div id="damage-target-list" class="damage-target-list"></div>
+                </div>
+                <div class="damage-players">
+                  <div id="damage-player-title" class="damage-panel-title">Players</div>
+                  <div id="damage-player-breakdown" class="damage-player-breakdown"></div>
+                  <div id="damage-player-detail-empty" class="damage-player-detail-empty">Click a player to view detailed stats.</div>
+                  <div id="damage-player-empty" class="empty-state">Select a target to view players.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="damage-player-modal-overlay" class="damage-player-modal-overlay" style="display:none;">
+            <div id="damage-player-modal" class="damage-player-modal" role="dialog" aria-modal="true" aria-label="Player Damage Details">
+              <div class="damage-player-modal-head">
+                <div class="damage-player-modal-title">Player Details</div>
+                <button id="damage-player-modal-close" class="damage-player-modal-close" type="button" aria-label="Close">x</button>
+              </div>
+              <div id="damage-player-detail" class="damage-player-detail"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-objects" class="tab-panel" style="display:none;">
+        <div class="objects-toolbar">
+          <label class="nearby-toolbar-label" for="objects-account-select">Account</label>
+          <select id="objects-account-select" class="nearby-select"></select>
+          <button id="objects-refresh-btn" class="setting-btn" data-i18n="btn.refresh">Refresh</button>
+          <label class="objects-auto-refresh">
+            <input type="checkbox" id="objects-auto-refresh" class="objects-auto-refresh-input" />
+            <span class="objects-auto-refresh-switch" aria-hidden="true"></span>
+            <span class="objects-auto-refresh-label" data-i18n="objects.autoRefresh">Auto-refresh</span>
+          </label>
+        </div>
+        <div id="objects-tree" class="objects-tree"></div>
+        <div id="objects-empty" class="empty-state" data-i18n="objects.empty">No object data. Click Refresh after connecting to a server and entering a map.</div>
+      </div>
+
+      <div id="tab-tilemap" class="tab-panel" style="display:none;">
+        <div class="objects-toolbar">
+          <label class="nearby-toolbar-label" for="tilemap-account-select">Account</label>
+          <select id="tilemap-account-select" class="nearby-select"></select>
+          <button id="tilemap-refresh-btn" class="setting-btn" data-i18n="btn.refresh">Refresh</button>
+          <label class="objects-auto-refresh">
+            <input type="checkbox" id="tilemap-auto-refresh" class="objects-auto-refresh-input" />
+            <span class="objects-auto-refresh-switch" aria-hidden="true"></span>
+            <span class="objects-auto-refresh-label" data-i18n="tilemap.autoRefresh">Auto-refresh</span>
+          </label>
+        </div>
+        <div id="tilemap-tree" class="objects-tree"></div>
+        <div id="tilemap-empty" class="empty-state" data-i18n="tilemap.empty">No tile data. Click Refresh after connecting to a server and entering a map.</div>
+      </div>
+
+      <div id="tab-game-wiki" class="tab-panel" style="display:none;">
+        <div class="game-wiki-root">
+          <div class="game-wiki-toolbar">
+            <nav class="game-wiki-subnav" aria-label="Game data sections">
+              <button type="button" class="game-wiki-subnav-btn active" data-game-wiki-section="objects">Objects</button>
+              <button type="button" class="game-wiki-subnav-btn" data-game-wiki-section="tiles">Tiles</button>
+              <button type="button" class="game-wiki-subnav-btn" data-game-wiki-section="effects">Effects</button>
+            </nav>
+            <input type="search" id="game-wiki-search" class="game-wiki-search" placeholder="Search…" autocomplete="off" spellcheck="false" aria-label="Search catalog" />
+            <select id="game-wiki-sort" class="game-wiki-bucket-select" aria-label="Sort by">
+              <option value="name">Name A→Z</option>
+              <option value="id">Type ID</option>
+              <option value="hp">Max HP ↓</option>
+              <option value="damage">Damage ↓</option>
+            </select>
+            <select id="game-wiki-dungeon-filter" class="game-wiki-bucket-select hidden" aria-label="Filter by dungeon">
+              <option value="">All Dungeons</option>
+            </select>
+            <button type="button" id="game-wiki-refresh-btn" class="setting-btn" title="Rebuild catalog from objects.xml / tiles.xml">Refresh</button>
+          </div>
+          <div id="game-wiki-filter-bar" class="game-wiki-filter-bar">
+            <div id="game-wiki-obj-filters" class="game-wiki-filter-chips">
+              <button type="button" class="game-wiki-filter-chip active" data-game-wiki-class="all">All</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="enemy">Enemies</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="projectile">Projectiles</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="container">Containers</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="portal">Portals</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="player">Players</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="wall">Walls</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="visual">Decorations</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="equip">Equips</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="weapon">Weapons</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="ability">Abilities</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="armor">Armors</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="ring">Rings</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="other">Other</button>
+            </div>
+            <div id="game-wiki-tile-filters" class="game-wiki-filter-chips hidden">
+              <button type="button" class="game-wiki-filter-chip active" data-game-wiki-class="all">All</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="Damaging">Damaging</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="DamageAttrs">Dmg Attrs</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="Condition">Condition</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="Sink">Sink</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="Speed">Speed</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="Push">Push</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="Slide">Slide</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="NoWalk">No Walk</button>
+              <button type="button" class="game-wiki-filter-chip" data-game-wiki-class="Other">Other</button>
+            </div>
+          </div>
+          <div id="game-wiki-loading" class="game-wiki-loading hidden" aria-live="polite">Loading catalog…</div>
+          <div id="game-wiki-empty" class="empty-state hidden">No game data. Ensure objects.xml and tiles.xml are loaded in the proxy data folder.</div>
+          <div id="game-wiki-main" class="game-wiki-main hidden">
+            <div class="game-wiki-list-wrap">
+              <div id="game-wiki-list-meta" class="game-wiki-list-meta"></div>
+              <div id="game-wiki-scroll" class="game-wiki-scroll" tabindex="0">
+                <div id="game-wiki-list-spacer-top" class="game-wiki-list-spacer"></div>
+                <div id="game-wiki-list-rows"></div>
+                <div id="game-wiki-list-spacer-bottom" class="game-wiki-list-spacer"></div>
+              </div>
+            </div>
+            <aside id="game-wiki-detail" class="game-wiki-detail" aria-live="polite">
+              <div id="game-wiki-detail-placeholder" class="game-wiki-detail-placeholder">Select a row</div>
+              <div id="game-wiki-detail-body" class="game-wiki-detail-body hidden"></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-api" class="tab-panel" style="display:none;">
+        <iframe class="api-docs-iframe" src="api-docs-tab.html" title="Scripting API reference"></iframe>
+      </div>
+
+      <div id="tab-scripts" class="tab-panel" style="display:none;">
+        <div id="scripts-sub-local" class="scripts-subpanel">
+          <div id="scripts-hub" class="plugin-hub plugin-trainer scripts-workspace" aria-label="Developer scripts">
+            <aside id="scripts-hub-sidebar" class="plugin-hub-sidebar">
+              <div class="plugin-hub-toolbar scripts-toolbar">
+                <div class="scripts-dir-wrap">
+                  <div class="scripts-dir-label">Local SDK scripts</div>
+                  <div id="scripts-dir-display" class="scripts-dir-display">—</div>
+                </div>
+                <div class="scripts-toolbar-actions">
+                  <button type="button" id="scripts-refresh-btn" class="setting-btn">Refresh</button>
+                  <button type="button" id="scripts-open-folder-btn" class="setting-btn setting-btn-secondary">Open folder</button>
+                </div>
+                <input id="scripts-search" class="scripts-filter-input" type="search" placeholder="Search scripts" spellcheck="false" />
+              </div>
+              <div id="scripts-list" class="plugin-sidebar-list" role="list" aria-label="Script packages"></div>
+            </aside>
+            <main id="scripts-hub-main" class="plugin-hub-main">
+              <section id="scripts-detail" class="plugin-detail scripts-detail-panel" aria-live="polite">
+                <div class="plugin-detail-header scripts-detail-header">
+                  <div>
+                    <div id="scripts-detail-title" class="plugin-detail-title">Select a script</div>
+                    <div id="scripts-detail-sub" class="plugin-detail-sub">Local packages run through ScriptHost in the proxy process.</div>
+                  </div>
+                  <div id="scripts-detail-status" class="scripts-badge scripts-badge-idle">Idle</div>
+                </div>
+                <div id="scripts-detail-body" class="scripts-detail-body">
+                  <div class="scripts-detail-empty">Select a local script to inspect its manifest, current activity, and controls.</div>
+                </div>
+                <div class="scripts-detail-actions">
+                  <button type="button" id="scripts-detail-run" class="setting-btn" disabled>Run</button>
+                  <button type="button" id="scripts-detail-pause" class="setting-btn setting-btn-secondary" disabled title="Pause/resume needs ScriptHost support">Pause</button>
+                  <button type="button" id="scripts-detail-stop" class="setting-btn setting-btn-secondary" disabled>Stop</button>
+                  <button type="button" id="scripts-detail-open-gui" class="setting-btn setting-btn-secondary" disabled title="Open the GUI this script registered via Hive.ui.panel">Open GUI</button>
+                </div>
+              </section>
+              <section class="plugin-detail scripts-log-panel">
+                <div class="plugin-detail-header scripts-log-header">
+                  <div>
+                    <div class="plugin-detail-title">Log</div>
+                  </div>
+                  <div class="scripts-log-actions">
+                    <button type="button" id="scripts-log-clear" class="setting-btn setting-btn-secondary">Clear</button>
+                  </div>
+                </div>
+                <div id="scripts-log-output" class="scripts-log-output" role="log" aria-live="polite" spellcheck="false"></div>
+              </section>
+            </main>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="tab-nearby" class="tab-panel" style="display:none;">
+        <div class="nearby-toolbar">
+          <label class="nearby-toolbar-label" for="nearby-account-select">Account</label>
+          <select id="nearby-account-select" class="nearby-select"></select>
+          <button id="nearby-refresh-btn" class="setting-btn">Refresh</button>
+          <div class="nearby-toolbar-spacer"></div>
+          <label class="nearby-toolbar-label" for="nearby-sort">Sort</label>
+          <select id="nearby-sort" class="nearby-select">
+            <option value="distance">Distance</option>
+            <option value="name">Name</option>
+            <option value="hp">HP%</option>
+          </select>
+          <input id="nearby-filter" class="nearby-filter" placeholder="Filter name..." spellcheck="false" />
+        </div>
+        <div class="nearby-split">
+          <div class="nearby-left">
+            <div class="nearby-table-wrap">
+              <table class="nearby-table" id="nearby-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Dist</th>
+                    <th>HP</th>
+                    <th>MP</th>
+                    <th>Lv</th>
+                    <th>Fame</th>
+                    <th>Equipped</th>
+                  </tr>
+                </thead>
+                <tbody id="nearby-tbody"></tbody>
+              </table>
+            </div>
+            <div id="nearby-empty" class="empty-state">No nearby players.</div>
+            <div class="nearby-hint">Right click a player row to open debug.</div>
+          </div>
+          <div class="nearby-right">
+            <div class="nearby-debug-header">
+              <div class="nearby-debug-title">Player Debug</div>
+              <div id="nearby-debug-subtitle" class="nearby-debug-subtitle"></div>
+            </div>
+            <div id="nearby-debug-tree" class="objects-tree"></div>
+            <div id="nearby-debug-empty" class="empty-state">Right click a player to view details.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings tab: the actual settings form is moved here from the
+           legacy settings-overlay by JS on init so we do not duplicate it. -->
+      <div id="tab-settings" class="tab-panel" style="display:none;">
+        <div class="settings-popout-backdrop" data-settings-popout-close></div>
+        <div class="settings-popout-panel" role="dialog" aria-modal="true" aria-labelledby="settings-popout-title">
+          <div class="settings-popout-header">
+            <div>
+              <div class="settings-popout-kicker">Hive</div>
+              <h2 id="settings-popout-title">Settings</h2>
+            </div>
+            <button type="button" id="settings-popout-close" class="settings-popout-close" aria-label="Close settings">&times;</button>
+          </div>
+          <div class="settings-popout-body">
+            <div id="settings-tab-form" class="settings-tab-form"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sniffer drawer (bottom) -->
+  <div id="sniffer-drawer" class="collapsed">
+    <div id="sniffer-header">
+      <div class="sniffer-header-left">
+        <button id="sniffer-toggle" class="sniffer-toggle-btn">&#9660;</button>
+        <span class="sniffer-title">Packet Sniffer</span>
+        <span id="sniffer-badge" class="sniffer-badge hidden">0</span>
+      </div>
+      <div class="sniffer-header-right admin-only">
+        <span id="pps">0 pkt/s</span>
+        <span id="total">0 total</span>
+        <button id="btn-pause">Pause</button>
+        <button id="btn-clear">Clear</button>
+        <button id="btn-export">Export</button>
+      </div>
+    </div>
+
+    <div id="sniffer-body">
+      <div id="sniffer-filters" class="admin-only">
+        <div class="filter-row">
+          <label><input type="checkbox" id="filter-cs" checked> C&#8594;S</label>
+          <label><input type="checkbox" id="filter-sc" checked> S&#8594;C</label>
+          <label><input type="checkbox" id="filter-hide-noisy"> Hide Noisy</label>
+          <input type="text" id="filter-search" placeholder="Search packets...">
+        </div>
+        <div id="packet-type-filters"></div>
+      </div>
+
+      <div id="sniffer-content">
+        <div id="sniffer-table-wrap">
+          <table id="packet-table">
+            <thead>
+              <tr>
+                <th class="col-time">Time</th>
+                <th class="col-dir">Dir</th>
+                <th class="col-name">Packet</th>
+                <th class="col-size">Size</th>
+              </tr>
+            </thead>
+            <tbody id="packet-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Detail panel -->
+        <div id="detail-panel" class="hidden">
+          <div id="detail-header">
+            <h3 id="detail-title">Packet Details</h3>
+            <button id="detail-close">&times;</button>
+          </div>
+          <div id="detail-content">
+            <div id="detail-fields"></div>
+            <h4>Raw Hex</h4>
+            <pre id="detail-hex"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAC sidebar Launch tab: create/edit saved account groups (fixed overlay; must not live inside a hidden tab) -->
+  <div id="mac-launch-group-modal" class="accounts-modal-overlay" style="display:none;" aria-hidden="true">
+    <div class="accounts-modal-backdrop" data-mac-group-modal-close></div>
+    <div class="accounts-modal-panel mac-launch-group-modal-panel" role="dialog" aria-modal="true" aria-labelledby="mac-launch-group-modal-heading">
+      <div id="mac-launch-group-modal-heading" class="accounts-modal-title" data-i18n="mac.launch.groupsModal.newTitle">New launch group</div>
+      <label class="mac-launch-group-field-label" for="mac-launch-group-name-input" data-i18n="mac.launch.groupsModal.name">Group name</label>
+      <input type="text" id="mac-launch-group-name-input" class="mac-launch-group-name-input" maxlength="64" autocomplete="off" />
+      <div class="mac-launch-group-field-label" data-i18n="mac.launch.groupsModal.accounts">Accounts in group</div>
+      <div id="mac-launch-group-accounts-scroll" class="mac-launch-group-accounts-scroll"></div>
+      <div class="mac-launch-group-field-label" data-i18n="mac.launch.groupsModal.layoutRef">Virtual desktop (pixels)</div>
+      <div class="mac-launch-group-layout-ref-row">
+        <label class="mac-launch-group-ref-label"><span data-i18n="mac.launch.groupsLayoutW">W</span>
+          <input type="number" id="mac-launch-group-ref-w" class="mac-launch-group-ref-num" min="800" max="7680" step="1" value="1920" />
+        </label>
+        <label class="mac-launch-group-ref-label"><span data-i18n="mac.launch.groupsLayoutH">H</span>
+          <input type="number" id="mac-launch-group-ref-h" class="mac-launch-group-ref-num" min="600" max="4320" step="1" value="1080" />
+        </label>
+      </div>
+      <label class="mac-launch-group-no-overlap-row" for="mac-launch-group-no-overlap">
+        <input type="checkbox" id="mac-launch-group-no-overlap" />
+        <span data-i18n="mac.launch.groupsModal.noOverlap">Prevent overlapping tiles</span>
+      </label>
+      <p class="mac-launch-group-layout-hint" data-i18n="mac.launch.groupsModal.layoutHint">Drag and resize tiles like the Multibox tab. On Windows, Hive moves each game window after launch so positions match this layout.</p>
+      <div id="mac-launch-group-layout-stage" class="mac-launch-group-layout-stage" aria-label="Per-account launch positions"></div>
+      <div class="accounts-modal-actions mac-launch-group-modal-actions">
+        <button type="button" id="mac-launch-group-delete-btn" class="setting-btn accounts-modal-danger-btn" style="display:none" data-i18n="mac.launch.groupsModal.delete">Delete group</button>
+        <span class="mac-launch-group-modal-actions-spacer"></span>
+        <button type="button" id="mac-launch-group-save-btn" class="setting-btn" data-i18n="btn.save">Save</button>
+        <button type="button" class="setting-btn setting-btn-secondary" data-mac-group-modal-close data-i18n="btn.cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settings-overlay" class="hidden">
+    <div id="settings-modal">
+      <div id="settings-header">
+        <h2 data-i18n="settings.title">Settings</h2>
+        <button id="settings-close">&times;</button>
+      </div>
+      <div id="settings-body">
+        <div class="settings-tabs" id="settings-tabs">
+          <button type="button" class="settings-tab active" data-settings-tab="visual" data-i18n="settings.tab.visual">Visual</button>
+          <button type="button" class="settings-tab hidden" data-settings-tab="developer" id="settings-tab-developer" data-i18n="settings.tab.developer">Developer</button>
+          <button type="button" class="settings-tab hidden" data-settings-tab="admin" id="settings-tab-admin" data-i18n="settings.tab.admin">Admin</button>
+        </div>
+        <div class="settings-tab-panels">
+          <div class="settings-tab-panel active" data-settings-panel="visual">
+            <div class="settings-group">
+              <h3 data-i18n="settings.appearance">Appearance</h3>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label" data-i18n="settings.theme">Theme</span>
+                </div>
+                <select id="setting-theme-select" class="settings-select">
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                  <option value="sage">Sage</option>
+                  <option value="mist">Mist</option>
+                  <option value="forest">Forest</option>
+                  <option value="ocean">Ocean</option>
+                  <option value="ember">Ember</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label" data-i18n="settings.language">Language</span>
+                </div>
+                <select id="setting-language-select" class="settings-select">
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                  <option value="de">Deutsch</option>
+                  <option value="pt">Português</option>
+                  <option value="ja">日本語</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label" data-i18n="settings.showStatBonuses">Show stat bonuses</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-show-gear-stat-bonuses">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label" data-i18n="settings.showServerPing">Show server ping</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-show-server-ping">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label" data-i18n="settings.showAccountEmails">Show account emails</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-show-account-emails">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="settings-group">
+              <h3 data-i18n="tutorial.settings.title">Tutorial</h3>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label" data-i18n="tutorial.settings.replayLabel">Replay tutorial</span>
+                </div>
+                <button id="settings-replay-tutorial" class="setting-btn setting-btn-secondary" type="button" data-i18n="tutorial.settings.replayBtn">Replay</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-tab-panel" data-settings-panel="developer">
+            <div class="settings-group">
+              <h3>Developer Options</h3>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label">Developer Mode</span>
+                  <span class="settings-desc">Show Objects, Tilemap, Nearby Players, Scripts, and plugin debug controls.</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-dev-mode">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-tab-panel" data-settings-panel="admin">
+            <div class="settings-group">
+              <h3>Admin Tools</h3>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label">Admin Mode</span>
+                  <span class="settings-desc">Show Logs, Packet Lab, and the Packet Sniffer.</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-admin-mode">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label" data-i18n="settings.packetSniffer">Packet Sniffer</span>
+                  <span class="settings-desc" data-i18n="settings.packetSnifferDesc">Show or hide the bottom packet sniffer panel while Admin Mode is on.</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-packet-sniffer-visible" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label">View as user</span>
+                  <span class="settings-desc">Preview the dashboard as a non-admin user on a specific plan. Resets on reload.</span>
+                </div>
+                <select id="setting-view-as" class="settings-select">
+                  <option value="">Real account</option>
+                  <option value="free">Free user (no admin)</option>
+                  <option value="dodge">Dodge user ($10/mo tier)</option>
+                  <option value="developer">Developer user ($8/mo tier)</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label">Single Client Only</span>
+                  <span class="settings-desc">Block launching if a RotMG Exalt process is already open.</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-single-client-only">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <span class="settings-label">Account layout</span>
+                  <span class="settings-desc">Single client sidebar, multi-account compact list (MAC), or multibox (MAC-style sidebar; Home tab reserved).</span>
+                </div>
+                <select id="setting-account-layout-mode" class="settings-select account-layout-mode-select" aria-label="Account layout">
+                  <option value="single">Single</option>
+                  <option value="mac">MAC</option>
+                  <option value="multibox">Multibox</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Market: Submit a Script (settings-style overlay) -->
+  <div id="market-submit-script-overlay" class="hidden admin-only">
+    <div id="market-submit-script-modal" role="dialog" aria-modal="true" aria-labelledby="market-submit-script-heading">
+      <div class="mss-header">
+        <div class="mss-header-text">
+          <h2 id="market-submit-script-heading" class="mss-title">Submit a Script</h2>
+          <p class="mss-subtitle">Your script will be reviewed by an admin before appearing in the marketplace.</p>
+        </div>
+        <button type="button" id="market-submit-script-x" class="mss-x" aria-label="Close">&times;</button>
+      </div>
+      <form id="market-submit-script-form" class="mss-form" novalidate>
+        <input type="text" id="market-submit-script-name" name="name" class="mss-input" placeholder="Script name" autocomplete="off" spellcheck="false" />
+        <textarea id="market-submit-script-description" name="description" class="mss-textarea" rows="5" placeholder="Description"></textarea>
+        <div class="mss-row2">
+          <input type="text" id="market-submit-script-category" name="category" class="mss-input" placeholder="Category" autocomplete="off" spellcheck="false" />
+          <input type="text" id="market-submit-script-tags" name="tags" class="mss-input" placeholder="Tags (comma-sep)" autocomplete="off" spellcheck="false" />
+        </div>
+        <select id="market-submit-script-pricing" name="pricing" class="mss-select" aria-label="Pricing">
+          <option value="free">Free</option>
+          <option value="monthly">Monthly</option>
+          <option value="one_time">One-time</option>
+        </select>
+        <div class="mss-file-block">
+          <div class="mss-file-label">Script file</div>
+          <div class="mss-file-row">
+            <label for="market-submit-script-file" class="mss-file-btn">Choose File</label>
+            <input type="file" id="market-submit-script-file" class="hidden" accept=".js,.ts,.tsx,.mjs,.cjs,.lua,.txt,.zip" />
+            <span id="market-submit-script-filename" class="mss-file-status">No file chosen</span>
+          </div>
+        </div>
+        <div class="mss-footer">
+          <button type="button" id="market-submit-script-cancel" class="mss-btn mss-btn-cancel">Cancel</button>
+          <button type="submit" id="market-submit-script-send" class="mss-btn mss-btn-submit">Submit for Review</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Splash / loading screen (shown until session restore completes) -->
+  <div id="app-splash" class="app-splash">
+    <img src="LogoWNoBackground.png" width="64" height="64" alt="Hive" class="app-splash-logo" />
+    <div class="app-splash-spinner"></div>
+    <div id="app-splash-status" class="app-splash-status">Loading...</div>
+  </div>
+
+  <!-- Dashboard login overlay -->
+  <div id="disconnect-overlay" class="hidden" data-mode="signin">
+    <div class="disconnect-content">
+      <img class="disconnect-icon" src="LogoWNoBackground.png" width="72" height="72" alt="Hive" />
+              <div class="disconnect-title">Hive</div>
+      <div id="disconnect-auth-subtitle" class="disconnect-subtitle disconnect-auth-subtitle">Sign in to your Hive account</div>
+      <div id="disconnect-auth-notice" class="disconnect-auth-notice">This is not your Realm account. Use the credentials you created for Hive.</div>
+      <div id="overlay-login-error" class="login-error hidden"></div>
+      <div class="disconnect-form">
+        <input type="email" id="overlay-email" placeholder="Email" spellcheck="false" autocomplete="email">
+        <div class="disconnect-password-wrap">
+          <input type="password" id="overlay-password" placeholder="Password" autocomplete="current-password">
+          <button type="button" id="overlay-password-toggle" class="disconnect-password-eye-btn" aria-pressed="false" aria-label="Show password" title="Show password">
+            <svg class="disconnect-password-eye-show" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="disconnect-password-eye-hide hidden" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="disconnect-auth-switch">
+        <button type="button" id="overlay-switch-to-register" class="disconnect-auth-link">Create an account</button>
+        <button type="button" id="overlay-switch-to-signin" class="disconnect-auth-link">Back to sign in</button>
+      </div>
+      <div class="disconnect-actions disconnect-auth-actions">
+        <button id="overlay-login-btn" class="launch-game-btn" type="button">Sign in</button>
+        <button id="overlay-register-btn" class="launch-game-btn disconnect-secondary-btn" type="button">Create account</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="item-detail-overlay" class="hidden">
+    <div id="item-detail-modal">
+      <div class="item-detail-header">
+        <div class="item-detail-title-wrap">
+          <div id="item-detail-title" class="item-detail-title">Item</div>
+          <div id="item-detail-subtitle" class="item-detail-subtitle"></div>
+        </div>
+        <button id="item-detail-close" class="icon-btn item-detail-close-btn" type="button" title="Close">×</button>
+      </div>
+      <div class="item-detail-body">
+        <div id="item-detail-sprite" class="item-detail-sprite-wrap"></div>
+        <div class="item-detail-section">
+          <div class="item-detail-section-title">Enchants</div>
+          <div id="item-detail-enchants" class="item-detail-enchants"></div>
+        </div>
+        <div id="item-detail-locations-section" class="item-detail-section hidden">
+          <div class="item-detail-section-title">Locations</div>
+          <div id="item-detail-locations" class="item-detail-locations"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subscription tiers (Manage plan) — content rendered dynamically by JS -->
+  <div id="plan-modal-overlay" class="plan-modal-overlay hidden" aria-hidden="true">
+    <div class="plan-modal-backdrop" data-plan-modal-close></div>
+    <div class="plan-modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
+      <div class="plan-modal-header">
+        <h2 id="plan-modal-title" class="plan-modal-title">Manage plan</h2>
+        <p class="plan-modal-lead"><strong>$1 USD = 100 gems</strong>. Plans renew monthly from your gem balance.</p>
+      </div>
+      <div id="plan-modal-body" class="plan-modal-body" aria-live="polite">
+        <div class="plan-modal-loading">Loading plans…</div>
+      </div>
+      <div id="plan-modal-msg" class="plan-modal-msg hidden" role="alert"></div>
+      <div class="plan-modal-footer">
+        <button type="button" class="setting-btn setting-btn-secondary" data-plan-modal-close>Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buy gems modal (two-step: quantity → payment method) -->
+  <div id="purchase-modal-overlay" class="purchase-modal-overlay hidden" aria-hidden="true">
+    <div class="purchase-modal-backdrop" data-purchase-modal-close></div>
+    <div class="purchase-modal-panel" role="dialog" aria-modal="true" aria-labelledby="purchase-modal-title">
+
+      <!-- Step 1: quantity -->
+      <div id="purchase-step-qty" class="purchase-step">
+        <div class="purchase-modal-header">
+          <h2 id="purchase-modal-title" class="purchase-modal-title">Buy gems</h2>
+          <p class="purchase-modal-rate"><strong>1¢ = 1 gem</strong> (800G = $8)</p>
+          <p class="purchase-modal-sub-hint">Subscribers get bonus gems on every purchase!</p>
+        </div>
+        <div class="purchase-modal-qty-block">
+          <label for="purchase-modal-gem-qty" class="purchase-modal-qty-label">Gems to add</label>
+          <div class="purchase-modal-qty-row">
+            <input type="text" id="purchase-modal-gem-qty" class="purchase-modal-gem-input" value="100" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="6" aria-describedby="purchase-modal-qty-error" />
+            <span class="purchase-modal-usd" id="purchase-modal-total">= <strong>$1.00</strong></span>
+          </div>
+          <div class="purchase-modal-quick-btns" aria-label="Quick amounts">
+            <button type="button" class="purchase-quick-btn" data-quick-gems="100">100<span class="market-gem-label">G</span></button>
+            <button type="button" class="purchase-quick-btn" data-quick-gems="500">500<span class="market-gem-label">G</span></button>
+            <button type="button" class="purchase-quick-btn" data-quick-gems="800">800<span class="market-gem-label">G</span></button>
+            <button type="button" class="purchase-quick-btn" data-quick-gems="1000">1,000<span class="market-gem-label">G</span></button>
+            <button type="button" class="purchase-quick-btn" data-quick-gems="2500">2,500<span class="market-gem-label">G</span></button>
+          </div>
+          <p id="purchase-modal-qty-error" class="purchase-modal-qty-error hidden" role="alert"></p>
+        </div>
+        <div class="purchase-modal-actions">
+          <button type="button" id="purchase-modal-checkout" class="setting-btn">Choose payment →</button>
+          <button type="button" class="setting-btn setting-btn-secondary" data-purchase-modal-close>Cancel</button>
+        </div>
+      </div>
+
+      <!-- Step 2: payment method -->
+      <div id="purchase-step-method" class="purchase-step hidden">
+        <div class="purchase-modal-header">
+          <button type="button" id="purchase-modal-back" class="purchase-modal-back-btn" aria-label="Back">← Back</button>
+          <h2 class="purchase-modal-title">Payment method</h2>
+          <p class="purchase-modal-rate">Paying <strong id="purchase-method-summary"></strong> — complete checkout on our website.</p>
+        </div>
+        <div class="pay-cat-list" role="group" aria-label="Select payment method">
+
+          <!-- Card — direct, no dropdown -->
+          <button type="button" class="pay-cat-row pay-cat-row--card" data-method="stripe_card">
+            <span class="pay-cat-left">
+              <span class="pay-cat-icon">💳</span>
+              <span class="pay-cat-label">Credit / Debit Card</span>
+            </span>
+            <span class="pay-cat-arrow">→</span>
+          </button>
+
+          <!-- Crypto — expandable -->
+          <div class="pay-cat-group">
+            <button type="button" class="pay-cat-row pay-cat-row--expand" data-expand="crypto" aria-expanded="false">
+              <span class="pay-cat-left">
+                <span class="pay-cat-icon">₿</span>
+                <span class="pay-cat-label">Crypto</span>
+              </span>
+              <span class="pay-cat-chevron">▾</span>
+            </button>
+            <div class="pay-cat-options hidden" id="pay-expand-crypto">
+              <button type="button" class="pay-opt-btn" data-method="btc">
+                <span class="pay-opt-icon">₿</span> Bitcoin (BTC)
+              </button>
+              <button type="button" class="pay-opt-btn" data-method="eth">
+                <span class="pay-opt-icon">Ξ</span> Ethereum (ETH)
+              </button>
+              <button type="button" class="pay-opt-btn" data-method="usdt">
+                <span class="pay-opt-icon">₮</span> Tether (USDT)
+              </button>
+              <button type="button" class="pay-opt-btn" data-method="ltc">
+                <span class="pay-opt-icon">Ł</span> Litecoin (LTC)
+              </button>
+              <button type="button" class="pay-opt-btn" data-method="xmr">
+                <span class="pay-opt-icon">ɱ</span> Monero (XMR)
+              </button>
+            </div>
+          </div>
+
+          <!-- Other — expandable -->
+          <div class="pay-cat-group">
+            <button type="button" class="pay-cat-row pay-cat-row--expand" data-expand="other" aria-expanded="false">
+              <span class="pay-cat-left">
+                <span class="pay-cat-icon">🎁</span>
+                <span class="pay-cat-label">Other</span>
+              </span>
+              <span class="pay-cat-chevron">▾</span>
+            </button>
+            <div class="pay-cat-options hidden" id="pay-expand-other">
+              <button type="button" class="pay-opt-btn" data-method="amazon_gift_card">
+                <span class="pay-opt-icon">🎁</span> Amazon Gift Card
+              </button>
+            </div>
+          </div>
+
+        </div>
+        <p class="purchase-modal-web-note">Selecting a method opens the checkout page in your browser.</p>
+      </div>
+
+    </div>
+  </div>
+
+<!-- First-time tutorial overlay -->
+<div id="tutorial-overlay" class="tutorial-overlay hidden">
+  <div class="tutorial-backdrop"></div>
+  <div class="tutorial-panel">
+    <!-- Step 0: Welcome -->
+    <div class="tutorial-step" data-tutorial-step="0">
+      <img class="tutorial-logo" src="LogoWNoBackground.png" width="80" height="80" alt="Hive" />
+      <h1 class="tutorial-heading" data-i18n="tutorial.step0.title">Welcome to Hive</h1>
+      <p class="tutorial-text" data-i18n="tutorial.step0.body">Your all-in-one companion for Realm of the Mad God. Let's take a quick tour so you know where everything is.</p>
+      <p class="tutorial-text tutorial-text-dim" data-i18n="tutorial.step0.dim">This will only take a minute.</p>
+    </div>
+
+    <!-- Step 1: Home tab -->
+    <div class="tutorial-step hidden" data-tutorial-step="1">
+      <div class="tutorial-step-badge">1 / 4</div>
+      <h2 class="tutorial-heading" data-i18n="tutorial.step1.title">Home</h2>
+      <p class="tutorial-text" data-i18n="tutorial.step1.body">The Home tab is your command center. From here you can:</p>
+      <ul class="tutorial-list">
+        <li data-i18n-html="tutorial.step1.li1"><strong>Active Script</strong> &mdash; Quick link to the Scripts tab for disk-based .js scripts.</li>
+        <li data-i18n-html="tutorial.step1.li2"><strong>Session Stats</strong> &mdash; Track uptime, fame gained, white bags, events killed, and dungeons completed in real time.</li>
+        <li data-i18n-html="tutorial.step1.li3"><strong>Accounts Ready</strong> &mdash; Quickly launch any of your saved accounts directly from the dashboard.</li>
+        <li data-i18n-html="tutorial.step1.li4"><strong>Edit Layout</strong> &mdash; Click the pencil icon in the top corner to rearrange, hide, or restore cards. Drag to reorder and save your custom layout.</li>
+      </ul>
+    </div>
+
+    <!-- Step 2: Accounts / Scripts -->
+    <div class="tutorial-step hidden" data-tutorial-step="2">
+      <div class="tutorial-step-badge">2 / 4</div>
+      <h2 class="tutorial-heading" data-i18n="tutorial.step2.title">Accounts</h2>
+      <p class="tutorial-text" data-i18n="tutorial.step2.body">The Accounts tab is where you prepare sessions and automation. From here you can:</p>
+      <ul class="tutorial-list">
+        <li data-i18n-html="tutorial.step2.li1"><strong>Manage accounts</strong> &mdash; Store credentials, server preferences, and proxy settings.</li>
+        <li data-i18n-html="tutorial.step2.li2"><strong>Scripts</strong> &mdash; Use disk-based .js scripts for automation when Developer Mode is on.</li>
+        <li data-i18n-html="tutorial.step2.li3"><strong>Accounts</strong> &mdash; Add email accounts to launch and manage them.</li>
+      </ul>
+      <p class="tutorial-text tutorial-text-dim" data-i18n="tutorial.step2.dim">Start with accounts, then layer scripts once you are comfortable.</p>
+    </div>
+
+    <!-- Step 3: Accounts tab (interactive) -->
+    <div class="tutorial-step hidden" data-tutorial-step="3">
+      <div class="tutorial-step-badge">3 / 4</div>
+      <h2 class="tutorial-heading" data-i18n="tutorial.step3.title">Accounts</h2>
+      <p class="tutorial-text" data-i18n="tutorial.step3.body1">This is where you manage your Realm accounts. You can store multiple accounts, view character overviews, vault contents, and launch into the game.</p>
+      <p class="tutorial-text" data-i18n="tutorial.step3.body2">Let's add your first account now to get you started.</p>
+      <div class="tutorial-account-form">
+        <div class="tutorial-field">
+          <label for="tutorial-email" data-i18n="accounts.label.email">Email</label>
+          <input id="tutorial-email" type="text" placeholder="name@example.com" spellcheck="false" autocomplete="email" />
+        </div>
+        <div class="tutorial-field">
+          <label for="tutorial-password" data-i18n="accounts.label.password">Password</label>
+          <input id="tutorial-password" type="password" placeholder="Password" autocomplete="current-password" data-i18n-placeholder="tutorial.step3.passwordPlaceholder" />
+        </div>
+      </div>
+      <div id="tutorial-account-status" class="tutorial-account-status"></div>
+      <p class="tutorial-text tutorial-text-dim" data-i18n="tutorial.step3.dim">You can always add more accounts later or skip this step for now.</p>
+    </div>
+
+    <!-- Step 4: Damage Sniffer -->
+    <div class="tutorial-step hidden" data-tutorial-step="4">
+      <div class="tutorial-step-badge">4 / 4</div>
+      <h2 class="tutorial-heading" data-i18n="tutorial.step4.title">Damage Sniffer</h2>
+      <p class="tutorial-text" data-i18n="tutorial.step4.body">The Damage Sniffer records combat data while you play. It tracks:</p>
+      <ul class="tutorial-list">
+        <li data-i18n-html="tutorial.step4.li1"><strong>Runs</strong> &mdash; Each encounter is logged with a live view and saved history.</li>
+        <li data-i18n-html="tutorial.step4.li2"><strong>Targets</strong> &mdash; See every enemy you hit, filter by boss or miniboss.</li>
+        <li data-i18n-html="tutorial.step4.li3"><strong>Player Breakdown</strong> &mdash; View per-player DPS and damage contributions.</li>
+      </ul>
+      <p class="tutorial-text tutorial-text-dim" data-i18n="tutorial.step4.dim">Data is captured automatically &mdash; just play and review your stats anytime.</p>
+    </div>
+
+    <!-- Step 5: Finish -->
+    <div class="tutorial-step hidden" data-tutorial-step="5">
+      <img class="tutorial-logo" src="LogoWNoBackground.png" width="64" height="64" alt="Hive" />
+      <h2 class="tutorial-heading" data-i18n="tutorial.step5.title">You're all set!</h2>
+      <p class="tutorial-text" data-i18n="tutorial.step5.body">That covers the essentials. You can explore each tab at your own pace. If you ever need to revisit this tour, you can reset it in Settings.</p>
+      <p class="tutorial-text tutorial-text-dim" data-i18n="tutorial.step5.dim">Happy realming!</p>
+    </div>
+
+    <!-- Navigation -->
+    <div class="tutorial-nav">
+      <button id="tutorial-skip-btn" class="tutorial-btn tutorial-btn-ghost" type="button" data-i18n="tutorial.nav.skip">Skip</button>
+      <div class="tutorial-dots" id="tutorial-dots"></div>
+      <div class="tutorial-nav-right">
+        <button id="tutorial-back-btn" class="tutorial-btn tutorial-btn-ghost hidden" type="button" data-i18n="tutorial.nav.back">Back</button>
+        <button id="tutorial-next-btn" class="tutorial-btn tutorial-btn-primary" type="button" data-i18n="tutorial.nav.getStarted">Get Started</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Home card add picker modal -->
+<div id="home-add-modal" class="home-add-modal hidden" aria-hidden="true">
+  <div class="home-add-modal-backdrop" data-home-add-close></div>
+  <div class="home-add-modal-panel" role="dialog" aria-modal="true">
+    <div class="home-add-modal-header">
+      <h3 class="home-add-modal-title">Add Card</h3>
+      <p class="home-add-modal-desc">Select a card to add to your homepage.</p>
+    </div>
+    <div id="home-add-modal-list" class="home-add-modal-list"></div>
+    <div class="home-add-modal-actions">
+      <button id="home-add-modal-close" class="setting-btn setting-btn-secondary" type="button" data-home-add-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Home card remove confirmation modal -->
+<div id="home-remove-modal" class="home-remove-modal hidden" aria-hidden="true">
+  <div class="home-remove-modal-backdrop" data-home-remove-close></div>
+  <div class="home-remove-modal-panel" role="dialog" aria-modal="true">
+    <div class="home-remove-modal-header">
+      <h3 class="home-remove-modal-title">Remove Card</h3>
+    </div>
+    <p class="home-remove-modal-text">Are you sure you want to remove <strong id="home-remove-card-name"></strong> from your homepage?</p>
+    <div class="home-remove-modal-actions">
+      <button id="home-remove-confirm" class="setting-btn setting-btn-danger" type="button">Remove</button>
+      <button id="home-remove-cancel" class="setting-btn setting-btn-secondary" type="button" data-home-remove-close>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Pre-create stub objects so app.js const references capture the real containers.
+  // The worker will Object.assign into these, mutating them in-place.
+  var _items = {}, _classes = {}, _skins = {}, _textures = {}, _textiles = {}, _skinsheets = {};
+  window.EAMAssets = { items: _items, classes: _classes, skins: _skins, textures: _textures, textiles: _textiles, skinsheets: _skinsheets };
+  var _ench = {};
+  window.EAMEnchantments = _ench;
+
+  window._eamPromise = new Promise(function(resolve) {
+    var w = new Worker('/eam-loader.js');
+    w.onmessage = function(e) {
+      if (e.data) {
+        var a = e.data.assets;
+        if (a) {
+          Object.assign(_items, a.items);
+          Object.assign(_classes, a.classes);
+          Object.assign(_skins, a.skins);
+          Object.assign(_textures, a.textures);
+          Object.assign(_textiles, a.textiles);
+          Object.assign(_skinsheets, a.skinsheets);
+        }
+        if (e.data.enchantments) Object.assign(_ench, e.data.enchantments);
+      }
+      w.terminate();
+      resolve();
+    };
+    w.onerror = function() { resolve(); };
+  });
+})();
+</script>
+<script src="eam-portrait.js"></script>
+<script src="app.js"></script>
+
+<!-- Quick Launch account picker popup -->
+<div id="ql-picker" class="ql-picker-overlay" style="display:none;">
+  <div class="ql-picker-backdrop"></div>
+  <div class="ql-picker-panel">
+    <div class="ql-picker-header">
+      <span class="ql-picker-title">Quick Launch — Choose Account</span>
+      <button id="ql-picker-close" class="ql-picker-close" type="button">×</button>
+    </div>
+    <p class="ql-picker-sub">Select an account to bind to the Quick Launch button. Clicking it will instantly launch that account.</p>
+    <div id="ql-picker-list" class="ql-picker-list"></div>
+    <div class="ql-picker-footer">
+      <button id="ql-picker-clear" class="setting-btn setting-btn-secondary" type="button">Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- Script picker popup -->
+<div id="script-picker-overlay" class="script-picker-overlay hidden" role="dialog" aria-modal="true" aria-label="Select Script">
+  <div class="script-picker-backdrop"></div>
+  <div class="script-picker-panel">
+    <div class="script-picker-header">
+      <span class="script-picker-title">Scripts</span>
+      <button type="button" id="script-picker-close" class="icon-btn" title="Close">×</button>
+    </div>
+    <div class="script-picker-toolbar">
+      <input type="text" id="script-picker-search" class="script-picker-search" placeholder="Search by name or developer…" autocomplete="off" spellcheck="false">
+      <select id="script-picker-sort" class="settings-select script-picker-sort-select">
+        <option value="name">Name A–Z</option>
+        <option value="name-desc">Name Z–A</option>
+        <option value="developer">Developer</option>
+        <option value="status">Status</option>
+      </select>
+    </div>
+    <div id="script-picker-list" class="script-picker-list"></div>
+  </div>
+</div>
+
+<!-- Quick Launch button right-click context menu -->
+<div id="ql-ctx-menu" class="ql-ctx-menu" style="display:none;" role="menu">
+  <button type="button" class="accounts-ctx-item" data-ql-action="launch">Launch</button>
+  <button type="button" class="accounts-ctx-item" data-ql-action="edit">Edit Account</button>
+  <button type="button" class="accounts-ctx-item accounts-ctx-item--danger" data-ql-action="clear">Clear</button>
+</div>
+</body>
+</html>

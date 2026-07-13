@@ -1,0 +1,10 @@
+.idea/
+.vscode/
+node_modules/
+lib/
+build/
+*.tsbuildinfo
+yarn.lock
+*.js
+src/.DS_Store
+.claude/launch.json

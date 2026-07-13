@@ -1,0 +1,8 @@
+node_modules/
+dist/
+accounts.json
+.token-cache.json
+.build-cache.json
+*.log
+*.tsbuildinfo
+.DS_Store

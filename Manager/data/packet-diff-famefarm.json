@@ -1,0 +1,852 @@
+{
+  "summary": {
+    "missing_id_count": 33,
+    "decode_candidate_count": 31,
+    "name_mismatch_count": 7,
+    "note": "RealmShark-tomato in this checkout does not include packet definition sources; comparison is from FameFarm1."
+  },
+  "missing_ids": [
+    {
+      "id": 3,
+      "name": "CLAIMDAILYLOGINREWARD",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 2,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ClaimDailyLoginRewardPacket.py"
+    },
+    {
+      "id": 4,
+      "name": "DELETEPET",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 17,
+      "name": "ENTERARENA",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 19,
+      "name": "INVDROP",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\InvDropPacket.py"
+    },
+    {
+      "id": 39,
+      "name": "VERIFYEMAIL",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 0,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\VerifyEmailPacket.py"
+    },
+    {
+      "id": 41,
+      "name": "NEWABILITY",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\NewAbilityPacket.py"
+    },
+    {
+      "id": 50,
+      "name": "IMMINENTARENAWAVE",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 53,
+      "name": "PETCHANGEFORMMSG",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 57,
+      "name": "CREATE",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 4,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\CreatePacket.py"
+    },
+    {
+      "id": 66,
+      "name": "GLOBALNOTIFICATION",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 2,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\GlobalNotificationPacket.py"
+    },
+    {
+      "id": 68,
+      "name": "ARENADEATH",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 80,
+      "name": "ACCEPTARENADEATH",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 82,
+      "name": "QUESTOBJID",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\QuestObjIdPacket.py"
+    },
+    {
+      "id": 84,
+      "name": "REALMHEROESRESPONSE",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\RealmHeroesResponsePacket.py"
+    },
+    {
+      "id": 87,
+      "name": "EVOLVEPET",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 93,
+      "name": "CLAIMDAILYLOGINRESPONSE",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 3,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\ClaimDailyLoginResponsePacket.py"
+    },
+    {
+      "id": 95,
+      "name": "INVRESULT",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 4,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\InvResultPacket.py"
+    },
+    {
+      "id": 100,
+      "name": "SHOOTACK",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ShootAckPacket.py"
+    },
+    {
+      "id": 107,
+      "name": "RESKINUNLOCK",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\ReskinUnlockPacket.py"
+    },
+    {
+      "id": 109,
+      "name": "UNLOCKINFORMATION",
+      "direction": null,
+      "has_read": false,
+      "num_assignments": 0,
+      "source_file": null
+    },
+    {
+      "id": 112,
+      "name": "QUEUEINFORMATION",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 2,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\QueueInformationPacket.py"
+    },
+    {
+      "id": 114,
+      "name": "EXALTATIONUPDATE",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 9,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\ExaltationUpdatePacket.py"
+    },
+    {
+      "id": 120,
+      "name": "BLUEPRINTINFO",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\BlueprintInfoPacket.py"
+    },
+    {
+      "id": 122,
+      "name": "SHOWALLYSHOOT",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ShowAllyShootPacket.py"
+    },
+    {
+      "id": 139,
+      "name": "UNKNOWN139",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 5,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\Unknown139Packet.py"
+    },
+    {
+      "id": 149,
+      "name": "CLAIMBATTLEPASS",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ClaimBattlepassPacket.py"
+    },
+    {
+      "id": 150,
+      "name": "CLAIMBATTLEPASSRESPONSE",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\ClaimBattlepassResponsePacket.py"
+    },
+    {
+      "id": 159,
+      "name": "SENDEMOTE",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 3,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\SendEmotePacket.py"
+    },
+    {
+      "id": 165,
+      "name": "UNKNOWN165",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\Unknown165Packet.py"
+    },
+    {
+      "id": 169,
+      "name": "REALMSCORE",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 1,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\RealmScorePacket.py"
+    },
+    {
+      "id": 182,
+      "name": "CRUCIBLEREQUEST",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 4,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\CrucibleRequestPacket.py"
+    },
+    {
+      "id": 183,
+      "name": "CRUCIBLERESPONSE",
+      "direction": "server",
+      "has_read": true,
+      "num_assignments": 7,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\CrucibleResponsePacket.py"
+    },
+    {
+      "id": 200,
+      "name": "CREATEPARTY",
+      "direction": "client",
+      "has_read": true,
+      "num_assignments": 6,
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\CreatePartyPacket.py"
+    }
+  ],
+  "decode_candidates": [
+    {
+      "id": 5,
+      "sauce_name": "REQUESTTRADE",
+      "famefarm_name": "REQUESTTRADE",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\RequestTradePacket.py"
+    },
+    {
+      "id": 6,
+      "sauce_name": "QUESTFETCHRESPONSE",
+      "famefarm_name": "QUESTFETCHRESPONSE",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "nextRefreshPrice",
+          "reader": "readShort"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\QuestFetchResponsePacket.py"
+    },
+    {
+      "id": 7,
+      "sauce_name": "JOINGUILD",
+      "famefarm_name": "JOINGUILD",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\JoinGuildPacket.py"
+    },
+    {
+      "id": 11,
+      "sauce_name": "SHOWEFFECT",
+      "famefarm_name": "SHOWEFFECT",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "effectType",
+          "reader": "readUnsignedByte"
+        },
+        {
+          "field": "ignore",
+          "reader": "readUnsignedByte"
+        },
+        {
+          "field": "targetObjectId",
+          "reader": "readCompressedInt"
+        },
+        {
+          "field": "color",
+          "reader": "readInt32"
+        },
+        {
+          "field": "duration",
+          "reader": "readFloat"
+        },
+        {
+          "field": "unknownByte",
+          "reader": "readByte"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\ShowEffectPacket.py"
+    },
+    {
+      "id": 15,
+      "sauce_name": "GUILDREMOVE",
+      "famefarm_name": "GUILDREMOVE",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\GuildRemovePacket.py"
+    },
+    {
+      "id": 21,
+      "sauce_name": "NAMERESULT",
+      "famefarm_name": "NAMERESULT",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "success",
+          "reader": "readBool"
+        },
+        {
+          "field": "errorText",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\NameResultPacket.py"
+    },
+    {
+      "id": 22,
+      "sauce_name": "BUYRESULT",
+      "famefarm_name": "BUYRESULT",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "result",
+          "reader": "readInt32"
+        },
+        {
+          "field": "resultString",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\BuyResultPacket.py"
+    },
+    {
+      "id": 24,
+      "sauce_name": "ACTIVEPETPDATEREQ",
+      "famefarm_name": "ACTIVEPETUPDATEREQUEST",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "commandType",
+          "reader": "readByte"
+        },
+        {
+          "field": "instanceId",
+          "reader": "readInt32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ActivePetUpdateRequestPacket.py"
+    },
+    {
+      "id": 26,
+      "sauce_name": "GUILDRESULT",
+      "famefarm_name": "GUILDRESULT",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "success",
+          "reader": "readBool"
+        },
+        {
+          "field": "lineBuilderJSON",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\GuildResultPacket.py"
+    },
+    {
+      "id": 27,
+      "sauce_name": "EDITACCOUNTLIST",
+      "famefarm_name": "EDITACCOUNTLIST",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "accountListId",
+          "reader": "readInt32"
+        },
+        {
+          "field": "add",
+          "reader": "readBool"
+        },
+        {
+          "field": "objectId",
+          "reader": "readInt32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\EditAccountListPacket.py"
+    },
+    {
+      "id": 33,
+      "sauce_name": "CHANGEPETSKIN",
+      "famefarm_name": "CHANGEPETSKIN",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "petId",
+          "reader": "readInt32"
+        },
+        {
+          "field": "skinType",
+          "reader": "readInt32"
+        },
+        {
+          "field": "currency",
+          "reader": "readInt32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ChangePetSkinPacket.py"
+    },
+    {
+      "id": 34,
+      "sauce_name": "TRADEDONE",
+      "famefarm_name": "TRADEDONE",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "code",
+          "reader": "readInt32"
+        },
+        {
+          "field": "description",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\TradeDonePacket.py"
+    },
+    {
+      "id": 37,
+      "sauce_name": "CHANGEGUILDRANK",
+      "famefarm_name": "CHANGEGUILDRANK",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        },
+        {
+          "field": "guildRank",
+          "reader": "readByte"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ChangeGuildRankPacket.py"
+    },
+    {
+      "id": 38,
+      "sauce_name": "PLAYSOUND",
+      "famefarm_name": "PLAYSOUND",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "ownerId",
+          "reader": "readInt32"
+        },
+        {
+          "field": "soundId",
+          "reader": "readUnsignedByte"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\PlaySoundPacket.py"
+    },
+    {
+      "id": 59,
+      "sauce_name": "CREATEGUILD",
+      "famefarm_name": "CREATEGUILD",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\CreateGuildPacket.py"
+    },
+    {
+      "id": 63,
+      "sauce_name": "KEYINFORESPONSE",
+      "famefarm_name": "KEYINFORESPONSE",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        },
+        {
+          "field": "description",
+          "reader": "readStr"
+        },
+        {
+          "field": "creator",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\KeyInfoResponsePacket.py"
+    },
+    {
+      "id": 77,
+      "sauce_name": "INVITEDTOGUILD",
+      "famefarm_name": "INVITEDTOGUILD",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        },
+        {
+          "field": "guildName",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\InvitedToGuildPacket.py"
+    },
+    {
+      "id": 79,
+      "sauce_name": "PASSWORDPROMPT",
+      "famefarm_name": "PASSWORDPROMPT",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "cleanPasswordStatus",
+          "reader": "readInt32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\PasswordPromptPacket.py"
+    },
+    {
+      "id": 83,
+      "sauce_name": "PIC",
+      "famefarm_name": "PIC",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "width",
+          "reader": "readInt32"
+        },
+        {
+          "field": "height",
+          "reader": "readInt32"
+        },
+        {
+          "field": "bitmapData",
+          "reader": "readBytes"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\PicPacket.py"
+    },
+    {
+      "id": 86,
+      "sauce_name": "TRADESTART",
+      "famefarm_name": "TRADESTART",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "partnerName",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\TradeStartPacket.py"
+    },
+    {
+      "id": 88,
+      "sauce_name": "TRADEREQUESTED",
+      "famefarm_name": "TRADEREQUESTED",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\TradeRequestedPacket.py"
+    },
+    {
+      "id": 94,
+      "sauce_name": "KEYINFOREQUEST",
+      "famefarm_name": "KEYINFOREQUEST",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "itemType",
+          "reader": "readInt32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\KeyInfoRequestPacket.py"
+    },
+    {
+      "id": 96,
+      "sauce_name": "QUESTREDEEMRESPONSE",
+      "famefarm_name": "QUESTREDEEMRESPONSE",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "ok",
+          "reader": "readBool"
+        },
+        {
+          "field": "message",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\QuestRedeemResponsePacket.py"
+    },
+    {
+      "id": 97,
+      "sauce_name": "CHOOSENAME",
+      "famefarm_name": "CHOOSENAME",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ChooseNamePacket.py"
+    },
+    {
+      "id": 99,
+      "sauce_name": "ACCOUNTLIST",
+      "famefarm_name": "ACCOUNTLIST",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "accountListId",
+          "reader": "readInt32"
+        },
+        {
+          "field": "lockAction",
+          "reader": "readInt32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\AccountListPacket.py"
+    },
+    {
+      "id": 104,
+      "sauce_name": "GUILDINVITE",
+      "famefarm_name": "GUILDINVITE",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "name",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\GuildInvitePacket.py"
+    },
+    {
+      "id": 106,
+      "sauce_name": "FILE",
+      "famefarm_name": "FILE",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "fileName",
+          "reader": "readStr"
+        },
+        {
+          "field": "file",
+          "reader": "readStr32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\FilePacket.py"
+    },
+    {
+      "id": 108,
+      "sauce_name": "NEWCHARACTERINFO",
+      "famefarm_name": "NEWCHARACTERINFORMATION",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "charXML",
+          "reader": "readStr"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\NewCharacterInformationPacket.py"
+    },
+    {
+      "id": 117,
+      "sauce_name": "VAULTCONTENT",
+      "famefarm_name": "VAULTINFO",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "unknownBool",
+          "reader": "readBool"
+        },
+        {
+          "field": "chestObjectId",
+          "reader": "readCompressedInt"
+        },
+        {
+          "field": "materialObjectId",
+          "reader": "readCompressedInt"
+        },
+        {
+          "field": "giftObjectId",
+          "reader": "readCompressedInt"
+        },
+        {
+          "field": "potionObjectId",
+          "reader": "readCompressedInt"
+        },
+        {
+          "field": "spoilsObjectId",
+          "reader": "readCompressedInt"
+        },
+        {
+          "field": "vaultUpgrageCost",
+          "reader": "readShort"
+        },
+        {
+          "field": "materialUpgradeCost",
+          "reader": "readShort"
+        },
+        {
+          "field": "potionUpgradeCose",
+          "reader": "readShort"
+        },
+        {
+          "field": "curPotionMax",
+          "reader": "readShort"
+        },
+        {
+          "field": "nextPotionMax",
+          "reader": "readShort"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\VaultInfoPacket.py"
+    },
+    {
+      "id": 118,
+      "sauce_name": "FORGEREQUEST",
+      "famefarm_name": "FORGEREQUEST",
+      "direction": "client",
+      "famefarm_assignments": [
+        {
+          "field": "itemId",
+          "reader": "readInt32"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Outgoing\\ForgeRequestPacket.py"
+    },
+    {
+      "id": 119,
+      "sauce_name": "FORGERESULT",
+      "famefarm_name": "FORGERESPONSE",
+      "direction": "server",
+      "famefarm_assignments": [
+        {
+          "field": "success",
+          "reader": "readBool"
+        }
+      ],
+      "source_file": "C:\\Users\\trump\\Desktop\\FameFarm1\\Networking\\Packets\\Incoming\\ForgeResponsePacket.py"
+    }
+  ],
+  "name_mismatches": [
+    {
+      "id": 24,
+      "sauce_name": "ACTIVEPETPDATEREQ",
+      "famefarm_name": "ACTIVEPETUPDATEREQUEST"
+    },
+    {
+      "id": 55,
+      "sauce_name": "INVENTORYSWAP",
+      "famefarm_name": "INVSWAP"
+    },
+    {
+      "id": 76,
+      "sauce_name": "ACTIVEPET",
+      "famefarm_name": "ACTIVEPETUPDATE"
+    },
+    {
+      "id": 108,
+      "sauce_name": "NEWCHARACTERINFO",
+      "famefarm_name": "NEWCHARACTERINFORMATION"
+    },
+    {
+      "id": 117,
+      "sauce_name": "VAULTCONTENT",
+      "famefarm_name": "VAULTINFO"
+    },
+    {
+      "id": 119,
+      "sauce_name": "FORGERESULT",
+      "famefarm_name": "FORGERESPONSE"
+    },
+    {
+      "id": 121,
+      "sauce_name": "SHOOTACKCOUNTER",
+      "famefarm_name": "ENEMYSHOOTACK"
+    }
+  ]
+}

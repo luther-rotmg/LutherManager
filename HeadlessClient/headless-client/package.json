@@ -1,0 +1,37 @@
+{
+  "name": "headless-client",
+  "version": "0.1.0",
+  "description": "A headless Realm of the Mad God client built on realmlib",
+  "private": true,
+  "main": "dist/library.js",
+  "types": "dist/library.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/library.d.ts",
+      "default": "./dist/library.js"
+    }
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env -r ts-node/register src/index.ts",
+    "dev": "node --env-file-if-exists=.env --watch -r ts-node/register src/index.ts",
+    "panel:preview": "node -r ts-node/register scripts/panel-preview.ts",
+    "test:live-character": "node --env-file-if-exists=.env -r ts-node/register scripts/live-character-lifecycle.ts",
+    "build": "tsc -p .",
+    "serve": "node --env-file-if-exists=.env dist/index.js",
+    "start:prod": "npm run build && npm run serve",
+    "debug:packets": "DEBUG_PACKETS=hex node --env-file-if-exists=.env -r ts-node/register src/index.ts",
+    "typecheck": "tsc -p . && tsc -p tsconfig.scripts.json",
+    "test": "node --test -r ts-node/register test/**/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "realmlib": "file:../realmlib",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}

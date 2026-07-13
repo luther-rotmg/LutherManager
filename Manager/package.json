@@ -1,0 +1,45 @@
+{
+  "name": "hive",
+  "version": "1.0.0",
+  "description": "Hive - RotMG headless fleet and automation manager",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx src/index.ts --dev",
+    "dev:wsl": "node dev-wsl.mjs",
+    "electron": "electron .",
+    "build:sdk": "tsc -p packages/sdk/tsconfig.json && node scripts/prepare-sdk.mjs",
+    "build": "npm run build:sdk && tsc",
+    "build:prod": "npm run build:sdk && node scripts/build-prod.mjs",
+    "build:admin": "npm run build:sdk && node scripts/build-prod.mjs --admin",
+    "download-game-xml": "tsx scripts/download-rotmg-xml-cli.ts",
+    "dist": "npm run build:prod && electron-builder --win",
+    "dist:installer": "npm run build:prod && electron-builder --win nsis",
+    "dist:portable": "npm run build:prod && electron-builder --win portable",
+    "dist:admin": "npm run build:admin && electron-builder --win portable",
+    "installer:desktop": "bash scripts/installer-to-desktop.sh",
+    "installer:desktop:portable": "bash scripts/installer-to-desktop.sh portable"
+  },
+  "dependencies": {
+    "@hive/sdk": "file:packages/sdk",
+    "chokidar": "^3.6.0",
+    "fast-xml-parser": "^4.3.0",
+    "headless-client": "file:../HeadlessClient/headless-client",
+    "koffi": "^2.9.0",
+    "node-addon-api": "^8.7.0",
+    "sharp": "^0.33.5",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "electron": "^40.7.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.4",
+    "javascript-obfuscator": "^5.3.0",
+    "node-gyp": "^12.2.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
