@@ -36,7 +36,10 @@ export interface BridgeDeps {
    * Set by `ScriptHost` while `onStart` / `onLoop` / `onStop` run so `Hive.log`
    * can attribute lines to the active script.
    */
-  scriptSession: { scriptId: string | undefined };
+  scriptSession: { scriptId: string | undefined; accountId?: string };
+  /** Async-safe execution context for callbacks registered by a script. */
+  getScriptSession?: () => { scriptId: string | undefined; accountId?: string };
+  runInScriptSession?: <T>(session: { scriptId: string; accountId?: string }, fn: () => T) => T;
   /** Forwards one line to dashboard WebSocket clients (Script log tab). */
   emitScriptLog: (scriptId: string, line: string, level: ScriptLogLevel) => void;
   /**

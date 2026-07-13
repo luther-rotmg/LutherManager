@@ -1,5 +1,4 @@
 import {
-  Combat,
   Hive,
   Position,
   Self,
@@ -13,6 +12,11 @@ import {
 } from '@hive/sdk';
 import type { Client } from 'headless-client';
 import type { BridgeDeps } from '../BridgeDeps.js';
+import { installHeadlessChatBridge } from './HeadlessChatBridge.js';
+import { installHeadlessCombatBridge } from './HeadlessCombatBridge.js';
+import { installHeadlessEventsBridge } from './HeadlessEventsBridge.js';
+import { installHeadlessSocialBridge } from './HeadlessSocialBridge.js';
+import { installHeadlessWorldBridge } from './HeadlessWorldBridge.js';
 
 function active(deps: BridgeDeps): Client {
   const client = deps.getHeadlessClient?.();
@@ -166,7 +170,6 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   Walking.nexus = () => active(deps).escape();
   Walking.hasReached = (position: Position, tolerance = 0.5) => (optional(deps)?.distanceTo(position) ?? Infinity) <= tolerance;
 
-  Combat.shootAt = (x: number, y: number, weaponSlot = 0) => active(deps).shootAt({ x, y }, weaponSlot);
   chat.say = (message: string) => active(deps).say(message);
   chat.send = (message: string) => active(deps).say(message);
 
@@ -238,5 +241,11 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   character.delete = (characterId: number) => active(deps).deleteCharacter(characterId);
   character.convertSeasonal = () => active(deps).sendSeasonalConversion();
   character.isSeasonal = () => optional(deps)?.isSeasonal();
+
+  installHeadlessWorldBridge(deps);
+  installHeadlessCombatBridge(deps);
+  installHeadlessChatBridge(deps);
+  installHeadlessSocialBridge(deps);
+  installHeadlessEventsBridge(deps);
 
 }

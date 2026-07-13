@@ -18,13 +18,15 @@ interface PacketDef {
   name: string;
   direction: 'client' | 'server';
   fields: FieldDef[];
+  /** Free-form annotation carried over from packet-definitions.json. */
+  note?: string;
 }
 
 interface DataObjectDef {
   fields: FieldDef[];
 }
 
-interface DefsFile {
+export interface DefsFile {
   packets: Record<string, PacketDef>;
   dataObjects: Record<string, DataObjectDef>;
 }

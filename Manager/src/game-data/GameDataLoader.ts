@@ -27,6 +27,21 @@ export interface ProjectileDef {
   speedClamp: number;
 }
 
+export interface WeaponPatternDef {
+  projectileId: number;
+  patternIndex: number;
+  numProjectiles: number;
+  arcGap: number;
+  defaultAngle: number;
+  posOffsetX: number;
+  posOffsetY: number;
+}
+
+export interface WeaponSubattackDef {
+  rateOfFire: number;
+  patterns: WeaponPatternDef[];
+}
+
 export type ObjectCategory =
   | 'Portal'
   | 'Beacon'
@@ -54,11 +69,19 @@ export interface ObjectDef {
   rateOfFire: number;
   numProjectiles: number;
   arcGap: number;
+  subattacks: WeaponSubattackDef[];
   slotType: number;
+  usable: boolean;
+  mpCost: number;
+  cooldownMs: number;
+  activateEffects: string[];
   burstCount: number;   // >0 if weapon has <BurstCount> (burst weapon)
   occupySquare: boolean; // true if object has <OccupySquare> (blocks pathfinding)
+  fullOccupy: boolean;
+  enemyOccupySquare: boolean;
   protectFromGroundDamage: boolean;
   isEnemy: boolean;     // true if object has <Enemy> tag
+  invincible: boolean;  // permanent XML <Invincible />; never a combat target
   isPet: boolean;
   isPlayer: boolean;
   isContainer: boolean;
@@ -175,6 +198,77 @@ export interface TilePushVector {
   dy: number;
 }
 
+function readActivateEffects(node: unknown): string[] {
+  if (node == null) return [];
+  if (Array.isArray(node)) return node.flatMap(readActivateEffects);
+  if (typeof node === 'string' || typeof node === 'number') {
+    const value = String(node).trim();
+    return value ? [value] : [];
+  }
+  if (typeof node === 'object') {
+    const value = String((node as Record<string, unknown>)['#text'] ?? '').trim();
+    return value ? [value] : [];
+  }
+  return [];
+}
+
+function asObjectArray(node: unknown): Record<string, unknown>[] {
+  const values = Array.isArray(node) ? node : node == null ? [] : [node];
+  return values.filter((value): value is Record<string, unknown> => !!value && typeof value === 'object');
+}
+
+function finiteOr(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function positiveIntOr(value: unknown, fallback: number): number {
+  const parsed = finiteOr(value, fallback);
+  return parsed > 0 ? Math.max(1, Math.trunc(parsed)) : fallback;
+}
+
+function readPosOffset(value: unknown, fallback: [number, number]): [number, number] {
+  if (typeof value !== 'string' && typeof value !== 'number') return fallback;
+  const [rawX, rawY] = String(value).split(',', 2);
+  return [finiteOr(rawX, fallback[0]), finiteOr(rawY, fallback[1])];
+}
+
+function readWeaponSubattacks(
+  node: unknown,
+  root: Record<string, unknown>,
+): WeaponSubattackDef[] {
+  const rootRate = finiteOr(root.RateOfFire, 1);
+  const rootNumProjectiles = positiveIntOr(root.NumProjectiles, 1);
+  const rootArcGap = finiteOr(root.ArcGap, 11.25);
+  const rootDefaultAngle = finiteOr(root.DefaultAngle, 0);
+  const rootOffset = readPosOffset(root.PosOffset, [0, 0]);
+
+  return asObjectArray(node).map((subattack) => {
+    const rateOfFire = finiteOr(subattack.RateOfFire, rootRate);
+    const inheritedNumProjectiles = positiveIntOr(subattack.NumProjectiles, rootNumProjectiles);
+    const inheritedArcGap = finiteOr(subattack.ArcGap, rootArcGap);
+    const inheritedDefaultAngle = finiteOr(subattack.DefaultAngle, rootDefaultAngle);
+    const inheritedOffset = readPosOffset(subattack.PosOffset, rootOffset);
+    const inheritedProjectileId = finiteOr(subattack['@_projectileId'], 0);
+    const explicitPatterns = asObjectArray(subattack.ProjectilePattern);
+    const patternNodes = explicitPatterns.length > 0 ? explicitPatterns : [subattack];
+
+    const patterns = patternNodes.map((pattern, patternIndex): WeaponPatternDef => {
+      const [posOffsetX, posOffsetY] = readPosOffset(pattern.PosOffset, inheritedOffset);
+      return {
+        projectileId: Math.max(0, Math.trunc(finiteOr(pattern['@_projectileId'], inheritedProjectileId))),
+        patternIndex: explicitPatterns.length > 0 ? patternIndex : -1,
+        numProjectiles: positiveIntOr(pattern.NumProjectiles, inheritedNumProjectiles),
+        arcGap: finiteOr(pattern.ArcGap, inheritedArcGap),
+        defaultAngle: finiteOr(pattern.DefaultAngle, inheritedDefaultAngle),
+        posOffsetX,
+        posOffsetY,
+      };
+    });
+    return { rateOfFire, patterns };
+  });
+}
+
 export interface TileTextureDef {
   file: string;
   index: number;
@@ -252,7 +346,8 @@ export class GameDataLoader {
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
       isArray: (name) =>
-        name === 'Object' || name === 'Projectile' || name === 'ConditionEffect',
+        name === 'Object' || name === 'Projectile' || name === 'ConditionEffect' || name === 'Activate'
+          || name === 'Subattack' || name === 'ProjectilePattern',
     });
 
     const parsed = parser.parse(xml);
@@ -265,27 +360,42 @@ export class GameDataLoader {
       const id = (obj['@_id'] as string) ?? '';
       const displayId = String(obj.DisplayId ?? '').trim();
       const objectClass = obj.Class ?? '';
+      const objectTexture = obj.Texture ?? obj.AnimatedTexture ?? obj.RandomTexture?.Texture;
+      const subattacks = readWeaponSubattacks(obj.Subattack, obj);
+      const primaryPattern = subattacks[0]?.patterns[0];
+      const fastestSubattackRate = subattacks.reduce(
+        (fastest, subattack) => Math.max(fastest, subattack.rateOfFire > 0 ? subattack.rateOfFire : 1),
+        0,
+      );
 
       const def: ObjectDef = {
         type,
         id,
         displayId,
         objectClass,
-        textureFile: readFirstTextureFile(obj.Texture),
-        textureIndex: readFirstTextureIndex(obj.Texture),
+        textureFile: readFirstTextureFile(objectTexture),
+        textureIndex: readFirstTextureIndex(objectTexture),
         projectiles: new Map(),
         maxHp: Number(obj.MaxHitPoints ?? 0),
         defense: Number(obj.Defense ?? 0),
         quest: obj.Quest !== undefined,
         god: obj.God !== undefined,
-        rateOfFire: Number(obj.RateOfFire ?? 1),
-        numProjectiles: Number(obj.NumProjectiles ?? 1),
-        arcGap: Number(obj.ArcGap ?? 0),
+        rateOfFire: fastestSubattackRate || finiteOr(obj.RateOfFire, 1),
+        numProjectiles: primaryPattern?.numProjectiles ?? positiveIntOr(obj.NumProjectiles, 1),
+        arcGap: primaryPattern?.arcGap ?? finiteOr(obj.ArcGap, 11.25),
+        subattacks,
         slotType: Number(obj.SlotType ?? -1),
+        usable: obj.Usable !== undefined,
+        mpCost: Number(obj.MpCost ?? 0),
+        cooldownMs: Math.max(0, Number(obj.Cooldown ?? 0) * 1000),
+        activateEffects: readActivateEffects(obj.Activate),
         burstCount: Number(obj.BurstCount ?? 0),
         occupySquare: obj.OccupySquare !== undefined,
+        fullOccupy: obj.FullOccupy !== undefined,
+        enemyOccupySquare: obj.EnemyOccupySquare !== undefined,
         protectFromGroundDamage: obj.ProtectFromGroundDamage !== undefined,
         isEnemy: obj.Enemy !== undefined,
+        invincible: obj.Invincible !== undefined,
         isPet: obj.Pet !== undefined,
         isPlayer: obj.Player !== undefined,
         isContainer: obj.Container !== undefined,
@@ -339,14 +449,14 @@ export class GameDataLoader {
             maxHealthDamage: Number(proj.MaxHealthDamage ?? 0),
             conditionEffects,
             amplitude: Number(proj.Amplitude ?? 0),
-            frequency: Number(proj.Frequency ?? 0),
+            frequency: Number(proj.Frequency ?? 1),
             magnitude: Number(proj.Magnitude ?? 3),
             wavy: proj.Wavy !== undefined,
             parametric: proj.Parametric !== undefined,
             boomerang: proj.Boomerang !== undefined,
             acceleration: Number(proj.Acceleration ?? 0),
             accelerationDelay: Number(proj.AccelerationDelay ?? 0),
-            speedClamp: Number(proj.SpeedClamp ?? 0),
+            speedClamp: Number(proj.SpeedClamp ?? -1),
           });
         }
       }
@@ -494,6 +604,12 @@ export class GameDataLoader {
     return obj.quest && obj.maxHp >= minHp;
   }
 
+  /** True for enemy-tagged types that the client can actually target with projectiles. */
+  isCombatEnemy(objectType: number): boolean {
+    const obj = this.objects.get(objectType);
+    return !!obj?.isEnemy && !obj.invincible;
+  }
+
   /** Returns the set of object types that have <OccupySquare> (block pathfinding). */
   getOccupySquareTypes(): Set<number> {
     const result = new Set<number>();
@@ -503,11 +619,11 @@ export class GameDataLoader {
     return result;
   }
 
-  /** Returns the set of object types that are enemies (have <Enemy> tag). */
+  /** Returns enemy types that are valid combat targets. */
   getEnemyTypes(): Set<number> {
     const result = new Set<number>();
     for (const obj of this.objects.values()) {
-      if (obj.isEnemy) result.add(obj.type);
+      if (this.isCombatEnemy(obj.type)) result.add(obj.type);
     }
     return result;
   }

@@ -9,14 +9,13 @@ import { ObjectCategory } from '../../types/world/ObjectCategory';
 /**
  * Everything standing on the current map (`Hive.world.objects`).
  *
- * This is the **generic** view — every enemy, portal, player, container,
- * pet, beacon, projectile, prop etc. comes back as a {@link GameObject}
- * so scripts can filter by category, position, or name without caring
- * about its specialised namespace.
+ * This is the **generic** view of tracked map entities: enemies, portals,
+ * players, containers, pets, beacons, props, and controllers. Projectiles are
+ * exposed separately through `Hive.world.projectiles`.
  *
- * Prefer {@link Enemies} / {@link Players} / {@link Portals} when you
- * already know what you're looking for — they return richer typed
- * entities (HP, class, portal helpers, etc.).
+ * Prefer `Hive.enemies` or `Hive.players` when you already know what you're
+ * looking for. Category convenience methods such as {@link getPortals} return
+ * richer typed entities where the SDK has a specialized shape.
  */
 export class Objects {
     // ─── Basic lookup ───────────────────────────────────────────────────────
@@ -48,21 +47,25 @@ export class Objects {
 
     // ─── By category ────────────────────────────────────────────────────────
 
-    /** Every object whose game-data category matches (e.g. `'Enemy'`, `'Container'`). */
+    /**
+     * Every object whose raw game-data category matches (e.g. `'Enemy'`,
+     * `'Container'`). An `'Enemy'` category query includes invincible controllers
+     * and spawners; use {@link getEnemies} for combat targets.
+     */
     static getByCategory(category: ObjectCategory): GameObject[] {
         throw new Error('Must be run inside Hive client');
     }
 
     /**
-     * All enemies on the map with enemy-specific fields filled in.
-     * Equivalent to `Hive.enemies.getAll()` but returned through
-     * the generic objects API.
+     * All combat-targetable enemies on the map with enemy-specific fields filled in.
+     * Permanently invincible enemy-tagged controllers and spawners are excluded.
+     * Compatibility convenience alias for `Hive.enemies.getAll()`.
      */
     static getEnemies(): Enemy[] {
         throw new Error('Must be run inside Hive client');
     }
 
-    /** All player-like entities on the map (includes you). */
+    /** Compatibility convenience alias for `Hive.players.getAll()` (includes you). */
     static getPlayers(): PlayerEntity[] {
         throw new Error('Must be run inside Hive client');
     }
@@ -164,19 +167,19 @@ export class Objects {
 
     // ─── Name lookups ───────────────────────────────────────────────────────
 
-    /** First object whose display name case-insensitively equals `name`. */
+    /** First object whose display name contains `name`, case-insensitively. */
     static findByName(name: string): GameObject | null {
         throw new Error('Must be run inside Hive client');
     }
 
-    /** Every object whose display name case-insensitively equals `name`. */
+    /** Every object whose display name contains `name`, case-insensitively. */
     static findAllByName(name: string): GameObject[] {
         throw new Error('Must be run inside Hive client');
     }
 
     // ─── Portal helpers ─────────────────────────────────────────────────────
 
-    /** First portal whose display name case-insensitively equals `name`. */
+    /** First portal whose display name contains `name`, case-insensitively. */
     static findPortal(name: string): Portal | null {
         throw new Error('Must be run inside Hive client');
     }
@@ -198,7 +201,7 @@ export class Objects {
         throw new Error('Must be run inside Hive client');
     }
 
-    /** First container whose display name case-insensitively equals `name`. */
+    /** First container whose display name contains `name`, case-insensitively. */
     static findContainer(name: string): Container | null {
         throw new Error('Must be run inside Hive client');
     }
@@ -220,6 +223,15 @@ export class Objects {
 
     /** Shortcut for `getCategory(objectType) === 'Enemy'`. */
     static isEnemy(objectType: number): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    /**
+     * `true` when the type is an enemy that can participate in combat targeting.
+     * Unlike {@link isEnemy}, this excludes permanently invincible enemy-tagged
+     * controllers and spawners.
+     */
+    static isCombatEnemy(objectType: number): boolean {
         throw new Error('Must be run inside Hive client');
     }
 

@@ -4,6 +4,8 @@
  * used internally by the Client's emitter.
  */
 export enum ClientEvent {
+  /** Raw packet traffic in either direction. Payload: PacketTraffic. */
+  PacketTraffic = 'packetTraffic',
   /** Socket connected; Hello sent. */
   Connected = 'connected',
   /** In-world (CreateSuccess). Payload: objectId. */
@@ -32,4 +34,10 @@ export enum ClientEvent {
   Disconnect = 'disconnect',
   /** A move target was reached. Payload: the target {x,y}. */
   ReachedTarget = 'reachedTarget',
+  /** Autonexus crossed its configured HP threshold. Payload: AutoNexusTrigger. */
+  AutoNexus = 'autoNexus',
+  /** A local PLAYERSHOOT packet was sent. Payload: ClientShotFiredEvent. */
+  ShotFired = 'shotFired',
+  /** Local damage was predicted or confirmed. Payload: ClientDamageTakenEvent. */
+  DamageTaken = 'damageTaken',
 }

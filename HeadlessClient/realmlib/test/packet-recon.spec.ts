@@ -24,6 +24,7 @@ import {
   QueueCancelPacket,
   EnemyHitPacket,
   ShootAckPacket,
+  PlayerShootPacket,
   FavourPetPacket,
   RealmScoreUpdatePacket,
   CrucibleRequestPacket,
@@ -329,17 +330,34 @@ describe('current-build packets reconciled from captured bytes', () => {
     const p = new ShootAckPacket();
     p.read(reader);
     expect(p.time).to.equal(0x00024d7d);
-    expect(p.unknownShort).to.equal(1);
+    expect(p.ackCount).to.equal(1);
     expect(reader.remaining).to.equal(0);
   });
 
   it('ShootAckPacket round trips', () => {
     const p = new ShootAckPacket();
     p.time = 987654;
-    p.unknownShort = 2;
+    p.ackCount = 2;
     const out = roundTrip(p, new ShootAckPacket());
     expect(out.time).to.equal(987654);
-    expect(out.unknownShort).to.equal(2);
+    expect(out.ackCount).to.equal(2);
+  });
+
+  it('PlayerShootPacket writes current basic-weapon attack metadata', () => {
+    const p = new PlayerShootPacket();
+    p.time = 123;
+    p.bulletId = 1;
+    p.containerType = 500;
+    const writer = new Writer();
+    p.write(writer);
+    expect(writer.index).to.equal(32);
+    expect(writer.buffer.subarray(21, 24).toString('hex')).to.equal('00ff00');
+
+    const out = roundTrip(p, new PlayerShootPacket());
+    expect(out.attackIndex).to.equal(0);
+    expect(out.attackType).to.equal(0);
+    expect(out.patternIndex).to.equal(-1);
+    expect(out.burstIndex).to.equal(0);
   });
 
   it('FavourPetPacket reads the leading byte then a signed pet id', () => {

@@ -6,6 +6,7 @@ import { SDKBridge } from './bridge/index.js';
 import type { BridgeDeps, ScriptLogLevel, ScriptPanelInboundEvent } from './bridge/BridgeDeps.js';
 import { decryptScript } from '../util/ScriptDecryptor.js';
 import type { ScriptRuntimePayload } from '../util/ScriptDecryptor.js';
+import { getScriptExecutionSession, runWithScriptExecutionSession } from './ScriptExecutionContext.js';
 
 export interface ScriptInfo {
   id: string;
@@ -48,10 +49,10 @@ const SCRIPT_MANIFEST = 'hive.script.json';
 
 export class ScriptHost {
   private scriptsDir: string;
-  private running: Map<string, { instance: ScriptInstance; timer: NodeJS.Timeout; startedAt: number }> = new Map();
+  private running: Map<string, { instance: ScriptInstance; timer: NodeJS.Timeout; startedAt: number; accountId?: string }> = new Map();
   private logCallback?: (id: string, line: string, level: ScriptLogLevel) => void;
   private bridgeInstalled = false;
-  private readonly scriptSession: { scriptId: string | undefined };
+  private readonly scriptSession: { scriptId: string | undefined; accountId?: string };
   /** Latest activity line per script id (folder name or marketplace uuid), for dashboard cards. */
   private scriptActivityById = new Map<string, string>();
   /** DevServer notifies dashboard WS clients when activity or runnable state changes (optional). */
@@ -65,7 +66,7 @@ export class ScriptHost {
    */
   private marketplaceModuleCache: Map<string, { ModuleClass: new () => ScriptInstance; name: string }> = new Map();
 
-  constructor(scriptSession: { scriptId: string | undefined }) {
+  constructor(scriptSession: { scriptId: string | undefined; accountId?: string }) {
     this.scriptSession = scriptSession;
     this.scriptsDir = join(
       process.env.USERPROFILE || homedir(),
@@ -94,7 +95,7 @@ export class ScriptHost {
    * attribute to the only running script when unambiguous.
    */
   private resolveActivityScriptId(deps: BridgeDeps): string | undefined {
-    const sid = deps.scriptSession.scriptId;
+    const sid = deps.getScriptSession?.().scriptId ?? deps.scriptSession.scriptId;
     if (sid && String(sid).trim()) return String(sid).trim();
     if (this.running.size === 1) {
       return this.running.keys().next().value as string;
@@ -115,6 +116,8 @@ export class ScriptHost {
       }
       this.emitScriptsStateChanged();
     };
+    deps.getScriptSession = () => getScriptExecutionSession() ?? deps.scriptSession;
+    deps.runInScriptSession = (session, fn) => runWithScriptExecutionSession(session, fn);
     SDKBridge.install(deps);
     this.bridgeInstalled = true;
   }
@@ -124,13 +127,16 @@ export class ScriptHost {
     this.logCallback = cb;
   }
 
-  private withScriptId<T>(id: string, fn: () => T): T {
+  private withScriptId<T>(id: string, fn: () => T, accountId?: string): T {
     const prev = this.scriptSession.scriptId;
+    const prevAccountId = this.scriptSession.accountId;
     this.scriptSession.scriptId = id;
+    this.scriptSession.accountId = accountId;
     try {
-      return fn();
+      return runWithScriptExecutionSession({ scriptId: id, accountId }, fn);
     } finally {
       this.scriptSession.scriptId = prev;
+      this.scriptSession.accountId = prevAccountId;
     }
   }
 
@@ -269,7 +275,7 @@ export class ScriptHost {
   }
 
   /** Loads and starts a script package by folder id. */
-  async start(id: string): Promise<{ ok: boolean; error?: string }> {
+  async start(id: string, accountId?: string): Promise<{ ok: boolean; error?: string }> {
     if (this.running.has(id)) {
       return { ok: false, error: 'Already running' };
     }
@@ -317,7 +323,7 @@ export class ScriptHost {
       this.withScriptId(id, () => {
         this.log(id, `Starting ${script.name} v${script.version} by ${script.developer}...`);
         instance.onStart();
-      });
+      }, accountId);
 
       const startedAt = Date.now();
       const schedule = () => {
@@ -331,17 +337,17 @@ export class ScriptHost {
               return;
             }
             const timer = setTimeout(schedule, typeof delay === 'number' ? delay : 600);
-            this.running.set(id, { instance, timer, startedAt });
+            this.running.set(id, { instance, timer, startedAt, accountId });
           } catch (err: any) {
             this.log(id, `Error in onLoop: ${err.message}`, 'error');
             this.stop(id);
           }
-        });
+        }, accountId);
       };
 
       const timer = setTimeout(schedule, 0);
-      this.running.set(id, { instance, timer, startedAt });
-      this.withScriptId(id, () => this.log(id, `Running ${script.name} v${script.version} by ${script.developer}.`));
+      this.running.set(id, { instance, timer, startedAt, accountId });
+      this.withScriptId(id, () => this.log(id, `Running ${script.name} v${script.version} by ${script.developer}.`), accountId);
 
       this.emitScriptsStateChanged();
 
@@ -376,7 +382,7 @@ export class ScriptHost {
       } catch (err: any) {
         this.log(id, `Error in onStop: ${err.message}`, 'error');
       }
-    });
+    }, entry.accountId);
 
     return { ok: true };
   }

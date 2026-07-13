@@ -7,6 +7,8 @@ import type {
   ItemPickedUpEvent,
   PortalOpenedEvent,
   ConnectionEvent,
+  ShotFiredEvent,
+  DamageTakenEvent,
   CharacterFameThresholdEvent,
   PlayerNearbyEvent,
   PlayerNearbyOptions,
@@ -102,6 +104,18 @@ export const events = {
     return noopUnsub;
   },
 
+  /** Fires for each local PLAYERSHOOT packet sent by the selected account. */
+  onShotFired(handler: (e: ShotFiredEvent) => void): Unsubscribe {
+    void handler;
+    return noopUnsub;
+  },
+
+  /** Fires for each locally predicted or server-confirmed hit on the selected account. */
+  onDamageTaken(handler: (e: DamageTakenEvent) => void): Unsubscribe {
+    void handler;
+    return noopUnsub;
+  },
+
   /** Fires when the local player’s level stat increases (observed on `NEWTICK`). */
   onLevelUp(handler: (e: LevelUpEvent) => void): Unsubscribe {
     void handler;
@@ -183,6 +197,8 @@ export type {
   ItemPickedUpEvent,
   PortalOpenedEvent,
   ConnectionEvent,
+  ShotFiredEvent,
+  DamageTakenEvent,
   CharacterFameThresholdEvent,
   PlayerNearbyEvent,
   PlayerNearbyOptions,

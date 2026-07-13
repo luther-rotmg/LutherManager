@@ -2,6 +2,11 @@ import { VaultChest } from './VaultChest';
 import { GiftChest } from './GiftChest';
 import { Item } from '../types/items/Item';
 
+/**
+ * Legacy class-style vault API retained for existing scripts.
+ *
+ * @deprecated Use the vault storage and transfer methods on `Hive.inventory`.
+ */
 export const Vault = {
     giftChest: GiftChest,
 

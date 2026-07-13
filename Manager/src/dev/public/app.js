@@ -102,7 +102,7 @@
       'tab.home': 'Home', 'tab.clients': 'Clients', 'tab.plugins': 'Plugins', 'tab.api': 'API',
       'tab.market': 'Market', 'tab.accounts': 'Accounts', 'tab.logs': 'Logs',
       'tab.damage': 'Damage Sniffer', 'tab.objects': 'Objects', 'tab.tilemap': 'Tilemap',
-      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Nearby Players', 'tab.scripts': 'Scripts',
+      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Nearby Players', 'tab.scripts': 'Scripts', 'tab.chat': 'Chat',
       'tab.multibox': 'Multibox',
       'multibox.toolbar.title': 'Multibox layout',
       'multibox.toolbar.hint': 'Placeholder tiles — drag a panel to move, drag the corner to resize. Layout presets mimic common multibox tools (large focus top-right, left stack, bottom rail). Dragging Game windows here comes later.',
@@ -457,7 +457,7 @@
       'tab.home': 'Inicio', 'tab.clients': 'Clientes', 'tab.plugins': 'Complementos', 'tab.api': 'API',
       'tab.market': 'Mercado', 'tab.accounts': 'Cuentas', 'tab.logs': 'Registros',
       'tab.damage': 'Analizador de Daño', 'tab.objects': 'Objetos', 'tab.tilemap': 'Mapa de Tiles',
-      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Jugadores Cercanos', 'tab.scripts': 'Guiones',
+      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Jugadores Cercanos', 'tab.scripts': 'Guiones', 'tab.chat': 'Chat',
       'tab.multibox': 'Multibox',
       'multibox.toolbar.title': 'Diseño Multibox',
       'multibox.toolbar.hint': 'Marcador — arrastra cualquier parte de una tarjeta para moverla, arrastra la esquina para redimensionar. Añade o quita con el botón o ×.',
@@ -793,7 +793,7 @@
       'tab.home': 'Startseite', 'tab.clients': 'Clients', 'tab.plugins': 'Erweiterungen', 'tab.api': 'API',
       'tab.market': 'Markt', 'tab.accounts': 'Konten', 'tab.logs': 'Protokolle',
       'tab.damage': 'Schadensanalyse', 'tab.objects': 'Objekte', 'tab.tilemap': 'Kachelkarte',
-      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Nahe Spieler', 'tab.scripts': 'Skripte',
+      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Nahe Spieler', 'tab.scripts': 'Skripte', 'tab.chat': 'Chat',
       'tab.multibox': 'Multibox',
       'multibox.toolbar.title': 'Multibox-Layout',
       'multibox.toolbar.hint': 'Platzhalter — Karte zum Verschieben ziehen, Ecke zum Größenändern ziehen. Clients mit Button oder × hinzufügen oder entfernen.',
@@ -1129,7 +1129,7 @@
       'tab.home': 'Início', 'tab.clients': 'Clientes', 'tab.plugins': 'Complementos', 'tab.api': 'API',
       'tab.market': 'Mercado', 'tab.accounts': 'Contas', 'tab.logs': 'Registros',
       'tab.damage': 'Analisador de Dano', 'tab.objects': 'Objetos', 'tab.tilemap': 'Mapa de Tiles',
-      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Jogadores Próximos', 'tab.scripts': 'Roteiros',
+      'tab.gameWiki': 'Wiki', 'tab.nearby': 'Jogadores Próximos', 'tab.scripts': 'Roteiros', 'tab.chat': 'Chat',
       'tab.multibox': 'Multibox',
       'multibox.toolbar.title': 'Layout Multibox',
       'multibox.toolbar.hint': 'Marcador — arraste o cartão para mover, canto para redimensionar. Adicione ou remova pelo botão ou ×.',
@@ -1465,7 +1465,7 @@
       'tab.home': 'ホーム', 'tab.clients': 'クライアント', 'tab.plugins': 'プラグイン', 'tab.api': 'API',
       'tab.market': 'マーケット', 'tab.accounts': 'アカウント', 'tab.logs': 'ログ',
       'tab.damage': 'ダメージ解析', 'tab.objects': 'オブジェクト', 'tab.tilemap': 'タイルマップ',
-      'tab.gameWiki': 'Wiki', 'tab.nearby': '近くのプレイヤー', 'tab.scripts': 'スクリプト',
+      'tab.gameWiki': 'Wiki', 'tab.nearby': '近くのプレイヤー', 'tab.scripts': 'スクリプト', 'tab.chat': 'チャット',
       'tab.multibox': 'マルチボックス',
       'tab.memHelper': 'メモリヘルパー',
       'multibox.toolbar.title': 'マルチボックスレイアウト',
@@ -2287,7 +2287,7 @@
   var connectedClients = new Map(); // clientId → compact data from clientList message
   var headlessSessions = new Map(); // accountId -> live headless session summary
   function refreshHeadlessAccountSelectors() {
-    ['objects-account-select', 'nearby-account-select', 'tilemap-account-select', 'damage-account-select', 'viewer-account-select'].forEach(function (id) {
+    ['objects-account-select', 'nearby-account-select', 'tilemap-account-select', 'damage-account-select', 'viewer-account-select', 'packet-logger-account-select'].forEach(function (id) {
       var select = document.getElementById(id);
       if (!select) return;
       var previous = String(select.value || '');
@@ -2307,6 +2307,451 @@
         select.appendChild(empty);
       }
     });
+    renderChatAccountList();
+  }
+
+  var packetLoggerPackets = [];
+  var packetLoggerSelectedId = null;
+  var packetLoggerPaused = false;
+  var packetLoggerWired = false;
+  var packetLoggerRenderTimer = null;
+  var packetLoggerRecentTimestamps = [];
+  var PACKET_LOGGER_MAX_ROWS = 1000;
+  var PACKET_LOGGER_MAX_VISIBLE_ROWS = 400;
+  var PACKET_LOGGER_NOISY = new Set(['NEWTICK', 'MOVE', 'UPDATE', 'UPDATEACK', 'PING', 'PONG', 'GOTOACK', 'SHOOTACK']);
+
+  function packetLoggerElement(id) {
+    return document.getElementById(id);
+  }
+
+  function selectedPacketLoggerAccountId() {
+    var select = packetLoggerElement('packet-logger-account-select');
+    return String(select && select.value || '');
+  }
+
+  function subscribePacketLogger() {
+    packetLoggerPackets = [];
+    packetLoggerSelectedId = null;
+    packetLoggerRecentTimestamps = [];
+    renderPacketLogger();
+    var accountId = selectedPacketLoggerAccountId();
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'subscribeHeadlessPackets', accountId: accountId }));
+  }
+
+  function unsubscribePacketLogger() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'unsubscribeHeadlessPackets' }));
+    }
+  }
+
+  function schedulePacketLoggerRender() {
+    if (packetLoggerPaused || activeTab !== 'packet-logger' || packetLoggerRenderTimer) return;
+    packetLoggerRenderTimer = setTimeout(function () {
+      packetLoggerRenderTimer = null;
+      renderPacketLogger(true);
+    }, 120);
+  }
+
+  function receiveHeadlessPacket(accountId, packet) {
+    if (accountId !== selectedPacketLoggerAccountId() || !packet) return;
+    packetLoggerPackets.push(packet);
+    if (packetLoggerPackets.length > PACKET_LOGGER_MAX_ROWS) {
+      packetLoggerPackets.splice(0, packetLoggerPackets.length - PACKET_LOGGER_MAX_ROWS);
+    }
+    var now = Date.now();
+    packetLoggerRecentTimestamps.push(now);
+    packetLoggerRecentTimestamps = packetLoggerRecentTimestamps.filter(function (stamp) { return stamp >= now - 1000; });
+    schedulePacketLoggerRender();
+  }
+
+  function filteredPacketLoggerPackets() {
+    var showIncoming = !!(packetLoggerElement('packet-logger-incoming') || {}).checked;
+    var showOutgoing = !!(packetLoggerElement('packet-logger-outgoing') || {}).checked;
+    var hideNoisy = !!(packetLoggerElement('packet-logger-hide-noisy') || {}).checked;
+    var search = String((packetLoggerElement('packet-logger-search') || {}).value || '').trim().toLowerCase();
+    return packetLoggerPackets.filter(function (packet) {
+      if (packet.direction === 'S->C' && !showIncoming) return false;
+      if (packet.direction === 'C->S' && !showOutgoing) return false;
+      if (hideNoisy && PACKET_LOGGER_NOISY.has(String(packet.name || '').toUpperCase())) return false;
+      if (!search) return true;
+      return (String(packet.name || '') + ' ' + String(packet.packetId) + ' ' + String(packet.payloadHex || '')).toLowerCase().includes(search);
+    });
+  }
+
+  function formatPacketLoggerHex(packet) {
+    var hex = String(packet && packet.payloadHex || '');
+    if (!hex) return 'Empty payload.';
+    var bytes = hex.match(/.{1,2}/g) || [];
+    var lines = [];
+    for (var i = 0; i < bytes.length; i += 16) lines.push(bytes.slice(i, i + 16).join(' '));
+    if (packet.payloadTruncated) lines.push('', '[Payload preview truncated]');
+    return lines.join('\n');
+  }
+
+  function showPacketLoggerDetail(packet) {
+    var name = packetLoggerElement('packet-logger-detail-name');
+    var meta = packetLoggerElement('packet-logger-detail-meta');
+    var hex = packetLoggerElement('packet-logger-detail-hex');
+    if (!packet) {
+      if (name) name.textContent = 'Packet details';
+      if (meta) meta.textContent = 'Select a packet from the log.';
+      if (hex) hex.textContent = 'No packet selected.';
+      return;
+    }
+    if (name) name.textContent = String(packet.name || 'UNKNOWN');
+    if (meta) {
+      meta.textContent = packet.direction + ' | ID ' + packet.packetId + ' | ' + packet.size + ' bytes | ' + new Date(packet.timestamp).toLocaleTimeString();
+    }
+    if (hex) hex.textContent = formatPacketLoggerHex(packet);
+  }
+
+  function renderPacketLogger(followTail) {
+    var body = packetLoggerElement('packet-logger-body');
+    var empty = packetLoggerElement('packet-logger-empty');
+    var count = packetLoggerElement('packet-logger-count');
+    var rate = packetLoggerElement('packet-logger-rate');
+    if (!body) return;
+    var filtered = filteredPacketLoggerPackets();
+    var visible = filtered.slice(-PACKET_LOGGER_MAX_VISIBLE_ROWS);
+    var fragment = document.createDocumentFragment();
+    visible.forEach(function (packet) {
+      var row = document.createElement('tr');
+      row.dataset.packetId = String(packet.id);
+      if (packet.id === packetLoggerSelectedId) row.classList.add('selected');
+      var time = document.createElement('td');
+      time.textContent = new Date(packet.timestamp).toISOString().slice(11, 23);
+      var direction = document.createElement('td');
+      direction.className = packet.direction === 'C->S' ? 'packet-dir-out' : 'packet-dir-in';
+      direction.textContent = packet.direction === 'C->S' ? 'OUT' : 'IN';
+      var id = document.createElement('td');
+      id.textContent = String(packet.packetId);
+      var name = document.createElement('td');
+      name.textContent = String(packet.name || 'UNKNOWN');
+      name.title = name.textContent;
+      var size = document.createElement('td');
+      size.textContent = String(packet.size) + ' B';
+      row.append(time, direction, id, name, size);
+      row.addEventListener('click', function () {
+        packetLoggerSelectedId = packet.id;
+        showPacketLoggerDetail(packet);
+        renderPacketLogger();
+      });
+      fragment.appendChild(row);
+    });
+    body.replaceChildren(fragment);
+    if (empty) {
+      empty.style.display = visible.length ? 'none' : 'flex';
+      empty.textContent = selectedPacketLoggerAccountId()
+        ? (packetLoggerPackets.length ? 'No packets match the current filters.' : 'Waiting for packet traffic...')
+        : 'Select a connected account to inspect packet traffic.';
+    }
+    if (count) count.textContent = filtered.length + (filtered.length === 1 ? ' packet' : ' packets');
+    var now = Date.now();
+    packetLoggerRecentTimestamps = packetLoggerRecentTimestamps.filter(function (stamp) { return stamp >= now - 1000; });
+    if (rate) rate.textContent = packetLoggerRecentTimestamps.length + ' pkt/s';
+    if (visible.length && !packetLoggerPaused && followTail) {
+      var wrap = body.closest('.packet-logger-list-wrap');
+      if (wrap) wrap.scrollTop = wrap.scrollHeight;
+    }
+  }
+
+  function wirePacketLogger() {
+    if (packetLoggerWired) return;
+    packetLoggerWired = true;
+    var account = packetLoggerElement('packet-logger-account-select');
+    var pause = packetLoggerElement('packet-logger-pause');
+    var clear = packetLoggerElement('packet-logger-clear');
+    var copy = packetLoggerElement('packet-logger-copy');
+    if (account) account.addEventListener('change', subscribePacketLogger);
+    ['packet-logger-incoming', 'packet-logger-outgoing', 'packet-logger-hide-noisy', 'packet-logger-search'].forEach(function (id) {
+      var element = packetLoggerElement(id);
+      if (element) element.addEventListener(element.tagName === 'INPUT' && element.type === 'search' ? 'input' : 'change', renderPacketLogger);
+    });
+    if (pause) pause.addEventListener('click', function () {
+      packetLoggerPaused = !packetLoggerPaused;
+      pause.classList.toggle('active', packetLoggerPaused);
+      pause.textContent = packetLoggerPaused ? 'Resume' : 'Pause';
+      if (!packetLoggerPaused) renderPacketLogger();
+    });
+    if (clear) clear.addEventListener('click', function () {
+      packetLoggerPackets = [];
+      packetLoggerSelectedId = null;
+      packetLoggerRecentTimestamps = [];
+      showPacketLoggerDetail(null);
+      renderPacketLogger();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'clearHeadlessPackets', accountId: selectedPacketLoggerAccountId() }));
+      }
+    });
+    if (copy) copy.addEventListener('click', function () {
+      var packet = packetLoggerPackets.find(function (item) { return item.id === packetLoggerSelectedId; });
+      if (!packet || !navigator.clipboard) return;
+      navigator.clipboard.writeText(JSON.stringify(packet, null, 2)).catch(function () {});
+    });
+    setInterval(function () {
+      if (activeTab !== 'packet-logger') return;
+      var now = Date.now();
+      packetLoggerRecentTimestamps = packetLoggerRecentTimestamps.filter(function (stamp) { return stamp >= now - 1000; });
+      var rate = packetLoggerElement('packet-logger-rate');
+      if (rate) rate.textContent = packetLoggerRecentTimestamps.length + ' pkt/s';
+    }, 500);
+  }
+
+  var chatHistoryByAccount = new Map();
+  var selectedChatAccountId = '';
+  var chatPendingRequestId = '';
+  var chatPendingAccountId = '';
+  var chatStatusTimer = null;
+
+  function chatElement(id) {
+    return document.getElementById(id);
+  }
+
+  function selectedChatSession() {
+    return selectedChatAccountId ? headlessSessions.get(selectedChatAccountId) : null;
+  }
+
+  function setChatSendStatus(message, isError) {
+    var el = chatElement('chat-send-status');
+    if (!el) return;
+    el.textContent = String(message || '');
+    el.classList.toggle('error', !!isError);
+    if (chatStatusTimer) clearTimeout(chatStatusTimer);
+    if (message) {
+      chatStatusTimer = setTimeout(function () {
+        el.textContent = '';
+        el.classList.remove('error');
+      }, 3500);
+    }
+  }
+
+  function updateChatComposerState() {
+    var session = selectedChatSession();
+    var available = !!(session && session.connected && session.inWorld && ws && ws.readyState === WebSocket.OPEN);
+    var input = chatElement('chat-message-input');
+    var button = chatElement('chat-send-button');
+    var recipient = chatElement('chat-recipient-input');
+    var channel = chatElement('chat-channel-select');
+    var hasRecipient = !channel || channel.value !== 'tell' || !!String(recipient && recipient.value || '').trim();
+    if (input) input.disabled = !available;
+    if (button) button.disabled = !available || !!chatPendingRequestId || !hasRecipient || !String(input && input.value || '').trim();
+    if (channel) channel.disabled = !available;
+    if (recipient) recipient.disabled = !available;
+  }
+
+  function renderChatHeader() {
+    var session = selectedChatSession();
+    var nameEl = chatElement('chat-selected-name');
+    var statusEl = chatElement('chat-selected-status');
+    var indicator = chatElement('chat-live-indicator');
+    if (!session) {
+      if (nameEl) nameEl.textContent = 'Select an account';
+      if (statusEl) statusEl.textContent = 'Choose a connected account to view its chat.';
+      if (indicator) {
+        indicator.className = 'chat-live-indicator offline';
+        indicator.innerHTML = '<span></span>Offline';
+      }
+      updateChatComposerState();
+      return;
+    }
+    var displayName = String(session.playerName || session.alias || session.email || selectedChatAccountId);
+    var location = String(session.mapName || session.lifecycle || 'Connecting');
+    var socketReady = !!(ws && ws.readyState === WebSocket.OPEN);
+    var live = !!(session.connected && session.inWorld && socketReady);
+    if (nameEl) nameEl.textContent = displayName;
+    if (statusEl) statusEl.textContent = String(session.alias || session.email || '') + ' · ' + location;
+    if (indicator) {
+      indicator.className = 'chat-live-indicator ' + (live ? 'online' : 'offline');
+      indicator.innerHTML = '<span></span>' + (live ? 'Live' : (socketReady ? 'Connecting' : 'Offline'));
+    }
+    updateChatComposerState();
+  }
+
+  function renderChatAccountList() {
+    var list = chatElement('chat-account-list');
+    var count = chatElement('chat-account-count');
+    if (!list) return;
+    var sessions = Array.from(headlessSessions.values());
+    var previousSelectedAccountId = selectedChatAccountId;
+    if (count) count.textContent = sessions.length + (sessions.length === 1 ? ' account' : ' accounts');
+    if (selectedChatAccountId && !headlessSessions.has(selectedChatAccountId)) selectedChatAccountId = '';
+    if (!selectedChatAccountId && sessions.length) selectedChatAccountId = String(sessions[0].accountId);
+    list.innerHTML = '';
+    if (!sessions.length) {
+      var empty = document.createElement('div');
+      empty.className = 'chat-account-empty';
+      empty.textContent = 'No connected accounts';
+      list.appendChild(empty);
+    } else {
+      sessions.forEach(function (session) {
+        var accountId = String(session.accountId || '');
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'chat-account-item' + (accountId === selectedChatAccountId ? ' active' : '');
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', accountId === selectedChatAccountId ? 'true' : 'false');
+        button.dataset.accountId = accountId;
+        var dot = document.createElement('span');
+        dot.className = 'chat-account-dot' + (session.connected && session.inWorld ? ' online' : '');
+        var body = document.createElement('span');
+        body.className = 'chat-account-item-body';
+        var title = document.createElement('span');
+        title.className = 'chat-account-item-name';
+        title.textContent = String(session.playerName || session.alias || session.email || accountId);
+        var meta = document.createElement('span');
+        meta.className = 'chat-account-item-meta';
+        meta.textContent = String(session.mapName || session.lifecycle || 'Connecting');
+        body.appendChild(title);
+        body.appendChild(meta);
+        button.appendChild(dot);
+        button.appendChild(body);
+        button.addEventListener('click', function () { selectChatAccount(accountId, true); });
+        list.appendChild(button);
+      });
+    }
+    renderChatHeader();
+    if (previousSelectedAccountId !== selectedChatAccountId) {
+      renderChatMessages();
+      if (activeTab === 'chat') requestChatHistory();
+    }
+  }
+
+  function selectChatAccount(accountId, requestHistory) {
+    var next = String(accountId || '');
+    if (!headlessSessions.has(next)) next = '';
+    var changed = next !== selectedChatAccountId;
+    selectedChatAccountId = next;
+    if (changed) setChatSendStatus('', false);
+    renderChatAccountList();
+    if (changed) renderChatMessages();
+    if ((changed || requestHistory) && next) requestChatHistory();
+  }
+
+  function requestChatHistory() {
+    if (!selectedChatAccountId || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'requestChatHistory', accountId: selectedChatAccountId }));
+  }
+
+  function formatChatTime(timestamp) {
+    var date = new Date(Number(timestamp) || Date.now());
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function appendChatMessageNode(container, message) {
+    var row = document.createElement('div');
+    var channel = String(message.channel || 'say').toLowerCase();
+    row.className = 'chat-message chat-message-' + channel + (message.isLocal ? ' local' : '');
+    row.dataset.messageId = String(message.id || '');
+    var meta = document.createElement('div');
+    meta.className = 'chat-message-meta';
+    var sender = document.createElement('span');
+    sender.className = 'chat-message-sender';
+    sender.textContent = String(message.sender || 'System');
+    var badge = document.createElement('span');
+    badge.className = 'chat-message-channel';
+    badge.textContent = channel;
+    var time = document.createElement('time');
+    time.className = 'chat-message-time';
+    time.dateTime = new Date(Number(message.timestamp) || Date.now()).toISOString();
+    time.textContent = formatChatTime(message.timestamp);
+    meta.appendChild(sender);
+    meta.appendChild(badge);
+    if (channel === 'tell' && message.recipient) {
+      var recipient = document.createElement('span');
+      recipient.className = 'chat-message-recipient';
+      recipient.textContent = 'to ' + String(message.recipient);
+      meta.appendChild(recipient);
+    }
+    meta.appendChild(time);
+    var body = document.createElement('div');
+    body.className = 'chat-message-body';
+    body.textContent = String(message.message || '');
+    row.appendChild(meta);
+    row.appendChild(body);
+    container.appendChild(row);
+  }
+
+  function renderChatMessages() {
+    var list = chatElement('chat-message-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!selectedChatAccountId) {
+      list.innerHTML = '<div class="chat-empty-state">Select an account to view its current chat.</div>';
+      return;
+    }
+    var messages = chatHistoryByAccount.get(selectedChatAccountId) || [];
+    if (!messages.length) {
+      list.innerHTML = '<div class="chat-empty-state">No chat messages received for this account yet.</div>';
+      return;
+    }
+    messages.forEach(function (message) { appendChatMessageNode(list, message); });
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function receiveChatMessage(accountId, message) {
+    var id = String(accountId || '');
+    if (!id || !message) return;
+    var history = chatHistoryByAccount.get(id) || [];
+    var messageId = String(message.id || '');
+    if (messageId && history.some(function (item) { return String(item.id || '') === messageId; })) return;
+    history.push(message);
+    if (history.length > 300) history.splice(0, history.length - 300);
+    chatHistoryByAccount.set(id, history);
+    if (id !== selectedChatAccountId) return;
+    var list = chatElement('chat-message-list');
+    if (!list) return;
+    var nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+    var empty = list.querySelector('.chat-empty-state');
+    if (empty) empty.remove();
+    appendChatMessageNode(list, message);
+    if (nearBottom) list.scrollTop = list.scrollHeight;
+  }
+
+  function wireChatWorkspace() {
+    var form = chatElement('chat-composer');
+    var input = chatElement('chat-message-input');
+    var channel = chatElement('chat-channel-select');
+    var recipient = chatElement('chat-recipient-input');
+    if (!form || form.dataset.wired === '1') return;
+    form.dataset.wired = '1';
+    if (channel) channel.addEventListener('change', function () {
+      if (recipient) recipient.classList.toggle('hidden', channel.value !== 'tell');
+      if (channel.value === 'tell' && recipient) recipient.focus();
+      updateChatComposerState();
+    });
+    if (recipient) recipient.addEventListener('input', updateChatComposerState);
+    if (input) {
+      input.addEventListener('input', function () {
+        input.style.height = 'auto';
+        input.style.height = Math.min(112, input.scrollHeight) + 'px';
+        updateChatComposerState();
+      });
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        }
+      });
+    }
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var body = String(input && input.value || '').trim();
+      if (!selectedChatAccountId || !body || chatPendingRequestId || !ws || ws.readyState !== WebSocket.OPEN) return;
+      chatPendingRequestId = Date.now() + '-' + Math.random().toString(16).slice(2);
+      chatPendingAccountId = selectedChatAccountId;
+      ws.send(JSON.stringify({
+        type: 'sendChatMessage',
+        requestId: chatPendingRequestId,
+        accountId: selectedChatAccountId,
+        channel: String(channel && channel.value || 'say'),
+        recipient: String(recipient && recipient.value || ''),
+        message: body,
+      }));
+      setChatSendStatus('Sending...', false);
+      updateChatComposerState();
+    });
+    renderChatAccountList();
   }
   var connectedClientFirstSeenAt = new Map(); // clientId -> first-seen timestamp (ms)
   var macScriptSelectionByClientId = (function () {
@@ -2326,6 +2771,10 @@
   let accountsDirty = false;
   let accountsRefreshAllLoading = false;
   let suppressAccountsEditorEvents = false;
+  let dashboardProxies = [];
+  let selectedProxyId = null;
+  let proxiesTesting = false;
+  let proxyTestingIds = new Set();
 
   let accountOverviewById = Object.create(null);
   let accountOverviewNoticeById = Object.create(null);
@@ -2466,11 +2915,32 @@
   const accountsServerSelect = document.getElementById('accounts-server');
   const accountsNotesInput = document.getElementById('accounts-notes');
   const accountsStatusEl = document.getElementById('accounts-status');
+  const accountsProxyIdSelect = document.getElementById('accounts-proxy-id');
+  const accountsProxyProtocolSelect = document.getElementById('accounts-proxy-protocol');
+  const accountsCustomProxyFields = document.getElementById('accounts-custom-proxy-fields');
   const accountsProxyInput = document.getElementById('accounts-proxy');
   const accountsProxyAuthWrap = document.getElementById('accounts-proxy-auth-wrap');
   const accountsProxyUsername = document.getElementById('accounts-proxy-username');
   const accountsProxyPassword = document.getElementById('accounts-proxy-password');
+  const proxyManagerSummary = document.getElementById('proxy-manager-summary');
+  const proxyTableBody = document.getElementById('proxy-table-body');
+  const proxyListEmpty = document.getElementById('proxy-list-empty');
+  const proxyAddBtn = document.getElementById('proxy-add-btn');
+  const proxyTestAllBtn = document.getElementById('proxy-test-all-btn');
+  const proxyEditorTitle = document.getElementById('proxy-editor-title');
+  const proxyNameInput = document.getElementById('proxy-name-input');
+  const proxyProtocolSelect = document.getElementById('proxy-protocol-select');
+  const proxyHostInput = document.getElementById('proxy-host-input');
+  const proxyPortInput = document.getElementById('proxy-port-input');
+  const proxyUsernameInput = document.getElementById('proxy-username-input');
+  const proxyPasswordInput = document.getElementById('proxy-password-input');
+  const proxyEnabledInput = document.getElementById('proxy-enabled-input');
+  const proxyEditorStatus = document.getElementById('proxy-editor-status');
+  const proxySaveBtn = document.getElementById('proxy-save-btn');
+  const proxyTestBtn = document.getElementById('proxy-test-btn');
+  const proxyDeleteBtn = document.getElementById('proxy-delete-btn');
   const accountsCardCtxMenu = document.getElementById('accounts-card-ctx-menu');
+  const clientsCardCtxMenu = document.getElementById('clients-card-ctx-menu');
   // New elements for redesigned accounts tab
   const accountsSetupEl = document.getElementById('accounts-setup');
   const accountsMainEl = document.getElementById('accounts-main');
@@ -5521,16 +5991,22 @@
         fetch('/api/scripts/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: scriptId }),
+          body: JSON.stringify({ id: scriptId, accountId: clientId }),
         })
           .then(function (r) { return r.json(); })
+          .then(function (result) {
+            if (!result || !result.ok) throw new Error((result && result.error) || 'Script failed to start.');
+            addHomeFeed('ok', 'Started ' + scriptId + ' on ' + clientId + '.');
+          })
           .then(function () { return fetch('/api/scripts'); })
           .then(function (r) { return r.json(); })
           .then(function (data) {
             scriptsTabLastData = data || { scripts: [], dir: null };
             renderMultiHomeConnectedCards();
           })
-          .catch(function () {});
+          .catch(function (err) {
+            addHomeFeed('err', (err && err.message) || 'Script failed to start.');
+          });
       });
     });
     grid.querySelectorAll('[data-multi-live-script-stop]').forEach(function (btn) {
@@ -6114,9 +6590,13 @@
 
     ws.onopen = () => {
       updateDashboardAvailabilityUi();
+      renderChatHeader();
+      updateChatComposerState();
       if (adminMode && packetSnifferVisible) seedSnifferPacketTypeChipsFromDefs();
       addHomeFeed('ok', 'Dashboard socket connected.');
       try { ws.send(JSON.stringify({ type: 'requestScriptPanelSnapshots' })); } catch (_e) {}
+      if (activeTab === 'chat') requestChatHistory();
+      if (activeTab === 'packet-logger') subscribePacketLogger();
       // Re-send dashboard tokens so the server-side bot API client stays in sync
       if (dashboardLoggedIn && accessToken) {
         ws.send(JSON.stringify({
@@ -6130,6 +6610,12 @@
     };
 
     ws.onclose = () => {
+      chatPendingRequestId = '';
+      chatPendingAccountId = '';
+      if (packetLoggerRenderTimer) {
+        clearTimeout(packetLoggerRenderTimer);
+        packetLoggerRenderTimer = null;
+      }
       labSendPending.clear();
       if (pendingAllPlayersRawStatsTimer) {
         clearTimeout(pendingAllPlayersRawStatsTimer);
@@ -6148,6 +6634,8 @@
       connectedClients.delete(SINGLE_ACCOUNT_CLIENT_ID);
       renderSingleAccountDock();
       if (activeTab === 'scripts') renderScriptsListFromData(scriptsTabLastData);
+      renderChatHeader();
+      updateChatComposerState();
       updateDashboardAvailabilityUi();
       addHomeFeed('err', 'Dashboard socket disconnected. Reconnecting...');
       if (typeof clearObjectsAutoRefresh === 'function') clearObjectsAutoRefresh();
@@ -6201,12 +6689,37 @@
             if (activeTab === 'damage') renderDamageTab();
           }
           break;
+        case 'headlessPacketHistory':
+          if (String(msg.accountId || '') === selectedPacketLoggerAccountId()) {
+            packetLoggerPackets = (Array.isArray(msg.packets) ? msg.packets : []).slice(-PACKET_LOGGER_MAX_ROWS);
+            packetLoggerSelectedId = null;
+            packetLoggerRecentTimestamps = [];
+            showPacketLoggerDetail(null);
+            renderPacketLogger();
+          }
+          break;
+        case 'headlessPacket':
+          receiveHeadlessPacket(String(msg.accountId || ''), msg.packet);
+          break;
+        case 'headlessDisconnectResult':
+          if (msg.ok) {
+            if (String(macPopoutOpenClientId || '') === String(msg.accountId || '')) closeMacPopout();
+            if (String(multiHomeFocusedClientId || '') === String(msg.accountId || '')) multiHomeFocusedClientId = null;
+            addHomeFeed('act', msg.message || 'Client disconnected.');
+          } else {
+            addHomeFeed('err', msg.message || 'Unable to disconnect client.');
+          }
+          break;
         case 'headlessSessions':
           var previousDamageAccountId = damageAccountSelect ? String(damageAccountSelect.value || '') : '';
           var previousViewerAccountId = viewerAccountSelect ? String(viewerAccountSelect.value || '') : '';
+          var previousPacketLoggerAccountId = selectedPacketLoggerAccountId();
           headlessSessions.clear();
           (msg.sessions || []).forEach(function (session) {
             headlessSessions.set(String(session.accountId), session);
+          });
+          Array.from(chatHistoryByAccount.keys()).forEach(function (accountId) {
+            if (!headlessSessions.has(accountId)) chatHistoryByAccount.delete(accountId);
           });
           refreshHeadlessAccountSelectors();
           if (activeTab === 'damage' && damageAccountSelect && String(damageAccountSelect.value || '') !== previousDamageAccountId) {
@@ -6215,6 +6728,37 @@
           if (activeTab === 'viewer' && viewerAccountSelect && String(viewerAccountSelect.value || '') !== previousViewerAccountId) {
             selectViewerAccount();
           }
+          if (activeTab === 'packet-logger' && selectedPacketLoggerAccountId() !== previousPacketLoggerAccountId) {
+            subscribePacketLogger();
+          }
+          break;
+        case 'chatHistory': {
+          var chatAccountId = String(msg.accountId || '');
+          var chatMessages = Array.isArray(msg.messages) ? msg.messages : [];
+          chatHistoryByAccount.set(chatAccountId, chatMessages.slice(-300));
+          if (chatAccountId === selectedChatAccountId) renderChatMessages();
+          break;
+        }
+        case 'chatMessage':
+          receiveChatMessage(String(msg.accountId || ''), msg.message);
+          break;
+        case 'chatSendResult':
+          if (!chatPendingRequestId || String(msg.requestId || '') !== chatPendingRequestId) break;
+          chatPendingRequestId = '';
+          var sentAccountId = chatPendingAccountId;
+          chatPendingAccountId = '';
+          if (msg.ok) {
+            var sentInput = chatElement('chat-message-input');
+            if (sentInput && selectedChatAccountId === sentAccountId) {
+              sentInput.value = '';
+              sentInput.style.height = 'auto';
+              sentInput.focus();
+              setChatSendStatus('Sent', false);
+            }
+          } else if (selectedChatAccountId === sentAccountId) {
+            setChatSendStatus(String(msg.error || 'Message could not be sent.'), true);
+          }
+          updateChatComposerState();
           break;
         case 'clientList': {
           var previousLiveClientIds = Array.from(connectedClients.keys()).filter(function (clientId) {
@@ -9705,6 +10249,71 @@
     return entry;
   }
 
+  function viewerObjectColor(category) {
+    var colors = {
+      Player: '#55a7ff', Enemy: '#ef5a62', Portal: '#a879ff', Beacon: '#f7c948',
+      Container: '#d69a45', Pet: '#52d6a0', VisualOnly: '#8da0ad', Other: '#b3bdc7'
+    };
+    return colors[String(category || '').replace(/\s+/g, '')] || '#b3bdc7';
+  }
+
+  function drawViewerObject(ctx, object, minX, minY, originX, originY, tileSize) {
+    var x = originX + (Number(object.x) - minX) * tileSize;
+    var y = originY + (Number(object.y) - minY) * tileSize;
+    var category = String(object.category || 'Other');
+    var image = getViewerTileImage(object);
+    if (category === 'Player' && (!image || image.failed)) image = getViewerPlayerImage(object.classType);
+    var drawnWidth = tileSize;
+    var drawnHeight = tileSize;
+
+    if (image && image.loaded && !image.failed) {
+      var naturalWidth = Math.max(1, Number(image.img.naturalWidth) || 8);
+      var naturalHeight = Math.max(1, Number(image.img.naturalHeight) || 8);
+      var scale = Math.max(1, Math.min(2.4, Math.max(naturalWidth, naturalHeight) / 8));
+      var maxSize = tileSize * scale;
+      var ratio = naturalWidth / naturalHeight;
+      if (ratio >= 1) {
+        drawnWidth = maxSize;
+        drawnHeight = maxSize / ratio;
+      } else {
+        drawnHeight = maxSize;
+        drawnWidth = maxSize * ratio;
+      }
+      ctx.drawImage(image.img, Math.round(x - drawnWidth / 2), Math.round(y - drawnHeight * 0.72), drawnWidth, drawnHeight);
+    } else {
+      ctx.fillStyle = viewerObjectColor(category);
+      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(3, tileSize * 0.28), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    var important = category === 'Player' || category === 'Enemy' || category === 'Portal' || category === 'Pet' || category === 'Container' || category === 'Beacon';
+    if (important) {
+      ctx.font = '600 10px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = '#f4f7fb';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 3;
+      ctx.fillText(String(object.name || category), x, y - drawnHeight * 0.72 - 2);
+      ctx.shadowBlur = 0;
+    }
+
+    var hp = Math.max(0, Number(object.hp) || 0);
+    var maxHp = Math.max(0, Number(object.maxHp) || 0);
+    if ((category === 'Player' || category === 'Enemy') && maxHp > 0) {
+      var barWidth = Math.max(18, tileSize * 1.2);
+      var barY = y + Math.max(3, drawnHeight * 0.28);
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillRect(x - barWidth / 2, barY, barWidth, 3);
+      ctx.fillStyle = category === 'Enemy' ? '#ef5a62' : '#4aa3ff';
+      ctx.fillRect(x - barWidth / 2, barY, barWidth * Math.min(1, hp / maxHp), 3);
+    }
+  }
+
   function renderViewer() {
     if (!viewerCanvas || !viewerStage || !viewerEmpty) return;
     var data = lastViewerData;
@@ -9759,23 +10368,19 @@
       if (image && image.loaded && !image.failed) ctx.drawImage(image.img, x, y, tileSize, tileSize);
     });
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (var i = 0; i <= count; i += 1) {
-      var gx = originX + i * tileSize + 0.5;
-      var gy = originY + i * tileSize + 0.5;
-      ctx.moveTo(gx, originY);
-      ctx.lineTo(gx, originY + fieldHeight);
-      ctx.moveTo(originX, gy);
-      ctx.lineTo(originX + fieldWidth, gy);
-    }
-    ctx.stroke();
+    var viewerObjects = Array.isArray(data.objects) ? data.objects.slice() : [];
+    viewerObjects.sort(function (a, b) {
+      return (Number(a.y) - Number(b.y)) || (Number(a.x) - Number(b.x));
+    });
+    viewerObjects.forEach(function (object) {
+      drawViewerObject(ctx, object, minX, minY, originX, originY, tileSize);
+    });
 
     var px = originX + (Number(player.x) - minX) * tileSize;
     var py = originY + (Number(player.y) - minY) * tileSize;
     var spriteSize = Math.max(18, Math.round(tileSize * 1.35));
-    var playerImage = getViewerPlayerImage(player.classType);
+    var playerImage = getViewerTileImage(player);
+    if (!playerImage || playerImage.failed) playerImage = getViewerPlayerImage(player.classType);
     ctx.fillStyle = 'rgba(34,197,94,0.24)';
     ctx.beginPath();
     ctx.arc(px, py, Math.max(8, tileSize * 0.55), 0, Math.PI * 2);
@@ -9802,7 +10407,7 @@
     ctx.shadowBlur = 0;
 
     if (viewerStatus) {
-      viewerStatus.textContent = String(data.mapName || 'Unknown') + '  |  ' + Number(player.x).toFixed(2) + ', ' + Number(player.y).toFixed(2) + '  |  ' + (data.tiles || []).length + ' tiles';
+      viewerStatus.textContent = String(data.mapName || 'Unknown') + '  |  ' + Number(player.x).toFixed(2) + ', ' + Number(player.y).toFixed(2) + '  |  ' + (data.tiles || []).length + ' tiles  |  ' + viewerObjects.length + ' objects';
     }
   }
 
@@ -9857,6 +10462,60 @@
     multiHomeFocusedClientId = clientId;
     openMacPopout(clientId);
   }, true);
+
+  var clientsCardCtxTargetId = null;
+
+  function hideClientsCardContextMenu() {
+    if (clientsCardCtxMenu) clientsCardCtxMenu.style.display = 'none';
+    clientsCardCtxTargetId = null;
+  }
+
+  document.addEventListener('contextmenu', function (e) {
+    var card = e.target && e.target.closest ? e.target.closest('.home-multi-live-card') : null;
+    if (!card) {
+      hideClientsCardContextMenu();
+      return;
+    }
+    var clientId = String(card.getAttribute('data-multi-live-client-id') || '');
+    if (!clientId || !connectedClients.has(clientId) || !clientsCardCtxMenu) return;
+    e.preventDefault();
+    clientsCardCtxTargetId = clientId;
+    clientsCardCtxMenu.style.display = 'block';
+    var menuWidth = clientsCardCtxMenu.offsetWidth || 180;
+    var menuHeight = clientsCardCtxMenu.offsetHeight || 80;
+    clientsCardCtxMenu.style.left = Math.max(8, Math.min(e.clientX, window.innerWidth - menuWidth - 8)) + 'px';
+    clientsCardCtxMenu.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - menuHeight - 8)) + 'px';
+  });
+
+  document.addEventListener('pointerdown', function (e) {
+    if (!clientsCardCtxMenu || clientsCardCtxMenu.style.display === 'none') return;
+    if (clientsCardCtxMenu.contains(e.target)) return;
+    hideClientsCardContextMenu();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') hideClientsCardContextMenu();
+  });
+
+  if (clientsCardCtxMenu) {
+    clientsCardCtxMenu.addEventListener('click', function (e) {
+      var item = e.target.closest('[data-client-card-action]');
+      if (!item || !clientsCardCtxTargetId) return;
+      var clientId = clientsCardCtxTargetId;
+      var action = String(item.getAttribute('data-client-card-action') || '');
+      hideClientsCardContextMenu();
+      if (action === 'details') {
+        multiHomeFocusedClientId = clientId;
+        openMacPopout(clientId);
+      } else if (action === 'disconnect') {
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'disconnectHeadlessClient', accountId: clientId }));
+        } else {
+          addHomeFeed('err', 'Dashboard connection is unavailable.');
+        }
+      }
+    });
+  }
 
   function startNearbyPolling() {
     stopNearbyPolling();
@@ -10536,6 +11195,7 @@
     const prevTab = activeTab;
     if (prevTab === 'nearby') stopNearbyPolling();
     if (prevTab === 'viewer') stopViewerPolling();
+    if (prevTab === 'packet-logger') unsubscribePacketLogger();
     if (prevTab === 'damage' && tabName !== 'damage') closeDamagePlayerModal();
     closeSettingsPopout();
 
@@ -10571,6 +11231,7 @@
     if (tabName === 'premium') renderPremiumTab();
     if (tabName === 'settings') refreshSettingsTab();
     if (tabName === 'accounts') renderAccountsTab();
+    if (tabName === 'proxies') renderProxyManager();
     if (tabName === 'damage') {
       renderDamageTab();
       requestHeadlessDamage();
@@ -10582,6 +11243,10 @@
       requestTilemap();
     }
     if (tabName === 'viewer') startViewerPolling();
+    if (tabName === 'packet-logger') {
+      wirePacketLogger();
+      subscribePacketLogger();
+    }
     if (tabName === 'game-wiki') {
       openGameWikiTab();
     }
@@ -10617,6 +11282,13 @@
     if (tabName === 'scripts') {
       wireScriptsPageControls();
       refreshScriptsTab();
+    }
+    if (tabName === 'chat') {
+      wireChatWorkspace();
+      renderChatAccountList();
+      requestChatHistory();
+      var chatInput = chatElement('chat-message-input');
+      if (chatInput && !chatInput.disabled) chatInput.focus();
     }
     if (tabName === 'market') {
       loadMarketTab();
@@ -14166,6 +14838,242 @@
     }
   }
 
+  // ─── Proxy manager ──────────────────────────────────────
+
+  function createEmptyDashboardProxy() {
+    return {
+      id: 'proxy-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
+      name: '',
+      protocol: 'socks5',
+      host: '',
+      port: 1080,
+      username: '',
+      password: '',
+      enabled: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastTestAt: 0,
+      lastLatencyMs: 0,
+      lastStatus: 'untested',
+      lastError: '',
+    };
+  }
+
+  function normalizeDashboardProxy(raw) {
+    var base = createEmptyDashboardProxy();
+    raw = raw && typeof raw === 'object' ? raw : {};
+    var protocol = String(raw.protocol || 'socks5').toLowerCase();
+    if (['http', 'https', 'socks4', 'socks5'].indexOf(protocol) < 0) protocol = 'socks5';
+    return {
+      id: String(raw.id || base.id),
+      name: String(raw.name || ''),
+      protocol: protocol,
+      host: String(raw.host || '').trim(),
+      port: Math.trunc(Number(raw.port || 0)) || (protocol === 'https' ? 443 : protocol === 'http' ? 8080 : 1080),
+      username: String(raw.username || ''),
+      password: String(raw.password || ''),
+      enabled: raw.enabled !== false,
+      createdAt: Number(raw.createdAt || base.createdAt) || base.createdAt,
+      updatedAt: Number(raw.updatedAt || base.updatedAt) || base.updatedAt,
+      lastTestAt: Number(raw.lastTestAt || 0) || 0,
+      lastLatencyMs: Math.max(0, Math.trunc(Number(raw.lastLatencyMs || 0) || 0)),
+      lastStatus: ['working', 'failed'].indexOf(String(raw.lastStatus || '')) >= 0 ? String(raw.lastStatus) : 'untested',
+      lastError: String(raw.lastError || ''),
+    };
+  }
+
+  function getSelectedDashboardProxy() {
+    return dashboardProxies.find(function (proxy) { return proxy.id === selectedProxyId; }) || null;
+  }
+
+  function setProxyEditorStatus(text, mode) {
+    if (!proxyEditorStatus) return;
+    proxyEditorStatus.textContent = String(text || '');
+    proxyEditorStatus.classList.toggle('error', mode === 'error');
+    proxyEditorStatus.classList.toggle('success', mode === 'success');
+  }
+
+  function escapeProxyAttr(value) {
+    return escapeHtml(String(value || '')).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderAccountProxyOptions() {
+    if (!accountsProxyIdSelect) return;
+    var current = String(accountsProxyIdSelect.value || '');
+    accountsProxyIdSelect.innerHTML = '<option value="">Custom / direct connection</option>';
+    dashboardProxies.forEach(function (proxy) {
+      var option = document.createElement('option');
+      option.value = proxy.id;
+      option.textContent = (proxy.enabled ? '' : '[Disabled] ') + (proxy.name || (proxy.protocol.toUpperCase() + ' ' + proxy.host + ':' + proxy.port));
+      accountsProxyIdSelect.appendChild(option);
+    });
+    if (current && dashboardProxies.some(function (proxy) { return proxy.id === current; })) {
+      accountsProxyIdSelect.value = current;
+    }
+  }
+
+  function renderProxyTable() {
+    if (!proxyTableBody) return;
+    var working = dashboardProxies.filter(function (proxy) { return proxy.lastStatus === 'working'; }).length;
+    var failed = dashboardProxies.filter(function (proxy) { return proxy.lastStatus === 'failed'; }).length;
+    if (proxyManagerSummary) {
+      proxyManagerSummary.textContent = dashboardProxies.length + ' prox' + (dashboardProxies.length === 1 ? 'y' : 'ies')
+        + ' · ' + working + ' working' + (failed ? ' · ' + failed + ' failed' : '');
+    }
+    if (proxyListEmpty) proxyListEmpty.style.display = dashboardProxies.length ? 'none' : '';
+    proxyTableBody.innerHTML = dashboardProxies.map(function (proxy) {
+      var endpoint = (proxy.host.indexOf(':') >= 0 ? '[' + proxy.host + ']' : proxy.host) + ':' + proxy.port;
+      var status = proxyTestingIds.has(proxy.id) ? 'testing' : proxy.lastStatus;
+      var statusLabel = status === 'working' ? 'Working' : status === 'failed' ? 'Failed' : status === 'testing' ? 'Testing' : 'Untested';
+      var latency = proxy.lastStatus === 'working' && proxy.lastLatencyMs ? proxy.lastLatencyMs + ' ms' : '--';
+      var title = proxy.lastError ? ' title="' + escapeProxyAttr(proxy.lastError) + '"' : '';
+      return '<tr data-proxy-id="' + escapeProxyAttr(proxy.id) + '" class="' + (proxy.id === selectedProxyId ? 'selected ' : '') + (proxy.enabled ? '' : 'disabled') + '">'
+        + '<td><input class="proxy-row-toggle" data-proxy-toggle="' + escapeProxyAttr(proxy.id) + '" type="checkbox" ' + (proxy.enabled ? 'checked' : '') + ' aria-label="Enable proxy"></td>'
+        + '<td title="' + escapeProxyAttr(proxy.name) + '">' + escapeHtml(proxy.name || 'Unnamed') + '</td>'
+        + '<td>' + escapeHtml(proxy.protocol.toUpperCase()) + '</td>'
+        + '<td title="' + escapeProxyAttr(endpoint) + '">' + escapeHtml(endpoint) + '</td>'
+        + '<td>' + (proxy.username || proxy.password ? 'Yes' : 'No') + '</td>'
+        + '<td' + title + '><span class="proxy-status ' + escapeHtml(status) + '">' + statusLabel + '</span></td>'
+        + '<td>' + latency + '</td>'
+        + '<td><button type="button" class="proxy-row-action" data-proxy-test="' + escapeProxyAttr(proxy.id) + '" title="Test proxy" aria-label="Test proxy">T</button></td>'
+        + '</tr>';
+    }).join('');
+
+    proxyTableBody.querySelectorAll('tr[data-proxy-id]').forEach(function (row) {
+      row.addEventListener('click', function (event) {
+        if (event.target.closest('[data-proxy-toggle], [data-proxy-test]')) return;
+        selectedProxyId = String(row.getAttribute('data-proxy-id') || '');
+        renderProxyManager();
+      });
+    });
+    proxyTableBody.querySelectorAll('[data-proxy-toggle]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var proxy = dashboardProxies.find(function (item) { return item.id === input.getAttribute('data-proxy-toggle'); });
+        if (!proxy) return;
+        proxy.enabled = !!input.checked;
+        proxy.updatedAt = Date.now();
+        saveDashboardProxies().catch(function () {});
+      });
+    });
+    proxyTableBody.querySelectorAll('[data-proxy-test]').forEach(function (button) {
+      button.addEventListener('click', function () { testDashboardProxies([String(button.getAttribute('data-proxy-test') || '')]); });
+    });
+  }
+
+  function renderProxyEditor() {
+    var proxy = getSelectedDashboardProxy();
+    var disabled = !proxy || proxiesTesting;
+    if (proxyEditorTitle) proxyEditorTitle.textContent = proxy ? (proxy.name || 'Unnamed proxy') : 'Select a proxy';
+    [proxyNameInput, proxyProtocolSelect, proxyHostInput, proxyPortInput, proxyUsernameInput, proxyPasswordInput, proxyEnabledInput].forEach(function (input) {
+      if (input) input.disabled = disabled;
+    });
+    if (proxyNameInput) proxyNameInput.value = proxy ? proxy.name : '';
+    if (proxyProtocolSelect) proxyProtocolSelect.value = proxy ? proxy.protocol : 'socks5';
+    if (proxyHostInput) proxyHostInput.value = proxy ? proxy.host : '';
+    if (proxyPortInput) proxyPortInput.value = proxy ? String(proxy.port || '') : '';
+    if (proxyUsernameInput) proxyUsernameInput.value = proxy ? proxy.username : '';
+    if (proxyPasswordInput) proxyPasswordInput.value = proxy ? proxy.password : '';
+    if (proxyEnabledInput) proxyEnabledInput.checked = proxy ? proxy.enabled : false;
+    if (proxySaveBtn) proxySaveBtn.disabled = disabled;
+    if (proxyTestBtn) proxyTestBtn.disabled = disabled;
+    if (proxyDeleteBtn) proxyDeleteBtn.disabled = disabled;
+    if (!proxy) setProxyEditorStatus('', '');
+    else if (proxyTestingIds.has(proxy.id)) setProxyEditorStatus('Testing connection...', '');
+    else if (proxy.lastStatus === 'failed') setProxyEditorStatus(proxy.lastError || 'Proxy test failed.', 'error');
+    else if (proxy.lastStatus === 'working') setProxyEditorStatus('Last test passed in ' + proxy.lastLatencyMs + ' ms.', 'success');
+    else setProxyEditorStatus('Not tested yet.', '');
+  }
+
+  function renderProxyManager() {
+    if (selectedProxyId && !dashboardProxies.some(function (proxy) { return proxy.id === selectedProxyId; })) selectedProxyId = null;
+    renderProxyTable();
+    renderProxyEditor();
+    renderAccountProxyOptions();
+    if (proxyTestAllBtn) {
+      proxyTestAllBtn.disabled = proxiesTesting || dashboardProxies.length === 0;
+      proxyTestAllBtn.textContent = proxiesTesting ? 'Testing...' : 'Test All';
+    }
+  }
+
+  function updateSelectedProxyFromEditor() {
+    var proxy = getSelectedDashboardProxy();
+    if (!proxy || proxiesTesting) return;
+    proxy.name = String(proxyNameInput && proxyNameInput.value || '');
+    proxy.protocol = String(proxyProtocolSelect && proxyProtocolSelect.value || 'socks5');
+    proxy.host = String(proxyHostInput && proxyHostInput.value || '').trim();
+    proxy.port = Math.trunc(Number(proxyPortInput && proxyPortInput.value || 0));
+    proxy.username = String(proxyUsernameInput && proxyUsernameInput.value || '');
+    proxy.password = String(proxyPasswordInput && proxyPasswordInput.value || '');
+    proxy.enabled = !!(proxyEnabledInput && proxyEnabledInput.checked);
+    proxy.updatedAt = Date.now();
+    setProxyEditorStatus('Unsaved changes.', '');
+    renderProxyTable();
+  }
+
+  function saveDashboardProxies() {
+    return fetch('/api/proxies', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proxies: dashboardProxies }),
+    }).then(function (response) {
+      return response.json().then(function (data) {
+        if (!response.ok) throw new Error(String(data && data.error || 'Failed to save proxies.'));
+        dashboardProxies = Array.isArray(data.proxies) ? data.proxies.map(normalizeDashboardProxy) : [];
+        renderProxyManager();
+        setProxyEditorStatus('Saved.', 'success');
+        return dashboardProxies;
+      });
+    }).catch(function (error) {
+      setProxyEditorStatus(error.message || String(error), 'error');
+      throw error;
+    });
+  }
+
+  function loadDashboardProxies() {
+    return fetch('/api/proxies')
+      .then(function (response) { if (!response.ok) throw new Error('Failed to load proxies.'); return response.json(); })
+      .then(function (data) {
+        dashboardProxies = Array.isArray(data && data.proxies) ? data.proxies.map(normalizeDashboardProxy) : [];
+        if (!selectedProxyId && dashboardProxies[0]) selectedProxyId = dashboardProxies[0].id;
+        renderProxyManager();
+        if (activeTab === 'accounts') renderAccountsEditor();
+      })
+      .catch(function (error) {
+        dashboardProxies = [];
+        renderProxyManager();
+        setProxyEditorStatus(error.message || String(error), 'error');
+      });
+  }
+
+  function testDashboardProxies(ids) {
+    if (proxiesTesting) return Promise.resolve();
+    proxiesTesting = true;
+    proxyTestingIds = new Set(ids || dashboardProxies.map(function (proxy) { return proxy.id; }));
+    renderProxyManager();
+    return saveDashboardProxies()
+      .then(function () {
+        return fetch('/api/proxies/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ids ? { ids: ids } : { all: true }),
+        });
+      })
+      .then(function (response) {
+        return response.json().then(function (data) {
+          if (!response.ok) throw new Error(String(data && data.error || 'Proxy test failed.'));
+          dashboardProxies = Array.isArray(data.proxies) ? data.proxies.map(normalizeDashboardProxy) : dashboardProxies;
+        });
+      })
+      .catch(function (error) {
+        setProxyEditorStatus(error.message || String(error), 'error');
+      })
+      .finally(function () {
+        proxiesTesting = false;
+        proxyTestingIds.clear();
+        renderProxyManager();
+      });
+  }
+
   // ─── Config handler ─────────────────────────────────────
 
   function createEmptyDashboardAccount() {
@@ -14177,6 +15085,8 @@
       serverName: (availableServerNames.indexOf('USWest') >= 0 ? 'USWest' : (availableServerNames[0] || 'USWest')),
       notes: '',
       preferredScriptId: '',
+      proxyId: '',
+      proxyProtocol: 'socks5',
       proxy: '',
       proxyUsername: '',
       proxyPassword: '',
@@ -14196,6 +15106,10 @@
       serverName: String(raw.serverName || base.serverName).trim() || base.serverName,
       notes: String(raw.notes || ''),
       preferredScriptId: String(raw.preferredScriptId || ''),
+      proxyId: String(raw.proxyId || ''),
+      proxyProtocol: ['http', 'https', 'socks4', 'socks5'].includes(String(raw.proxyProtocol || '').toLowerCase())
+        ? String(raw.proxyProtocol).toLowerCase()
+        : (String(raw.proxy || '').includes('://') ? String(raw.proxy).split('://')[0].toLowerCase() : 'socks5'),
       proxy: String(raw.proxy || ''),
       proxyUsername: String(raw.proxyUsername || ''),
       proxyPassword: String(raw.proxyPassword || ''),
@@ -15698,6 +16612,40 @@
       accountsNotesInput.disabled = fieldDisabled;
       accountsNotesInput.value = account ? String(account.notes || '') : '';
     }
+    renderAccountProxyOptions();
+    var managedProxy = account ? String(account.proxyId || '') : '';
+    var customProxy = !managedProxy;
+    if (accountsProxyIdSelect) {
+      accountsProxyIdSelect.disabled = fieldDisabled;
+      accountsProxyIdSelect.value = managedProxy;
+      if (managedProxy && accountsProxyIdSelect.value !== managedProxy) {
+        var missingOption = document.createElement('option');
+        missingOption.value = managedProxy;
+        missingOption.textContent = '[Missing managed proxy]';
+        accountsProxyIdSelect.appendChild(missingOption);
+        accountsProxyIdSelect.value = managedProxy;
+      }
+    }
+    if (accountsCustomProxyFields) accountsCustomProxyFields.style.display = customProxy ? '' : 'none';
+    if (accountsProxyProtocolSelect) {
+      accountsProxyProtocolSelect.disabled = fieldDisabled || !customProxy;
+      accountsProxyProtocolSelect.value = account ? String(account.proxyProtocol || 'socks5') : 'socks5';
+    }
+    if (accountsProxyInput) {
+      accountsProxyInput.disabled = fieldDisabled || !customProxy;
+      accountsProxyInput.value = account ? String(account.proxy || '') : '';
+    }
+    if (accountsProxyUsername) {
+      accountsProxyUsername.disabled = fieldDisabled || !customProxy;
+      accountsProxyUsername.value = account ? String(account.proxyUsername || '') : '';
+    }
+    if (accountsProxyPassword) {
+      accountsProxyPassword.disabled = fieldDisabled || !customProxy;
+      accountsProxyPassword.value = account ? String(account.proxyPassword || '') : '';
+    }
+    if (accountsProxyAuthWrap) {
+      accountsProxyAuthWrap.style.display = customProxy && account && String(account.proxy || '').trim() ? '' : 'none';
+    }
     if (accountsEmailLabel) accountsEmailLabel.textContent = 'Email';
     if (accountsPasswordLabel) accountsPasswordLabel.textContent = 'Password';
     if (accountsEmailInput) accountsEmailInput.placeholder = 'name@example.com';
@@ -15850,6 +16798,15 @@
     if (!account) return opts;
     if (opts.accountId == null) opts.accountId = account.id;
     if (opts.accountLabel == null) opts.accountLabel = String(account.label || account.email || '');
+    if (opts.accountProxy == null) {
+      opts.accountProxy = {
+        proxyId: String(account.proxyId || ''),
+        proxyProtocol: String(account.proxyProtocol || 'socks5'),
+        proxy: String(account.proxy || ''),
+        proxyUsername: String(account.proxyUsername || ''),
+        proxyPassword: String(account.proxyPassword || ''),
+      };
+    }
     return opts;
   }
 
@@ -15907,6 +16864,9 @@
         ? String(launchOpts.accountLabel).trim()
         : '';
     if (alab) payload.accountLabel = alab;
+    if (launchOpts.accountProxy && typeof launchOpts.accountProxy === 'object') {
+      payload.accountProxy = launchOpts.accountProxy;
+    }
     ws.send(JSON.stringify(payload));
     return true;
   }
@@ -17400,6 +18360,8 @@
     account.password = String(accountsPasswordInput && accountsPasswordInput.value || '');
     account.serverName = String(accountsServerSelect && accountsServerSelect.value || account.serverName || 'USWest').trim() || 'USWest';
     account.notes = String(accountsNotesInput && accountsNotesInput.value || '');
+    account.proxyId = String(accountsProxyIdSelect && accountsProxyIdSelect.value || '').trim();
+    account.proxyProtocol = String(accountsProxyProtocolSelect && accountsProxyProtocolSelect.value || 'socks5');
     account.proxy = String(accountsProxyInput && accountsProxyInput.value || '').trim();
     account.proxyUsername = String(accountsProxyUsername && accountsProxyUsername.value || '');
     account.proxyPassword = String(accountsProxyPassword && accountsProxyPassword.value || '');
@@ -17484,7 +18446,17 @@
     });
   }
 
-  // Proxy input — show/hide auth fields on change
+  if (accountsProxyIdSelect) {
+    accountsProxyIdSelect.addEventListener('change', function () {
+      updateSelectedDashboardAccountFromEditor();
+      renderAccountsEditor();
+    });
+  }
+  if (accountsProxyProtocolSelect) {
+    accountsProxyProtocolSelect.addEventListener('change', updateSelectedDashboardAccountFromEditor);
+  }
+
+  // Custom proxy input — show/hide auth fields on change
   if (accountsProxyInput) {
     accountsProxyInput.addEventListener('input', function () {
       updateSelectedDashboardAccountFromEditor();
@@ -17500,6 +18472,36 @@
     el.addEventListener('input', updateSelectedDashboardAccountFromEditor);
     el.addEventListener('change', updateSelectedDashboardAccountFromEditor);
   });
+
+  [proxyNameInput, proxyProtocolSelect, proxyHostInput, proxyPortInput, proxyUsernameInput, proxyPasswordInput, proxyEnabledInput].forEach(function (el) {
+    if (!el) return;
+    el.addEventListener('input', updateSelectedProxyFromEditor);
+    el.addEventListener('change', updateSelectedProxyFromEditor);
+  });
+  if (proxyAddBtn) {
+    proxyAddBtn.addEventListener('click', function () {
+      var proxy = createEmptyDashboardProxy();
+      dashboardProxies.push(proxy);
+      selectedProxyId = proxy.id;
+      renderProxyManager();
+      if (proxyNameInput) proxyNameInput.focus();
+    });
+  }
+  if (proxySaveBtn) proxySaveBtn.addEventListener('click', function () { updateSelectedProxyFromEditor(); saveDashboardProxies().catch(function () {}); });
+  if (proxyTestBtn) proxyTestBtn.addEventListener('click', function () {
+    updateSelectedProxyFromEditor();
+    if (selectedProxyId) testDashboardProxies([selectedProxyId]);
+  });
+  if (proxyTestAllBtn) proxyTestAllBtn.addEventListener('click', function () { testDashboardProxies(null); });
+  if (proxyDeleteBtn) {
+    proxyDeleteBtn.addEventListener('click', function () {
+      var proxy = getSelectedDashboardProxy();
+      if (!proxy || !window.confirm('Delete proxy "' + (proxy.name || proxy.host || 'Unnamed') + '"?')) return;
+      dashboardProxies = dashboardProxies.filter(function (item) { return item.id !== proxy.id; });
+      selectedProxyId = dashboardProxies[0] ? dashboardProxies[0].id : null;
+      saveDashboardProxies().catch(function () {});
+    });
+  }
 
   // Right-click context menu on account cards
   var accountsCardCtxTargetId = null;
@@ -17551,6 +18553,7 @@
 
   // ────────────────────────────────────────────────────────────────────────────
 
+  loadDashboardProxies();
   loadDashboardAccounts();
 
   // --- Stubs after removal of visual automation (disk scripts: Scripts tab) ---
@@ -20681,6 +21684,7 @@
   })();
   window._AccountSessions = _AccountSessions;
 
+  wireChatWorkspace();
   connect();
 
 })();

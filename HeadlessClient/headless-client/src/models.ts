@@ -1,4 +1,6 @@
 import type { PlayerData } from 'realmlib';
+import type { CombatDataProvider } from './combat-tracker';
+import type { ProxyConfig } from './proxy';
 
 /** A realm portal in the nexus, parsed from its NAME stat. */
 export interface RealmPortal {
@@ -55,10 +57,14 @@ export interface ClientOptions {
   charId: number;
   needsNewChar: boolean;
   host: string;
+  /** Routes every game TCP connection and reconnect through this proxy. */
+  proxy?: ProxyConfig;
   /** Full server list known when the client was created. */
   servers?: ClientServer[];
   /** Walk into the vault automatically once in the nexus. */
   autoEnterVault?: boolean;
+  /** Projectile/object definitions used to resolve combat hit claims. */
+  combatData?: CombatDataProvider;
   /**
    * Settings used when `needsNewChar` is true (or `createCharacter()` is
    * called). `createClassType` is a resolved numeric object type; defaults to

@@ -21,7 +21,15 @@ import type { GameWorldState } from '../../state/GameWorldState.js';
 import type { GameDataLoader } from '../../game-data/GameDataLoader.js';
 import { Logger } from '../../util/Logger.js';
 import { RuntimeScheduler } from '../../util/RuntimeScheduler.js';
-import type { HeadlessFleet, HeadlessSessionSummary } from '../../headless/HeadlessFleet.js';
+import type { HeadlessChatMessage, HeadlessFleet, HeadlessSessionSummary } from '../../headless/HeadlessFleet.js';
+import {
+  createProxyAgent,
+  parseProxyConfig,
+  testProxy as testNetworkProxy,
+  type PacketTraffic,
+  type ProxyConfig,
+  type ProxyProtocol,
+} from 'headless-client';
 import { getHiveDataDir, getHiveDocumentsDir } from '../../util/rotmgAssetExtractor.js';
 
 // ── Debug logging ─────────────────────────────────────────────────────────────
@@ -296,10 +304,17 @@ interface DashboardAccountRecord {
   preferredScriptId: string;
   createdAt: number;
   updatedAt: number;
+  proxyId: string;
+  proxyProtocol: ProxyProtocol;
   proxy: string;
   proxyUsername: string;
   proxyPassword: string;
 }
+
+type DashboardAccountProxySelection = Pick<
+  DashboardAccountRecord,
+  'proxyId' | 'proxyProtocol' | 'proxy' | 'proxyUsername' | 'proxyPassword'
+>;
 
 interface DashboardAccountOverviewItem {
   objectType: number;
@@ -366,11 +381,45 @@ interface DashboardAccountOverviewCacheRecord {
   overview: DashboardAccountOverview;
 }
 
+type DashboardProxyStatus = 'untested' | 'working' | 'failed';
+
+interface DashboardProxyRecord {
+  id: string;
+  name: string;
+  protocol: ProxyProtocol;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+  lastTestAt: number;
+  lastLatencyMs: number;
+  lastStatus: DashboardProxyStatus;
+  lastError: string;
+}
+
+interface HeadlessPacketRecord {
+  id: number;
+  accountId: string;
+  timestamp: number;
+  direction: 'C->S' | 'S->C';
+  packetId: number;
+  name: string;
+  size: number;
+  payloadHex: string;
+  payloadTruncated: boolean;
+}
+
 /**
  * Dev dashboard HTTP + WebSocket server.
  * Serves the packet inspector UI on localhost:3000.
  */
 export class DevServer {
+  private static readonly HEADLESS_CHAT_HISTORY_LIMIT = 300;
+  private static readonly HEADLESS_PACKET_HISTORY_LIMIT = 500;
+  private static readonly HEADLESS_PACKET_PAYLOAD_LIMIT = 512;
   private httpServer: http.Server;
   private wss: WebSocketServer;
   private inspector: PacketInspector;
@@ -418,6 +467,10 @@ export class DevServer {
 /** Cached `gameWikiCatalog` WebSocket payload (built once per process; omit `force` on client to reuse). */
   private gameWikiCatalogJson: string | null = null;
   private dashboardAccountStoragePrepared = false;
+  private readonly headlessChatHistory = new Map<string, HeadlessChatMessage[]>();
+  private readonly headlessPacketHistory = new Map<string, HeadlessPacketRecord[]>();
+  private readonly headlessPacketSubscriptions = new Map<WebSocket, string>();
+  private headlessPacketSequence = 0;
 
   private getConfigsDir(): string {
     return join(getHiveDocumentsDir(), 'configs');
@@ -429,6 +482,10 @@ export class DevServer {
 
   private getAccountsFile(): string {
     return join(this.getHiveDocumentsDir(), '_accounts.json');
+  }
+
+  private getProxiesFile(): string {
+    return join(this.getHiveDocumentsDir(), '_proxies.json');
   }
 
   private getAccountsCacheDir(): string {
@@ -551,6 +608,18 @@ export class DevServer {
     return `acct-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  private generateDashboardProxyId(): string {
+    return `proxy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  private normalizeProxyProtocol(value: unknown): ProxyProtocol {
+    const protocol = String(value || 'socks5').trim().toLowerCase().replace(/:$/, '');
+    if (protocol === 'http' || protocol === 'https' || protocol === 'socks4' || protocol === 'socks5') {
+      return protocol;
+    }
+    return 'socks5';
+  }
+
   private normalizeDashboardAccountRecord(raw: any, index = 0): DashboardAccountRecord {
     const now = Date.now();
     const id = String(raw?.id || '').trim() || `${this.generateDashboardAccountId()}-${index}`;
@@ -566,6 +635,8 @@ export class DevServer {
       preferredScriptId: String(raw?.preferredScriptId || '').trim(),
       createdAt,
       updatedAt,
+      proxyId: String(raw?.proxyId || '').trim(),
+      proxyProtocol: this.normalizeProxyProtocol(raw?.proxyProtocol || String(raw?.proxy || '').split('://')[0]),
       proxy: String(raw?.proxy || ''),
       proxyUsername: String(raw?.proxyUsername || ''),
       proxyPassword: String(raw?.proxyPassword || ''),
@@ -600,6 +671,103 @@ export class DevServer {
     this.prepareDashboardAccountStorage();
     this.ensureDir(this.getHiveDocumentsDir());
     writeFileSync(this.getAccountsFile(), JSON.stringify({ accounts }, null, 2), 'utf8');
+  }
+
+  private normalizeDashboardProxyRecord(raw: any, index = 0): DashboardProxyRecord {
+    const now = Date.now();
+    const createdAt = Number(raw?.createdAt || 0) > 0 ? Number(raw.createdAt) : now;
+    const updatedAt = Number(raw?.updatedAt || 0) > 0 ? Number(raw.updatedAt) : now;
+    const status = String(raw?.lastStatus || 'untested');
+    return {
+      id: String(raw?.id || '').trim() || `${this.generateDashboardProxyId()}-${index}`,
+      name: String(raw?.name || '').trim(),
+      protocol: this.normalizeProxyProtocol(raw?.protocol),
+      host: String(raw?.host || '').trim(),
+      port: Math.trunc(Number(raw?.port || 0)),
+      username: String(raw?.username || ''),
+      password: String(raw?.password || ''),
+      enabled: raw?.enabled !== false,
+      createdAt,
+      updatedAt,
+      lastTestAt: Math.max(0, Number(raw?.lastTestAt || 0) || 0),
+      lastLatencyMs: Math.max(0, Math.trunc(Number(raw?.lastLatencyMs || 0) || 0)),
+      lastStatus: status === 'working' || status === 'failed' ? status : 'untested',
+      lastError: String(raw?.lastError || ''),
+    };
+  }
+
+  private dashboardProxyToConfig(proxy: DashboardProxyRecord): ProxyConfig {
+    const addressHasPort = /^\[[^\]]+\]:\d+/.test(proxy.host) || /^[^:\s]+:\d+(?::|$)/.test(proxy.host);
+    const address = proxy.host.includes('://') || proxy.host.includes('@') || addressHasPort
+      ? proxy.host
+      : `${proxy.host}:${proxy.port}`;
+    return parseProxyConfig(address, {
+      protocol: proxy.protocol,
+      ...(proxy.username ? { username: proxy.username } : {}),
+      ...(proxy.password ? { password: proxy.password } : {}),
+    });
+  }
+
+  private readDashboardProxies(): DashboardProxyRecord[] {
+    try {
+      this.ensureDir(this.getHiveDocumentsDir());
+      const filePath = this.getProxiesFile();
+      if (!existsSync(filePath)) return [];
+      const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as { proxies?: unknown[] };
+      const proxies = Array.isArray(parsed?.proxies) ? parsed.proxies : [];
+      return proxies.map((proxy, index) => this.normalizeDashboardProxyRecord(proxy, index));
+    } catch (error) {
+      Logger.warn('DevServer', `proxies read failed: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  private writeDashboardProxies(proxies: DashboardProxyRecord[]): void {
+    this.ensureDir(this.getHiveDocumentsDir());
+    writeFileSync(this.getProxiesFile(), JSON.stringify({ proxies }, null, 2), 'utf8');
+  }
+
+  private async testDashboardProxies(ids?: Set<string>): Promise<DashboardProxyRecord[]> {
+    const proxies = this.readDashboardProxies();
+    const selected = proxies.filter((proxy) => !ids || ids.has(proxy.id));
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < selected.length) {
+        const proxy = selected[cursor++];
+        const testedAt = Date.now();
+        try {
+          const result = await testNetworkProxy(this.dashboardProxyToConfig(proxy));
+          proxy.lastTestAt = testedAt;
+          proxy.lastLatencyMs = result.latencyMs;
+          proxy.lastStatus = result.ok ? 'working' : 'failed';
+          proxy.lastError = result.error || '';
+        } catch (error) {
+          proxy.lastTestAt = testedAt;
+          proxy.lastLatencyMs = 0;
+          proxy.lastStatus = 'failed';
+          proxy.lastError = error instanceof Error ? error.message : String(error);
+        }
+      }
+    };
+    const workerCount = Math.min(8, Math.max(1, selected.length));
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    this.writeDashboardProxies(proxies);
+    return proxies;
+  }
+
+  private resolveDashboardAccountProxy(account: DashboardAccountRecord): ProxyConfig | undefined {
+    if (account.proxyId) {
+      const managed = this.readDashboardProxies().find((proxy) => proxy.id === account.proxyId);
+      if (!managed) throw new Error('The account references a proxy that no longer exists.');
+      if (!managed.enabled) throw new Error(`Proxy "${managed.name || managed.host}" is disabled.`);
+      return this.dashboardProxyToConfig(managed);
+    }
+    if (!account.proxy.trim()) return undefined;
+    return parseProxyConfig(account.proxy, {
+      protocol: account.proxyProtocol,
+      ...(account.proxyUsername ? { username: account.proxyUsername } : {}),
+      ...(account.proxyPassword ? { password: account.proxyPassword } : {}),
+    });
   }
 
   private readDashboardAccountOverviewCache(accountId: string): DashboardAccountOverviewCacheRecord | null {
@@ -905,7 +1073,10 @@ export class DevServer {
     return this.parseVerifyError(`<Error>${error}</Error>`);
   }
 
-  private async fetchCharListXml(accessToken: string): Promise<{ xml: string } | { error: string }> {
+  private async fetchCharListXml(
+    accessToken: string,
+    proxy?: ProxyConfig,
+  ): Promise<{ xml: string } | { error: string }> {
     const body = new URLSearchParams({
       do_login: 'false',
       accessToken,
@@ -921,6 +1092,7 @@ export class DevServer {
         'https://www.realmofthemadgod.com/char/list',
         {
           method: 'POST',
+          agent: proxy ? createProxyAgent(proxy) : undefined,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(body, 'utf8'),
@@ -946,7 +1118,7 @@ export class DevServer {
       );
       req.on('error', (err) => {
         Logger.error('DevServer', `char/list request failed: ${err.message}`);
-        resolve({ error: 'Failed to load character list.' });
+        resolve({ error: `Failed to load character list: ${err.message}` });
       });
       req.setTimeout(15000, () => {
         req.destroy();
@@ -961,14 +1133,15 @@ export class DevServer {
     accountId: string,
     email: string,
     password: string,
+    proxy?: ProxyConfig,
   ): Promise<{ cache: DashboardAccountOverviewCacheRecord } | { error: string }> {
     const clientToken = getClientToken();
     if (!clientToken) return { error: 'Client token unavailable.' };
 
-    const verifyResult = await this.verifyDecaAccount(email, password, clientToken);
+    const verifyResult = await this.verifyDecaAccount(email, password, clientToken, proxy);
     if ('error' in verifyResult) return { error: verifyResult.error };
 
-    const charListResult = await this.fetchCharListXml(verifyResult.token);
+    const charListResult = await this.fetchCharListXml(verifyResult.token, proxy);
     if ('error' in charListResult) return { error: charListResult.error };
 
     const overview = this.parseDashboardAccountOverview(email, charListResult.xml);
@@ -1218,6 +1391,8 @@ export class DevServer {
     this.lab = new PacketLab();
     this.headlessFleet?.on('changed', (sessions) => this.broadcastHeadlessSessions(sessions));
     this.headlessFleet?.on('damage', (accountId, snapshot) => this.broadcastHeadlessDamage(accountId, snapshot));
+    this.headlessFleet?.on('chat', (accountId, message) => this.broadcastHeadlessChat(accountId, message));
+    this.headlessFleet?.on('packet', (accountId, traffic) => this.captureHeadlessPacket(accountId, traffic));
     this.inspector.subscribe((pkt) => {
       if (pkt.captureMode === 'full') this.lab.capture(pkt);
       this.observeTradePacket(pkt);
@@ -2143,6 +2318,7 @@ export class DevServer {
     email: string,
     password: string,
     clientToken: string,
+    proxy?: ProxyConfig,
   ): Promise<
     | { token: string; tokenTimestamp: string; tokenExpiration: string }
     | { error: string }
@@ -2161,6 +2337,7 @@ export class DevServer {
         'https://www.realmofthemadgod.com/account/verify',
         {
           method: 'POST',
+          agent: proxy ? createProxyAgent(proxy) : undefined,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Content-Length': Buffer.byteLength(body, 'utf8'),
@@ -2183,7 +2360,7 @@ export class DevServer {
       );
       req.on('error', (err) => {
         Logger.error('DevServer', `account/verify request failed: ${err.message}`);
-        resolve({ error: 'Network error. Try again.' });
+        resolve({ error: `Network error: ${err.message}` });
       });
       req.setTimeout(15000, () => {
         req.destroy();
@@ -2273,17 +2450,34 @@ export class DevServer {
       accountId?: string | null;
       /** Dashboard display label when the client sends it */
       accountLabel?: string | null;
+      /** Current credential-editor proxy values, including edits not saved yet. */
+      accountProxy?: DashboardAccountProxySelection | null;
     },
   ): Promise<{ ok: boolean; error?: string }> {
     if (this.headlessFleet) {
       const accountId = String(opts?.accountId || email).trim();
       try {
+        const savedAccount = opts?.accountId
+          ? this.readDashboardAccounts().find((account) => account.id === opts.accountId)
+          : undefined;
+        const proxyAccount = opts?.accountProxy
+          ? this.normalizeDashboardAccountRecord({
+              ...(savedAccount || {}),
+              ...opts.accountProxy,
+              id: accountId,
+              email,
+              password,
+              serverName,
+            })
+          : savedAccount;
+        const proxy = proxyAccount ? this.resolveDashboardAccountProxy(proxyAccount) : undefined;
         await this.headlessFleet.connect({
           id: accountId,
           email,
           password,
           label: String(opts?.accountLabel || email).trim(),
           serverName,
+          proxy,
         });
         return { ok: true };
       } catch (err) {
@@ -2546,6 +2740,10 @@ export class DevServer {
   }
 
   private broadcastHeadlessSessions(sessions: HeadlessSessionSummary[] = this.headlessFleet?.list() ?? []): void {
+    const activeAccountIds = new Set(sessions.map((session) => session.accountId));
+    for (const accountId of this.headlessChatHistory.keys()) {
+      if (!activeAccountIds.has(accountId)) this.headlessChatHistory.delete(accountId);
+    }
     const msg = JSON.stringify({ type: 'headlessSessions', sessions });
     for (const ws of this.wss.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
@@ -2558,6 +2756,77 @@ export class DevServer {
     const msg = JSON.stringify({ type: 'headlessDamageData', accountId, ...snapshot });
     for (const ws of this.wss.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
+  }
+
+  private broadcastHeadlessChat(accountId: string, message: HeadlessChatMessage): void {
+    const history = this.headlessChatHistory.get(accountId) ?? [];
+    history.push(message);
+    if (history.length > DevServer.HEADLESS_CHAT_HISTORY_LIMIT) {
+      history.splice(0, history.length - DevServer.HEADLESS_CHAT_HISTORY_LIMIT);
+    }
+    this.headlessChatHistory.set(accountId, history);
+    const payload = JSON.stringify({ type: 'chatMessage', accountId, message });
+    for (const ws of this.wss.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(payload);
+    }
+  }
+
+  private captureHeadlessPacket(accountId: string, traffic: PacketTraffic): void {
+    const preview = traffic.payload.subarray(0, DevServer.HEADLESS_PACKET_PAYLOAD_LIMIT);
+    const packet: HeadlessPacketRecord = {
+      id: ++this.headlessPacketSequence,
+      accountId,
+      timestamp: traffic.timestamp,
+      direction: traffic.direction === 'outgoing' ? 'C->S' : 'S->C',
+      packetId: traffic.id,
+      name: traffic.type ? String(traffic.type) : `UNKNOWN_${traffic.id}`,
+      size: traffic.size,
+      payloadHex: preview.toString('hex'),
+      payloadTruncated: traffic.payload.length > preview.length,
+    };
+    const history = this.headlessPacketHistory.get(accountId) ?? [];
+    history.push(packet);
+    if (history.length > DevServer.HEADLESS_PACKET_HISTORY_LIMIT) {
+      history.splice(0, history.length - DevServer.HEADLESS_PACKET_HISTORY_LIMIT);
+    }
+    this.headlessPacketHistory.set(accountId, history);
+
+    const payload = JSON.stringify({ type: 'headlessPacket', accountId, packet });
+    for (const [client, selectedAccountId] of this.headlessPacketSubscriptions) {
+      if (selectedAccountId === accountId && client.readyState === WebSocket.OPEN) client.send(payload);
+    }
+  }
+
+  private sendHeadlessChat(accountId: string, channel: string, recipient: string, message: string): { ok: boolean; error?: string } {
+    const client = this.headlessFleet?.get(accountId);
+    if (!client || !client.isConnected() || !client.isInWorld()) {
+      return { ok: false, error: 'The selected account is not connected in a world.' };
+    }
+    const body = message.trim();
+    if (!body) return { ok: false, error: 'Enter a message.' };
+    if (body.length > 512) return { ok: false, error: 'Messages are limited to 512 characters.' };
+
+    let line: string;
+    switch (channel) {
+      case 'say': line = body; break;
+      case 'yell': line = `/yell ${body}`; break;
+      case 'party': line = `/party ${body}`; break;
+      case 'guild': line = `/guild ${body}`; break;
+      case 'tell': {
+        const target = recipient.trim();
+        if (!target) return { ok: false, error: 'Enter a recipient for a tell.' };
+        if (target.length > 64 || /\s/.test(target)) return { ok: false, error: 'Enter a valid player name.' };
+        line = `/tell ${target} ${body}`;
+        break;
+      }
+      default: return { ok: false, error: 'Unsupported chat channel.' };
+    }
+    try {
+      client.say(line);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message || 'The message could not be sent.' };
     }
   }
 
@@ -2612,6 +2881,7 @@ export class DevServer {
     if (!client || !this.gameData) return null;
     const center = client.getPosition();
     const player = client.getPlayer();
+    const playerDef = player ? this.gameData.getObject(Number(player.class)) : undefined;
     const r = Math.max(6, Math.min(24, Math.trunc(radius)));
     const tiles = client.visibleTiles()
       .filter((tile) => Math.abs(tile.x - center.x) <= r && Math.abs(tile.y - center.y) <= r)
@@ -2626,11 +2896,31 @@ export class DevServer {
           textureIndex: texture?.index ?? -1,
         };
       });
+    const objects = client.visibleObjects()
+      .filter((object) => Math.abs(object.x - center.x) <= r && Math.abs(object.y - center.y) <= r)
+      .map((object) => {
+        const def = this.gameData?.getObject(object.type);
+        const category = this.gameData?.getObjectCategory(object.type) ?? 'Other';
+        return {
+          objectId: object.objectId,
+          type: object.type,
+          category,
+          name: object.player?.name || object.name || def?.displayId || def?.id || `0x${object.type.toString(16)}`,
+          x: object.x,
+          y: object.y,
+          textureFile: def?.textureFile ?? '',
+          textureIndex: def?.textureIndex ?? -1,
+          classType: category === 'Player' ? object.type : 0,
+          hp: Number(object.player?.hp ?? object.rawStats?.['1'] ?? 0),
+          maxHp: Number(object.player?.maxHP ?? object.rawStats?.['0'] ?? def?.maxHp ?? 0),
+        };
+      });
     return {
       mapName: client.getMapName(),
       center,
       radius: r,
       tiles,
+      objects,
       player: {
         objectId: client.getObjectId(),
         name: player?.name || client.alias,
@@ -2640,6 +2930,8 @@ export class DevServer {
         maxHp: Number(player?.maxHP ?? 0),
         x: center.x,
         y: center.y,
+        textureFile: playerDef?.textureFile ?? '',
+        textureIndex: playerDef?.textureIndex ?? -1,
       },
     };
   }
@@ -3704,6 +3996,68 @@ export class DevServer {
       return;
     }
 
+    if (req.url === '/api/proxies' && req.method === 'GET') {
+      const proxies = this.readDashboardProxies();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ proxies }));
+      return;
+    }
+
+    if (req.url === '/api/proxies' && req.method === 'PUT') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body || '{}') as { proxies?: unknown[] };
+          if (!Array.isArray(parsed.proxies)) throw new Error('proxies[] is required.');
+          const existing = new Map(this.readDashboardProxies().map((proxy) => [proxy.id, proxy] as const));
+          const now = Date.now();
+          const proxies = parsed.proxies.map((raw, index) => {
+            const normalized = this.normalizeDashboardProxyRecord(raw, index);
+            const previous = existing.get(normalized.id);
+            normalized.name ||= `${normalized.protocol.toUpperCase()} ${normalized.host}:${normalized.port}`;
+            normalized.createdAt = previous?.createdAt || normalized.createdAt || now;
+            normalized.updatedAt = now;
+            const config = this.dashboardProxyToConfig(normalized);
+            normalized.protocol = config.protocol;
+            normalized.host = config.host;
+            normalized.port = config.port;
+            normalized.username ||= config.username || '';
+            normalized.password ||= config.password || '';
+            return normalized;
+          });
+          this.writeDashboardProxies(proxies);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, proxies }));
+        } catch (error) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+        }
+      });
+      return;
+    }
+
+    if (req.url === '/api/proxies/test' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', async () => {
+        try {
+          const parsed = JSON.parse(body || '{}') as { ids?: unknown[]; all?: boolean };
+          const ids = parsed.all
+            ? undefined
+            : new Set((Array.isArray(parsed.ids) ? parsed.ids : []).map((id) => String(id)));
+          if (ids && ids.size === 0) throw new Error('Select at least one proxy to test.');
+          const proxies = await this.testDashboardProxies(ids);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, proxies }));
+        } catch (error) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+        }
+      });
+      return;
+    }
+
     if (req.url === '/api/accounts' && req.method === 'GET') {
       try {
         debugLog(`GET /api/accounts: reading accounts...`);
@@ -3792,10 +4146,15 @@ export class DevServer {
             }
           }
 
+          const savedAccount = accountId
+            ? this.readDashboardAccounts().find((account) => account.id === accountId)
+            : undefined;
+          const proxy = savedAccount ? this.resolveDashboardAccountProxy(savedAccount) : undefined;
           const remoteResult = await this.fetchDashboardAccountOverviewRemote(
             accountId || email,
             email,
             password,
+            proxy,
           );
           if ('error' in remoteResult) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -3813,7 +4172,7 @@ export class DevServer {
         } catch (err) {
           Logger.warn('DevServer', `accounts overview failed: ${(err as Error).message}`);
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Failed to load account overview.' }));
+          res.end(JSON.stringify({ error: (err as Error).message || 'Failed to load account overview.' }));
         }
       });
       return;
@@ -3847,10 +4206,18 @@ export class DevServer {
               results[account.id] = { ok: false, error: 'Missing credentials.' };
               continue;
             }
+            let proxy: ProxyConfig | undefined;
+            try {
+              proxy = this.resolveDashboardAccountProxy(account);
+            } catch (error) {
+              results[account.id] = { ok: false, error: (error as Error).message };
+              continue;
+            }
             const remoteResult = await this.fetchDashboardAccountOverviewRemote(
               account.id,
               email,
               password,
+              proxy,
             );
             if ('error' in remoteResult) {
               results[account.id] = { ok: false, error: remoteResult.error };
@@ -3937,19 +4304,36 @@ export class DevServer {
             res.end(JSON.stringify({ ok: false, error: 'Script host not available.' }));
             return;
           }
-          if (this.connectedClients.size === 0) {
+          const parsed = JSON.parse(body || '{}') as { id?: string; accountId?: string };
+          const requestedAccountId = String(parsed.accountId ?? '').trim();
+          const headlessClient = requestedAccountId
+            ? this.headlessFleet?.get(requestedAccountId)
+            : this.headlessFleet?.get();
+          if (requestedAccountId && !headlessClient) {
+            res.writeHead(409, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'The selected headless client is no longer connected.' }));
+            return;
+          }
+          if (headlessClient && !headlessClient.isInWorld()) {
+            res.writeHead(409, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'The selected headless client is not ready in a map yet.' }));
+            return;
+          }
+          if (!headlessClient && this.connectedClients.size === 0) {
             res.writeHead(409, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: false, error: 'Connect an account before starting scripts.' }));
             return;
           }
-          const parsed = JSON.parse(body || '{}') as { id?: string };
           const id = String(parsed.id ?? '').trim();
           if (!id) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: false, error: 'id is required.' }));
             return;
           }
-          const result = await this.scriptHost.start(id);
+          const boundAccountId = headlessClient
+            ? (requestedAccountId || this.headlessFleet?.accountIdForClient(headlessClient))
+            : undefined;
+          const result = await this.scriptHost.start(id, boundAccountId);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(result));
         } catch (err) {
@@ -4457,11 +4841,24 @@ export class DevServer {
           const rawLabel = (msg as { accountLabel?: unknown }).accountLabel;
           const accountLabel =
             typeof rawLabel === 'string' && rawLabel.trim() !== '' ? rawLabel.trim() : null;
+          const rawProxy = (msg as { accountProxy?: unknown }).accountProxy;
+          let accountProxy: DashboardAccountProxySelection | null = null;
+          if (rawProxy && typeof rawProxy === 'object') {
+            const value = rawProxy as Record<string, unknown>;
+            accountProxy = {
+              proxyId: String(value.proxyId || '').trim(),
+              proxyProtocol: this.normalizeProxyProtocol(value.proxyProtocol),
+              proxy: String(value.proxy || ''),
+              proxyUsername: String(value.proxyUsername || ''),
+              proxyPassword: String(value.proxyPassword || ''),
+            };
+          }
           this.launchGameWithCredentials(email, password, serverName, {
             compactWindow,
             windowRect,
             accountId,
             accountLabel,
+            accountProxy,
           }).then(
             (result) => {
               if (ws.readyState === WebSocket.OPEN) {
@@ -4505,6 +4902,45 @@ export class DevServer {
             live: snapshot?.live ?? null,
             history: snapshot?.history ?? [],
           }));
+        } else if (msg.type === 'subscribeHeadlessPackets') {
+          const accountId = String(msg.accountId || '').trim();
+          if (accountId && this.headlessFleet?.get(accountId)) {
+            this.headlessPacketSubscriptions.set(ws, accountId);
+          } else {
+            this.headlessPacketSubscriptions.delete(ws);
+          }
+          ws.send(JSON.stringify({
+            type: 'headlessPacketHistory',
+            accountId,
+            packets: accountId ? this.headlessPacketHistory.get(accountId) ?? [] : [],
+          }));
+        } else if (msg.type === 'unsubscribeHeadlessPackets') {
+          this.headlessPacketSubscriptions.delete(ws);
+        } else if (msg.type === 'clearHeadlessPackets') {
+          const accountId = String(msg.accountId || '').trim();
+          if (accountId) this.headlessPacketHistory.set(accountId, []);
+          ws.send(JSON.stringify({ type: 'headlessPacketHistory', accountId, packets: [] }));
+        } else if (msg.type === 'requestChatHistory') {
+          const accountId = String(msg.accountId || '').trim();
+          ws.send(JSON.stringify({
+            type: 'chatHistory',
+            accountId,
+            messages: this.headlessChatHistory.get(accountId) ?? [],
+          }));
+        } else if (msg.type === 'sendChatMessage') {
+          const accountId = String(msg.accountId || '').trim();
+          const result = this.sendHeadlessChat(
+            accountId,
+            String(msg.channel || 'say').trim().toLowerCase(),
+            String(msg.recipient || ''),
+            String(msg.message || ''),
+          );
+          ws.send(JSON.stringify({
+            type: 'chatSendResult',
+            requestId: String(msg.requestId || ''),
+            accountId,
+            ...result,
+          }));
         } else if (msg.type === 'requestViewer') {
           const accountId = String(msg.accountId || '') || null;
           const radiusRaw = Number(msg.radius ?? 15);
@@ -4513,7 +4949,16 @@ export class DevServer {
           ws.send(JSON.stringify({
             type: 'viewerData',
             accountId: accountId || this.headlessFleet?.list()[0]?.accountId || '',
-            ...(payload ?? { mapName: '', center: { x: 0, y: 0 }, radius: 15, tiles: [], player: null }),
+            ...(payload ?? { mapName: '', center: { x: 0, y: 0 }, radius: 15, tiles: [], objects: [], player: null }),
+          }));
+        } else if (msg.type === 'disconnectHeadlessClient') {
+          const accountId = String(msg.accountId || '').trim();
+          const ok = !!accountId && !!this.headlessFleet?.disconnect(accountId, 'dashboard disconnect');
+          ws.send(JSON.stringify({
+            type: 'headlessDisconnectResult',
+            accountId,
+            ok,
+            message: ok ? 'Client disconnected.' : 'Client is no longer connected.',
           }));
         } else if (msg.type === 'requestGameWikiCatalog') {
           if (msg.force === true) {
@@ -4919,6 +5364,7 @@ export class DevServer {
 
     ws.on('close', () => {
       unsub();
+      this.headlessPacketSubscriptions.delete(ws);
       Logger.log('DevServer', 'Dashboard client disconnected');
     });
   }

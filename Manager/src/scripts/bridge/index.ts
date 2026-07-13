@@ -14,6 +14,7 @@ import { BridgeProjectiles } from './world/projectiles/Projectiles.js';
 import { BridgeLog } from './log/Log.js';
 import { BridgeSettings } from './settings/Settings.js';
 import { BridgeTiming } from './timing/Timing.js';
+import { BridgeAutoNexus } from './autoNexus/AutoNexus.js';
 import { install as installChat } from './chat/index.js';
 import { install as installParty } from './party/index.js';
 import { install as installTrade } from './trade/index.js';
@@ -31,7 +32,7 @@ import {
   INVENTORY_MAIN_SLOT_COUNT, INVENTORY_BACKPACK_SLOT_COUNT, INVENTORY_TOTAL_SLOT_COUNT,
   loot, discord, DiscordWebhook,
   Self, Walking, Combat, Players, Enemies, Inventory, Vault, World, Tiles, Objects, Projectiles,
-  Log, Settings, Timing, Hive, Position, StatusEffect, Panel, uiPanel,
+  Log, Settings, Timing, AutoNexus, Hive, Position, StatusEffect, Panel, uiPanel,
   TreeScript, Root, Branch, Leaf, leaf, branch, when, not, always, cooldown, once, sequence, parallel,
 } from '@hive/sdk';
 
@@ -59,6 +60,7 @@ export class SDKBridge {
     BridgeLog.install(deps);
     BridgeSettings.install(deps);
     BridgeTiming.install(deps);
+    BridgeAutoNexus.install(deps);
     installChat(deps);
     installParty(deps);
     installTrade(deps);
@@ -76,7 +78,7 @@ export class SDKBridge {
       INVENTORY_MAIN_SLOT_COUNT, INVENTORY_BACKPACK_SLOT_COUNT, INVENTORY_TOTAL_SLOT_COUNT,
       loot, discord, DiscordWebhook, guild, GuildRank,
       Self, Pet, Walking, Combat, Players, Enemies, Inventory, Vault, World, Tiles, Objects, Projectiles,
-      Log, Settings, Timing, Hive, Position, StatusEffect, Panel, uiPanel,
+      Log, Settings, Timing, AutoNexus, Hive, Position, StatusEffect, Panel, uiPanel,
       TreeScript, Root, Branch, Leaf, leaf, branch, when, not, always, cooldown, once, sequence, parallel,
     };
 

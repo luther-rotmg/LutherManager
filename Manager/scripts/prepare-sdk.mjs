@@ -24,7 +24,7 @@ const EXPORT_NAMES = [
   'loot', 'discord', 'DiscordWebhook',
   'Self', 'Pet', 'Walking', 'Combat', 'Players', 'Enemies', 'Inventory', 'Vault', 'World',
   'Tiles', 'Objects', 'Projectiles',
-  'Log', 'Settings', 'Timing', 'Hive', 'Position', 'StatusEffect',
+  'Log', 'Settings', 'Timing', 'AutoNexus', 'Hive', 'Position', 'StatusEffect',
   'Panel', 'uiPanel',
   'TreeScript', 'Root', 'Branch', 'Leaf',
   'leaf', 'branch', 'when', 'not', 'always', 'cooldown', 'once', 'sequence', 'parallel',
@@ -59,6 +59,7 @@ const FALLBACK_MODULES = [
   './log/Log.js',
   './settings/Settings.js',
   './timing/Timing.js',
+  './autoNexus/AutoNexus.js',
   './ui/Panel.js',
   './treescript/index.js',
 ];

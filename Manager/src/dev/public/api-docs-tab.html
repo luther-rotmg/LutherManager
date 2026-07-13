@@ -518,7 +518,7 @@ class AttackNearest extends Leaf {
   isValid(): boolean { return Hive.enemies.count() &gt; 0; }
   onLoop(): number {
     const e = Hive.enemies.getNearest();
-    if (e) Hive.combat.attack(e.objectId);
+    if (e) Hive.combat.aimAt(e.objectId);
     return 150;
   }
 }
@@ -605,7 +605,7 @@ export class AttackNearest extends Leaf {
   isValid(): boolean { return Hive.enemies.count() &gt; 0; }
   onLoop(): number {
     const e = Hive.enemies.getNearest();
-    if (e) Hive.combat.attack(e.objectId);
+    if (e) Hive.combat.aimAt(e.objectId);
     return 150;
   }
 }</code></pre>
@@ -1023,7 +1023,7 @@ export function register(ctx) {
                 <li data-i18n="docs.unity.intro.li2"><strong>Instances</strong> &mdash; the actual copies of those templates that exist in the world right now.</li>
                 <li data-i18n="docs.unity.intro.li3"><strong>Inheritance</strong> &mdash; how templates share behavior so that every enemy doesn't have to re-declare how HP or movement works.</li>
               </ul>
-              <p data-i18n="docs.unity.intro.p3">If those three ideas click, <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a>, and <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> all start making sense as different views of the same underlying entities.</p>
+              <p data-i18n="docs.unity.intro.p3">If those three ideas click, <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a>, and <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> all start making sense as different views of the same underlying entities.</p>
 
               <h3 id="unity-intro-why" data-i18n="docs.unity.intro.h3.why">Why It Matters for the SDK</h3>
               <p data-i18n="docs.unity.intro.why.p1">The SDK exposes game state in two shapes:</p>
@@ -1124,9 +1124,9 @@ server removes entity  →  instance disappears from enemies.getAll()</div>
               <h3 id="unity-instances-sdk" data-i18n="docs.unity.instances.h3.sdk">Instance APIs</h3>
               <p data-i18n="docs.unity.instances.sdk.p1">The SDK namespaces that deal in instances:</p>
               <ul>
-                <li data-i18n="docs.unity.instances.sdk.li1"><a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.enemies</code></a> &mdash; enemy instances on the current map.</li>
+                <li data-i18n="docs.unity.instances.sdk.li1"><a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a> &mdash; combat-targetable enemy instances on the current map.</li>
                 <li data-i18n="docs.unity.instances.sdk.li2"><a class="api-ref-link" href="#api-ns-players"><code>Hive.players</code></a> &mdash; player instances.</li>
-                <li data-i18n="docs.unity.instances.sdk.li3"><a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; non-enemy instances (chests, portals, containers).</li>
+                <li data-i18n="docs.unity.instances.sdk.li3"><a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; the generic view of all tracked map entities.</li>
                 <li data-i18n="docs.unity.instances.sdk.li4"><a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> &mdash; active projectile instances.</li>
                 <li data-i18n="docs.unity.instances.sdk.li5"><a class="api-ref-link" href="#api-ns-self"><code>Hive.self</code></a> &mdash; your own player instance.</li>
               </ul>
@@ -1222,7 +1222,7 @@ def.projectiles;  // array of Projectile declarations</code></pre>
                     <tr>
                       <td data-i18n="docs.unity.cheatsheet.row2.c1">Instance (enemy)</td>
                       <td data-i18n="docs.unity.cheatsheet.row2.c2">Server world state (live)</td>
-                      <td><code>Hive.enemies.getAll()</code> / <code>getByName()</code></td>
+                      <td><code>Hive.enemies.getAll()</code> / <code>find(name)</code></td>
                     </tr>
                     <tr>
                       <td data-i18n="docs.unity.cheatsheet.row3.c1">Instance (player)</td>
@@ -1345,8 +1345,10 @@ if (oryx) {
           <a href="#api-ns-loot">Hive.loot</a>
           <a href="#api-ns-guild">Hive.guild</a>
           <a href="#api-ns-walking">Hive.walking</a>
+          <a href="#api-ns-autonexus">Hive.autoNexus</a>
           <a href="#api-ns-combat">Hive.combat</a>
           <a href="#api-ns-players">Hive.players</a>
+          <a href="#api-ns-enemies">Hive.enemies</a>
           <div class="api-ref-sidebar-group" data-api-sidebar-group="world">
             <div class="api-ref-sidebar-parent">
               <a href="#api-ns-world">Hive.world</a>
@@ -1755,6 +1757,8 @@ Hive.trade.cancel();</code></pre>
                   <tr><td><code>onMapChanged(handler)</code></td><td>When you load or change maps (display name plus width and height).</td></tr>
                   <tr><td><code>onConnected(handler)</code></td><td>When your character is active in the game world.</td></tr>
                   <tr><td><code>onDisconnected(handler)</code></td><td>When the game session ends. Optional <code>serverAddress</code> from the last known server.</td></tr>
+                  <tr><td><code>onShotFired(handler)</code></td><td>For each local <code>PLAYERSHOOT</code> packet sent by the selected account.</td></tr>
+                  <tr><td><code>onDamageTaken(handler)</code></td><td>When damage to the selected account is locally predicted or confirmed by the server.</td></tr>
                   <tr><td><code>onLevelUp(handler)</code></td><td>When your character’s level increases.</td></tr>
                   <tr><td><code>onItemPickedUp(handler)</code></td><td>When a main inventory slot <code>0–11</code> goes from empty to holding an item.</td></tr>
                   <tr><td><code>onPortalOpened(handler)</code></td><td>When a new portal appears on the map.</td></tr>
@@ -1802,6 +1806,13 @@ PortalOpenedEvent:
 
 ConnectionEvent:
   { serverAddress?: string }
+
+ShotFiredEvent:
+  { bulletId: number; weaponType: number; attackIndex: number; angle: number }
+
+DamageTakenEvent:
+  { amount: number; source: 'server' | 'projectile' | 'aoe' | 'ground';
+    hp: number | null; maxHp: number | null; ownerId?: number; bulletId?: number }
 
 CharacterFameThresholdEvent:
   { fame: number; threshold: number }</code></pre></div></details>
@@ -2022,27 +2033,99 @@ readonly [number, number]</code></pre></div></details>
             <details><summary>Enemy</summary><div class="details-body"><p class="api-doc-desc">Same fields as <code>GameObject</code> (see <a href="#api-ns-world-objects">Hive.world.objects</a> types).</p></div></details>
           </article>
 
-          <article class="api-doc-block" id="api-ns-combat">
-            <h2>Hive.combat</h2>
-            <p class="api-doc-desc">Aiming and ability usage. (Partially implemented)</p>
+          <article class="api-doc-block" id="api-ns-autonexus">
+            <h2>Hive.autoNexus</h2>
+            <p class="api-doc-desc">Account-scoped emergency Nexus protection. It checks authoritative HP and locally predicted projectile and AOE damage before sending the corresponding hit acknowledgement. Autonexus is disabled by default and retains a 5% threshold until configured.</p>
             <div class="api-doc-table-wrap">
               <table class="api-doc-table">
                 <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
                 <tbody>
+                  <tr><td><code>enable(thresholdPercent?)</code></td><td><code>void</code></td><td>Enable autonexus for the script's selected account. Optionally set the HP threshold at the same time.</td></tr>
+                  <tr><td><code>disable()</code></td><td><code>void</code></td><td>Disable autonexus without changing the current threshold.</td></tr>
+                  <tr><td><code>setEnabled(enabled)</code></td><td><code>void</code></td><td>Set the enabled state explicitly.</td></tr>
+                  <tr><td><code>isEnabled()</code></td><td><code>boolean</code></td><td>Whether autonexus is enabled for the selected account.</td></tr>
+                  <tr><td><code>setThreshold(percent)</code></td><td><code>void</code></td><td>Set the trigger threshold from <code>1</code> through <code>100</code> percent.</td></tr>
+                  <tr><td><code>getThreshold()</code></td><td><code>number</code></td><td>Current trigger percentage.</td></tr>
+                  <tr><td><code>configure(options)</code></td><td><code>void</code></td><td>Set <code>enabled</code> and/or <code>thresholdPercent</code> together.</td></tr>
+                  <tr><td><code>getState()</code></td><td><code>AutoNexusState</code></td><td>Read configuration, server HP, predicted HP, safe-map state, and the last trigger.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <pre><code class="language-typescript">onStart(): void {
+  Hive.autoNexus.configure({
+    enabled: true,
+    thresholdPercent: 30,
+  });
+}
+
+onStop(): void {
+  Hive.autoNexus.disable();
+}</code></pre>
+            <p class="api-doc-desc">Nexus, Vault, Guild Hall, Cloth Bazaar, login and quest rooms, and Pet Yard maps are treated as safe. When the threshold is crossed in a combat map, the dangerous socket is dropped and a fresh Nexus connection begins immediately.</p>
+          </article>
+
+          <article class="api-doc-block" id="api-ns-combat">
+            <h2>Hive.combat</h2>
+            <p class="api-doc-desc">Per-client weapon aiming, enemy target selection, ability use, and shot accuracy. Automatic combat only runs while the bound headless client is in a combat map.</p>
+            <div class="api-doc-table-wrap">
+              <table class="api-doc-table">
+                <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
+                <tbody>
+                  <tr><td><code>shootAt(x, y, weaponSlot?)</code></td><td><code>boolean</code></td><td>Fire one rate-limited weapon volley toward world coordinates. Defaults to equipment slot <code>0</code>.</td></tr>
                   <tr><td><code>aimAt(objectId)</code></td><td><code>boolean</code></td><td>Auto-aim weapon shots at a tracked object id.</td></tr>
                   <tr><td><code>aimAtPosition(x, y)</code></td><td><code>boolean</code></td><td>Auto-aim weapon shots at fixed world coordinates.</td></tr>
                   <tr><td><code>stopAiming()</code></td><td><code>void</code></td><td>Clear the active object-id or position aim override.</td></tr>
-                  <tr><td><code>autoAimOff()</code></td><td><code>void</code></td><td>Disable SDK auto-aim so manual aim passes through unchanged.</td></tr>
+                  <tr><td><code>enableAutoAim(options?)</code></td><td><code>boolean</code></td><td>Select and fire at visible enemies. Supports closest, maximum HP, lowest HP, and random targeting.</td></tr>
+                  <tr><td><code>setAutoAim(modeOrOptions)</code></td><td><code>boolean</code></td><td>Update target mode, range, boss priority, target leading, or weapon slot without changing enabled state.</td></tr>
+                  <tr><td><code>disableAutoAim()</code> / <code>autoAimOff()</code></td><td><code>void</code></td><td>Disable automatic or fixed aiming.</td></tr>
+                  <tr><td><code>getAutoAimTarget()</code></td><td><code>number | null</code></td><td>Current selected enemy object id, or <code>null</code>.</td></tr>
+                  <tr><td><code>getAutomationState()</code></td><td><code>CombatAutomationState | null</code></td><td>Read the bound client's current combat settings and selected target.</td></tr>
                   <tr><td><code>useAbility()</code></td><td><code>boolean</code></td><td>Activate the player's ability (slot 1).</td></tr>
                   <tr><td><code>useAbilityAt(x, y)</code></td><td><code>boolean</code></td><td>Use ability toward tile coordinates as numbers.</td></tr>
+                  <tr><td><code>useAbilityOn(enemy)</code></td><td><code>boolean</code></td><td>Use the equipped ability at an enemy's current position.</td></tr>
+                  <tr><td><code>enableAutoAbility(options?)</code></td><td><code>boolean</code></td><td>Automatically use the equipped ability when its MP, target, range, and cooldown requirements pass.</td></tr>
+                  <tr><td><code>setAutoAbility(options)</code></td><td><code>boolean</code></td><td>Update automatic ability requirements without changing enabled state.</td></tr>
+                  <tr><td><code>disableAutoAbility()</code></td><td><code>void</code></td><td>Stop automatic ability use.</td></tr>
                   <tr><td><code>accuracy()</code></td><td><code>number</code></td><td>Shot accuracy since tracking began (up to 1 hour history). Returns a 0&ndash;1 fraction; multiply by 100 for a percentage. Returns 0 if no shots fired.</td></tr>
                   <tr><td><code>recentAccuracy(minutes)</code></td><td><code>number</code></td><td>Shot accuracy over the last <code>minutes</code> minutes. Returns 0 if no shots in the window.</td></tr>
                   <tr><td><code>resetAccuracy()</code></td><td><code>void</code></td><td>Reset shot and hit counters.</td></tr>
                 </tbody>
               </table>
             </div>
-            <p class="api-doc-desc">Accuracy is tracked by counting outgoing <code>PLAYERSHOOT</code> packets (shots fired) vs <code>ENEMYHIT</code> packets (shots that connected). Some combat helpers are still being filled in; behavior may be limited until a future release.</p>
+            <p class="api-doc-desc">The client derives weapon range, fire rate, projectile count, ability MP cost, and item cooldown from game data. It will not automate in Nexus, Vault, Pet Yard, Guild Hall, or quest rooms. Teleport abilities are excluded unless <code>allowTeleport: true</code>. Ability packets are also blocked while Quiet or Silenced, and shooting abilities while Stunned. Accuracy compares outgoing <code>PLAYERSHOOT</code> packets with acknowledged <code>ENEMYHIT</code> packets and is clamped to a 0&ndash;1 fraction for multi-hit weapons.</p>
+            <pre><code class="language-typescript">onStart(): void {
+  Hive.combat.enableAutoAim({
+    mode: 'maxHp',
+    bossPriority: true,
+    leadTargets: true,
+  });
+  Hive.combat.enableAutoAbility({
+    minMpPercent: 60,
+    minTargets: 1,
+  });
+}
+
+onStop(): void {
+  Hive.combat.disableAutoAim();
+  Hive.combat.disableAutoAbility();
+}</code></pre>
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">Types</h3>
+            <details open><summary>AutoAimOptions</summary><div class="details-body"><pre><code class="language-typescript">{
+  mode?: 'closest' | 'maxHp' | 'lowestHp' | 'random';
+  range?: number;              // 0 derives weapon range
+  bossPriority?: boolean;      // default true
+  leadTargets?: boolean;       // default true
+  includeInvulnerable?: boolean;
+  weaponSlot?: number;         // default 0
+}</code></pre></div></details>
+            <details><summary>AutoAbilityOptions</summary><div class="details-body"><pre><code class="language-typescript">{
+  minMpPercent?: number;       // default 50
+  minTargetHp?: number;        // default 0
+  minTargets?: number;         // default 1
+  range?: number;              // 0 derives ability range
+  cooldownMs?: number;         // additional minimum cooldown
+  allowTeleport?: boolean;     // default false
+}</code></pre></div></details>
             <details open><summary>Position</summary><div class="details-body"><p class="api-doc-desc"><code>aimAtPosition(x, y)</code> and <code>useAbilityAt(x, y)</code> take world X and Y as two numbers (e.g. <code>500, 500</code>).</p><pre><code class="language-typescript">// e.g. 500, 500 — world X, then Y
 readonly [number, number]</code></pre></div></details>
           </article>
@@ -2097,6 +2180,39 @@ readonly [number, number]</code></pre></div></details>
   dexterity: number;
   vitality: number;
   wisdom: number;
+}</code></pre></div></details>
+          </article>
+
+          <article class="api-doc-block" id="api-ns-enemies">
+            <h2>Hive.enemies</h2>
+            <p class="api-doc-desc">The typed combat view of enemies currently tracked on the map. Permanently invincible enemy-tagged controllers and spawners are excluded. Use <a href="#api-ns-world-objects"><code>Hive.world.objects.getByCategory('Enemy')</code></a> when you need the raw game-data category instead.</p>
+            <div class="api-doc-table-wrap">
+              <table class="api-doc-table">
+                <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
+                <tbody>
+                  <tr><td><code>getAll()</code></td><td><code>Enemy[]</code></td><td>Every combat-targetable enemy currently tracked on the map.</td></tr>
+                  <tr><td><code>getNearest()</code></td><td><code>Enemy | null</code></td><td>Enemy closest to the local player.</td></tr>
+                  <tr><td><code>getNearestTo(position)</code></td><td><code>Enemy | null</code></td><td>Enemy closest to a world position.</td></tr>
+                  <tr><td><code>getBoss()</code></td><td><code>Enemy | null</code></td><td>Closest currently tracked enemy marked as a boss.</td></tr>
+                  <tr><td><code>find(name)</code></td><td><code>Enemy | null</code></td><td>First enemy whose display name contains <code>name</code>, case-insensitively.</td></tr>
+                  <tr><td><code>count()</code></td><td><code>number</code></td><td>Number of enemies <code>getAll()</code> would return.</td></tr>
+                  <tr><td><code>getById(objectId)</code></td><td><code>Enemy | null</code></td><td>Enemy by runtime instance id.</td></tr>
+                  <tr><td><code>getByType(objectType)</code></td><td><code>Enemy[]</code></td><td>Enemies that share a game-data type id.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <details open><summary>Enemy</summary><div class="details-body"><p class="api-doc-desc">Extends <code>GameObject</code> with live combat fields.</p><pre><code class="language-typescript">{
+  objectType: number;
+  objectId: number;
+  name: string;
+  position: Position;
+  hp: number;
+  maxHp: number;
+  defense: number;
+  stats: Stats;
+  phase: number;
+  isEnraged: boolean;
+  isBoss: boolean;
 }</code></pre></div></details>
           </article>
 
@@ -2186,8 +2302,8 @@ readonly [number, number]</code></pre></div></details>
 
           <article class="api-doc-block" id="api-ns-world-objects">
             <h2>Hive.world.objects</h2>
-            <p class="api-doc-desc">The <strong>generic</strong> view of every entity standing on the current map &mdash; enemies, players, portals, containers (loot bags / chests), pets, beacons, projectiles, and props &mdash; all returned as <code>GameObject</code>s so you can filter by category, position, or name without caring about their specialised namespace.</p>
-            <p class="api-doc-desc">Reach for <a href="#api-ns-world-objects"><code>Hive.enemies</code></a> or <code>Hive.players</code> when you already know what you&rsquo;re looking for &mdash; they return richer typed entities (HP, class, etc.). Part of <a href="#api-ns-world">Hive.world</a>.</p>
+            <p class="api-doc-desc">The <strong>generic</strong> view of tracked map entities &mdash; enemies, players, portals, containers (loot bags / chests), pets, beacons, props, and controllers. Projectiles are exposed separately through <a href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a>.</p>
+            <p class="api-doc-desc">Reach for <a href="#api-ns-enemies"><code>Hive.enemies</code></a> or <code>Hive.players</code> when you already know what you&rsquo;re looking for. Part of <a href="#api-ns-world">Hive.world</a>.</p>
 
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">Basic lookup</h3>
             <div class="api-doc-table-wrap">
@@ -2208,9 +2324,9 @@ readonly [number, number]</code></pre></div></details>
               <table class="api-doc-table">
                 <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
                 <tbody>
-                  <tr><td><code>getByCategory(category)</code></td><td><code>GameObject[]</code></td><td>Every object whose game-data category matches (e.g. <code>'Enemy'</code>, <code>'Container'</code>).</td></tr>
-                  <tr><td><code>getEnemies()</code></td><td><code>Enemy[]</code></td><td>All enemies on the map with enemy-specific fields filled in.</td></tr>
-                  <tr><td><code>getPlayers()</code></td><td><code>PlayerEntity[]</code></td><td>All player-like entities on the map (includes you).</td></tr>
+                  <tr><td><code>getByCategory(category)</code></td><td><code>GameObject[]</code></td><td>Every object whose raw game-data category matches. <code>'Enemy'</code> includes invincible enemy-tagged controllers and spawners.</td></tr>
+                  <tr><td><code>getEnemies()</code></td><td><code>Enemy[]</code></td><td>Compatibility convenience alias for <code>Hive.enemies.getAll()</code>.</td></tr>
+                  <tr><td><code>getPlayers()</code></td><td><code>PlayerEntity[]</code></td><td>Compatibility convenience alias for <code>Hive.players.getAll()</code> (includes you).</td></tr>
                   <tr><td><code>getPortals()</code></td><td><code>Portal[]</code></td><td>All portals on the map (realm, dungeon, event, &hellip;).</td></tr>
                   <tr><td><code>getContainers()</code></td><td><code>Container[]</code></td><td>All containers on the map &mdash; loot bags, vault chests, gift chests, etc.</td></tr>
                   <tr><td><code>getPets()</code></td><td><code>GameObject[]</code></td><td>All pet entities on the map.</td></tr>
@@ -2245,8 +2361,8 @@ readonly [number, number]</code></pre></div></details>
               <table class="api-doc-table">
                 <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
                 <tbody>
-                  <tr><td><code>findByName(name)</code></td><td><code>GameObject | null</code></td><td>First object whose display name case-insensitively equals <code>name</code>.</td></tr>
-                  <tr><td><code>findAllByName(name)</code></td><td><code>GameObject[]</code></td><td>Every object whose display name case-insensitively equals <code>name</code>.</td></tr>
+                  <tr><td><code>findByName(name)</code></td><td><code>GameObject | null</code></td><td>First object whose display name contains <code>name</code>, case-insensitively.</td></tr>
+                  <tr><td><code>findAllByName(name)</code></td><td><code>GameObject[]</code></td><td>Every object whose display name contains <code>name</code>, case-insensitively.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -2256,7 +2372,7 @@ readonly [number, number]</code></pre></div></details>
               <table class="api-doc-table">
                 <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
                 <tbody>
-                  <tr><td><code>findPortal(name)</code></td><td><code>Portal | null</code></td><td>First portal whose display name case-insensitively equals <code>name</code>.</td></tr>
+                  <tr><td><code>findPortal(name)</code></td><td><code>Portal | null</code></td><td>First portal whose display name contains <code>name</code>, case-insensitively.</td></tr>
                   <tr><td><code>getNearestPortal()</code></td><td><code>Portal | null</code></td><td>Closest portal to you.</td></tr>
                   <tr><td><code>getOpenPortals()</code></td><td><code>Portal[]</code></td><td>Every portal currently in its &ldquo;open&rdquo; state (walkable by players).</td></tr>
                 </tbody>
@@ -2269,7 +2385,7 @@ readonly [number, number]</code></pre></div></details>
                 <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
                 <tbody>
                   <tr><td><code>getNearestContainer()</code></td><td><code>Container | null</code></td><td>Closest container to you &mdash; convenient for auto-loot logic.</td></tr>
-                  <tr><td><code>findContainer(name)</code></td><td><code>Container | null</code></td><td>First container whose display name case-insensitively equals <code>name</code>.</td></tr>
+                  <tr><td><code>findContainer(name)</code></td><td><code>Container | null</code></td><td>First container whose display name contains <code>name</code>, case-insensitively.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -2283,6 +2399,7 @@ readonly [number, number]</code></pre></div></details>
                   <tr><td><code>getCategory(objectType)</code></td><td><code>ObjectCategory | null</code></td><td>Category bucket for an <code>objectType</code>, or <code>null</code> when the type is unknown.</td></tr>
                   <tr><td><code>getTypeName(objectType)</code></td><td><code>string</code></td><td>Display name from game data for a given <code>objectType</code> (e.g. <code>'Dungeon Portal'</code>).</td></tr>
                   <tr><td><code>isEnemy(objectType)</code></td><td><code>boolean</code></td><td>Shortcut for <code>getCategory(objectType) === 'Enemy'</code>.</td></tr>
+                  <tr><td><code>isCombatEnemy(objectType)</code></td><td><code>boolean</code></td><td><code>true</code> for a combat target; excludes permanently invincible enemy-tagged types.</td></tr>
                   <tr><td><code>isPortal(objectType)</code></td><td><code>boolean</code></td><td>Shortcut for <code>getCategory(objectType) === 'Portal'</code>.</td></tr>
                   <tr><td><code>isContainer(objectType)</code></td><td><code>boolean</code></td><td>Shortcut for <code>getCategory(objectType) === 'Container'</code>.</td></tr>
                   <tr><td><code>isBoss(objectType)</code></td><td><code>boolean</code></td><td><code>true</code> when game data marks this type as a boss (quest flag or high maxHp).</td></tr>
@@ -2566,7 +2683,7 @@ class AttackNearest extends Leaf {
   isValid(): boolean { return Hive.enemies.count() &gt; 0; }
   onLoop(): number {
     const e = Hive.enemies.getNearest();
-    if (e) Hive.combat.attack(e.objectId);
+    if (e) Hive.combat.aimAt(e.objectId);
     return 150;
   }
 }
@@ -2650,7 +2767,7 @@ export default class MyScript extends TreeScript {
         'docs.unity.intro.li1': '<strong>Clases</strong> &mdash; las plantillas que describen <em>qué es algo</em> (un Oryx, Sword of Acclaim, una Medusa).',
         'docs.unity.intro.li2': '<strong>Instancias</strong> &mdash; las copias reales de esas plantillas que existen en el mundo en este momento.',
         'docs.unity.intro.li3': '<strong>Herencia</strong> &mdash; cómo las plantillas comparten comportamiento para que cada enemigo no tenga que volver a declarar cómo funcionan los HP o el movimiento.',
-         'docs.unity.intro.p3': 'Si esas tres ideas te quedan claras, <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a>, y <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> empiezan a tener sentido como distintas vistas de las mismas entidades subyacentes.',
+         'docs.unity.intro.p3': 'Si esas tres ideas te quedan claras, <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a>, y <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> empiezan a tener sentido como distintas vistas de las mismas entidades subyacentes.',
         'docs.unity.intro.h3.why': 'Por qué importa para el SDK',
         'docs.unity.intro.why.p1': 'El SDK expone el estado del juego en dos formas:',
         'docs.unity.intro.why.li1': '<strong>Datos de instancia</strong> &mdash; "este Oryx específico en (123, 456) tiene 1,200,000 HP restantes" &mdash; vienen de paquetes en vivo del servidor (<code>NEWTICK</code>, <code>ENEMYHIT</code>, <code>UPDATE</code>).',
@@ -2686,9 +2803,9 @@ export default class MyScript extends TreeScript {
         'docs.unity.instances.lifecycle.p1': 'Como las instancias van y vienen, <strong>nunca almacenes en caché un <code>objectId</code> entre transiciones de mapa</strong>. El mismo nombre de enemigo recibirá un id nuevo en el siguiente mapa.',
         'docs.unity.instances.h3.sdk': 'APIs de instancia',
         'docs.unity.instances.sdk.p1': 'Los namespaces del SDK que trabajan con instancias:',
-         'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.enemies</code></a> &mdash; instancias de enemigos en el mapa actual.',
+         'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a> &mdash; instancias de enemigos atacables en el mapa actual.',
         'docs.unity.instances.sdk.li2': '<a class="api-ref-link" href="#api-ns-players"><code>Hive.players</code></a> &mdash; instancias de jugadores.',
-        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; instancias no enemigas (cofres, portales, Container).',
+        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; vista genérica de todas las entidades rastreadas del mapa.',
         'docs.unity.instances.sdk.li4': '<a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> &mdash; instancias de Projectile activos.',
         'docs.unity.instances.sdk.li5': '<a class="api-ref-link" href="#api-ns-self"><code>Hive.self</code></a> &mdash; tu propia instancia de jugador.',
         'docs.unity.inheritance.p1': 'La <strong>herencia</strong> es cómo una clase reutiliza comportamiento de una clase padre. En Unity, tus scripts personalizados heredan de <code>MonoBehaviour</code> para obtener automáticamente <code>Update()</code>, <code>Start()</code>, <code>OnDestroy()</code>. En RotMG, las clases heredan mediante la etiqueta <code>&lt;Class&gt;</code>.',
@@ -3150,7 +3267,7 @@ export default class MyScript extends TreeScript {
         'docs.unity.intro.li1': '<strong>Klassen</strong> &mdash; die Vorlagen, die beschreiben, <em>was etwas ist</em> (ein Oryx, Sword of Acclaim, eine Medusa).',
         'docs.unity.intro.li2': '<strong>Instanzen</strong> &mdash; die tatsächlichen Kopien dieser Vorlagen, die gerade in der Welt existieren.',
         'docs.unity.intro.li3': '<strong>Vererbung</strong> &mdash; wie Vorlagen Verhalten teilen, damit nicht jeder Gegner neu deklarieren muss, wie HP oder Bewegung funktionieren.',
-        'docs.unity.intro.p3': 'Wenn diese drei Ideen sitzen, ergeben <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-world"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> und <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> alle Sinn als unterschiedliche Ansichten derselben zugrunde liegenden Entitäten.',
+        'docs.unity.intro.p3': 'Wenn diese drei Ideen sitzen, ergeben <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> und <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> alle Sinn als unterschiedliche Ansichten derselben zugrunde liegenden Entitäten.',
         'docs.unity.intro.h3.why': 'Warum das für das SDK wichtig ist',
         'docs.unity.intro.why.p1': 'Das SDK stellt Spielzustand in zwei Formen bereit:',
         'docs.unity.intro.why.li1': '<strong>Instanzdaten</strong> &mdash; "dieser konkrete Oryx bei (123, 456) hat noch 1,200,000 HP" &mdash; kommen aus Live-Serverpaketen (<code>NEWTICK</code>, <code>ENEMYHIT</code>, <code>UPDATE</code>).',
@@ -3186,9 +3303,9 @@ export default class MyScript extends TreeScript {
         'docs.unity.instances.lifecycle.p1': 'Weil Instanzen kommen und gehen, solltest du <strong>eine <code>objectId</code> niemals über Kartenwechsel hinweg cachen</strong>. Derselbe Gegnername bekommt auf der nächsten Karte eine neue ID.',
         'docs.unity.instances.h3.sdk': 'Instanz-APIs',
         'docs.unity.instances.sdk.p1': 'Die SDK-Namespaces, die mit Instanzen arbeiten:',
-        'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-world"><code>Hive.enemies</code></a> &mdash; Gegnerinstanzen auf der aktuellen Karte.',
+        'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a> &mdash; angreifbare Gegnerinstanzen auf der aktuellen Karte.',
         'docs.unity.instances.sdk.li2': '<a class="api-ref-link" href="#api-ns-players"><code>Hive.players</code></a> &mdash; Spielerinstanzen.',
-        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; Nicht-Gegner-Instanzen (Truhen, Portale, Container).',
+        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; generische Ansicht aller verfolgten Kartenentitäten.',
         'docs.unity.instances.sdk.li4': '<a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> &mdash; aktive Projectile-Instanzen.',
         'docs.unity.instances.sdk.li5': '<a class="api-ref-link" href="#api-ns-self"><code>Hive.self</code></a> &mdash; deine eigene Spielerinstanz.',
         'docs.unity.inheritance.p1': '<strong>Vererbung</strong> ist die Art, wie eine Klasse Verhalten von einer Elternklasse wiederverwendet. In Unity erben deine eigenen Skripte von <code>MonoBehaviour</code> und bekommen dadurch automatisch <code>Update()</code>, <code>Start()</code>, <code>OnDestroy()</code>. In RotMG erben Klassen über das Tag <code>&lt;Class&gt;</code>.',
@@ -3650,7 +3767,7 @@ export default class MyScript extends TreeScript {
         'docs.unity.intro.li1': '<strong>Classes</strong> &mdash; os modelos que descrevem <em>o que algo é</em> (um Oryx, Sword of Acclaim, uma Medusa).',
         'docs.unity.intro.li2': '<strong>Instâncias</strong> &mdash; as cópias reais desses modelos que existem no mundo neste momento.',
         'docs.unity.intro.li3': '<strong>Herança</strong> &mdash; como os modelos compartilham comportamento para que todo inimigo não precise redeclarar como HP ou movimento funcionam.',
-        'docs.unity.intro.p3': 'Se essas três ideias fizerem sentido, <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-world"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> e <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> passam a fazer sentido como visões diferentes das mesmas entidades subjacentes.',
+        'docs.unity.intro.p3': 'Se essas três ideias fizerem sentido, <a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>, <a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a>, <a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> e <a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> passam a fazer sentido como visões diferentes das mesmas entidades subjacentes.',
         'docs.unity.intro.h3.why': 'Por que isso importa para o SDK',
         'docs.unity.intro.why.p1': 'O SDK expõe o estado do jogo em dois formatos:',
         'docs.unity.intro.why.li1': '<strong>Dados de instância</strong> &mdash; "este Oryx específico em (123, 456) tem 1,200,000 HP restantes" &mdash; vêm de pacotes ao vivo do servidor (<code>NEWTICK</code>, <code>ENEMYHIT</code>, <code>UPDATE</code>).',
@@ -3686,9 +3803,9 @@ export default class MyScript extends TreeScript {
         'docs.unity.instances.lifecycle.p1': 'Como as instâncias vêm e vão, <strong>nunca armazene em cache um <code>objectId</code> entre transições de mapa</strong>. O mesmo nome de inimigo receberá um novo id no próximo mapa.',
         'docs.unity.instances.h3.sdk': 'APIs de instância',
         'docs.unity.instances.sdk.p1': 'Os namespaces do SDK que lidam com instâncias:',
-        'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-world"><code>Hive.enemies</code></a> &mdash; instâncias de inimigos no mapa atual.',
+        'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a> &mdash; instâncias de inimigos que podem ser alvejados no mapa atual.',
         'docs.unity.instances.sdk.li2': '<a class="api-ref-link" href="#api-ns-players"><code>Hive.players</code></a> &mdash; instâncias de jogadores.',
-        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; instâncias não inimigas (baús, portais, Container).',
+        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; visão genérica de todas as entidades rastreadas do mapa.',
         'docs.unity.instances.sdk.li4': '<a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> &mdash; instâncias de Projectile ativos.',
         'docs.unity.instances.sdk.li5': '<a class="api-ref-link" href="#api-ns-self"><code>Hive.self</code></a> &mdash; sua própria instância de jogador.',
         'docs.unity.inheritance.p1': 'A <strong>herança</strong> é como uma classe reutiliza comportamento de uma classe pai. No Unity, seus scripts personalizados herdam de <code>MonoBehaviour</code> para receber automaticamente <code>Update()</code>, <code>Start()</code>, <code>OnDestroy()</code>. Em RotMG, as classes herdam por meio da tag <code>&lt;Class&gt;</code>.',
@@ -4150,7 +4267,7 @@ export default class MyScript extends TreeScript {
         'docs.unity.intro.li1': '<strong>クラス</strong> &mdash; <em>それが何であるか</em> を表すテンプレートです（Oryx、Sword of Acclaim、Medusa など）。',
         'docs.unity.intro.li2': '<strong>インスタンス</strong> &mdash; そのテンプレートの実際のコピーで、今この瞬間にワールド内に存在しているものです。',
         'docs.unity.intro.li3': '<strong>継承</strong> &mdash; テンプレート同士が振る舞いを共有する仕組みです。これにより、すべての敵が HP や移動の仕組みを毎回再定義せずに済みます。',
-        'docs.unity.intro.p3': 'この 3 つが腑に落ちると、<a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>、<a class="api-ref-link" href="#api-ns-world"><code>Hive.enemies</code></a>、<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a>、<a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> は、同じ基盤エンティティを別の角度から見たものだと分かるようになります。',
+        'docs.unity.intro.p3': 'この 3 つが腑に落ちると、<a class="api-ref-link" href="#api-ns-world"><code>Hive.world</code></a>、<a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a>、<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a>、<a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> は、同じ基盤エンティティを別の角度から見たものだと分かるようになります。',
         'docs.unity.intro.h3.why': 'SDK で重要な理由',
         'docs.unity.intro.why.p1': 'SDK はゲーム状態を 2 つの形で公開します。',
         'docs.unity.intro.why.li1': '<strong>インスタンスデータ</strong> &mdash; "この特定の Oryx は (123, 456) にいて、残り HP は 1,200,000" &mdash; はライブのサーバーパケット（<code>NEWTICK</code>、<code>ENEMYHIT</code>、<code>UPDATE</code>）から来ます。',
@@ -4186,9 +4303,9 @@ export default class MyScript extends TreeScript {
         'docs.unity.instances.lifecycle.p1': 'インスタンスは現れては消えるので、<strong><code>objectId</code> をマップ遷移をまたいでキャッシュしてはいけません</strong>。同じ敵名でも次のマップでは新しい ID になります。',
         'docs.unity.instances.h3.sdk': 'インスタンス API',
         'docs.unity.instances.sdk.p1': 'インスタンスを扱う SDK の名前空間:',
-        'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-world"><code>Hive.enemies</code></a> &mdash; 現在のマップ上の敵インスタンス。',
+        'docs.unity.instances.sdk.li1': '<a class="api-ref-link" href="#api-ns-enemies"><code>Hive.enemies</code></a> &mdash; 現在のマップ上で戦闘対象にできる敵インスタンス。',
         'docs.unity.instances.sdk.li2': '<a class="api-ref-link" href="#api-ns-players"><code>Hive.players</code></a> &mdash; プレイヤーインスタンス。',
-        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; 敵以外のインスタンス（チェスト、ポータル、Container）。',
+        'docs.unity.instances.sdk.li3': '<a class="api-ref-link" href="#api-ns-world-objects"><code>Hive.world.objects</code></a> &mdash; マップ上で追跡されている全エンティティの汎用ビュー。',
         'docs.unity.instances.sdk.li4': '<a class="api-ref-link" href="#api-ns-world-projectiles"><code>Hive.world.projectiles</code></a> &mdash; アクティブな Projectile インスタンス。',
         'docs.unity.instances.sdk.li5': '<a class="api-ref-link" href="#api-ns-self"><code>Hive.self</code></a> &mdash; 自分自身のプレイヤーインスタンス。',
         'docs.unity.inheritance.p1': '<strong>継承</strong> は、クラスが親クラスから振る舞いを再利用する仕組みです。Unity では自作スクリプトは <code>MonoBehaviour</code> を継承するので、自動的に <code>Update()</code>、<code>Start()</code>、<code>OnDestroy()</code> を使えます。RotMG ではクラスは <code>&lt;Class&gt;</code> タグを通して継承します。',

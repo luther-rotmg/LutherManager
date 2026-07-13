@@ -48,6 +48,7 @@ import { attachCoreCommands } from './core/CoreCommands.js';
 import { StateManager } from './state/StateManager.js';
 import { PartyRosterState } from './state/PartyRosterState.js';
 import { ScriptHost } from './scripts/ScriptHost.js';
+import { getScriptExecutionSession } from './scripts/ScriptExecutionContext.js';
 import type { BridgeClientRef } from './scripts/bridge/BridgeDeps.js';
 import { GameWorldState } from './state/GameWorldState.js';
 import { ProjectileTracker } from './state/ProjectileTracker.js';
@@ -161,14 +162,14 @@ async function main() {
     devServer.setBridgeClientRef(bridgeClientRef);
     devServer.attachProxy(proxy);
 
-    const scriptSession = { scriptId: undefined as string | undefined };
+    const scriptSession = { scriptId: undefined as string | undefined, accountId: undefined as string | undefined };
     scriptHost = new ScriptHost(scriptSession);
     scriptHost.onLog((id, line, level) => {
       devServer?.broadcastScriptLog(id, line, level);
     });
     devServer.setScriptHost(scriptHost);
     scriptHost.installBridge({
-      getHeadlessClient: () => headlessFleet.get(),
+      getHeadlessClient: () => headlessFleet.get(getScriptExecutionSession()?.accountId ?? scriptSession.accountId),
       stateManager,
       clientRef: bridgeClientRef,
       worldState,

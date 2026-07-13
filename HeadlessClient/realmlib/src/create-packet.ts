@@ -3,6 +3,7 @@ import { Packet } from './packet';
 
 import * as IncomingPackets from './packets/incoming';
 import * as OutgoingPackets from './packets/outgoing';
+import * as PartyPackets from './packets/party-packets';
 
 /**
  * A factory which constructs a new packet instance.
@@ -13,6 +14,13 @@ type PacketFactory = () => Packet;
  * Maps each packet type to a factory for the matching packet class.
  */
 const PACKET_FACTORIES: { [key in PacketType]?: PacketFactory } = {
+  [PacketType.CREATE_PARTY_MESSAGE]: () => new PartyPackets.CreatePartyMessagePacket(),
+  [PacketType.PARTY_ACTION_RESULT]: () => new PartyPackets.PartyActionResultPacket(),
+  [PacketType.PARTY_ACTION]: () => new PartyPackets.PartyActionPacket(),
+  [PacketType.INCOMING_PARTY_MEMBER_INFO]: () => new PartyPackets.IncomingPartyMemberInfoPacket(),
+  [PacketType.PARTY_MEMBER_ADDED]: () => new PartyPackets.PartyMemberAddedPacket(),
+  [PacketType.PARTY_LIST_MESSAGE]: () => new PartyPackets.PartyListMessagePacket(),
+  [PacketType.PARTY_JOIN_REQUEST]: () => new PartyPackets.PartyJoinRequestPacket(),
   [PacketType.FAILURE]: () => new IncomingPackets.FailurePacket(),
   [PacketType.ACCEPT_ARENA_DEATH]: () => new OutgoingPackets.AcceptArenaDeathPacket(),
   [PacketType.LOAD]: () => new OutgoingPackets.LoadPacket(),

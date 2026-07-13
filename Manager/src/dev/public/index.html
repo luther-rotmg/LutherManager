@@ -228,13 +228,16 @@
       <div id="content-tabs">
         <button class="content-tab" data-tab="clients" data-icon="C" data-label="Clients" data-i18n="tab.clients">Clients</button>
         <button class="content-tab active" data-tab="accounts" data-icon="A" data-label="Accounts" data-i18n="tab.accounts">Accounts</button>
+        <button class="content-tab" data-tab="proxies" data-icon="P" data-label="Proxies">Proxies</button>
         <button class="content-tab" data-tab="api" data-icon="A" data-label="API" data-i18n="tab.api">API</button>
         <button class="content-tab" data-tab="game-wiki" data-icon="W" data-label="Wiki" data-i18n="tab.gameWiki">Wiki</button>
         <button class="content-tab" data-tab="objects" data-icon="O" data-label="Objects" data-i18n="tab.objects">Objects</button>
         <button class="content-tab" data-tab="nearby" data-icon="P" data-label="Nearby Players" data-i18n="tab.nearby">Nearby Players</button>
         <button class="content-tab" data-tab="tilemap" data-icon="T" data-label="Tilemap" data-i18n="tab.tilemap">Tilemap</button>
+        <button class="content-tab" data-tab="chat" data-icon="C" data-label="Chat" data-i18n="tab.chat">Chat</button>
         <button class="content-tab" data-tab="viewer" data-icon="V" data-label="Viewer">Viewer</button>
         <button class="content-tab" data-tab="damage" data-icon="D" data-label="Damage Sniffer" data-i18n="tab.damage">Damage Sniffer</button>
+        <button class="content-tab" data-tab="packet-logger" data-icon="P" data-label="Packet Logger">Packet Logger</button>
         <button class="content-tab" data-tab="scripts" data-icon="S" data-label="Scripts" data-i18n="tab.scripts">Scripts</button>
       </div>
 
@@ -400,6 +403,10 @@
 
           <div id="home-multi-connected-cards-grid" class="home-multi-connected-cards-grid home-card--span-3"></div>
 
+        </div>
+        <div id="clients-card-ctx-menu" class="accounts-card-ctx-menu clients-card-ctx-menu" style="display:none;" role="menu">
+          <button type="button" class="accounts-ctx-item" data-client-card-action="details">Open Details</button>
+          <button type="button" class="accounts-ctx-item accounts-ctx-item--danger" data-client-card-action="disconnect">Disconnect Client</button>
         </div>
       </div>
 
@@ -622,17 +629,36 @@
               <div class="acct-section acct-section--proxy">
                 <div class="acct-section-head"><span class="acct-section-title">Proxy</span></div>
                 <div class="accounts-field">
-                  <label for="accounts-proxy">Host:Port <span class="accounts-field-hint">optional</span></label>
-                  <input type="text" id="accounts-proxy" placeholder="e.g. 127.0.0.1:1080" autocomplete="off" spellcheck="false">
+                  <label for="accounts-proxy-id">Managed Proxy <span class="accounts-field-hint">optional</span></label>
+                  <select id="accounts-proxy-id">
+                    <option value="">Custom / direct connection</option>
+                  </select>
                 </div>
-                <div id="accounts-proxy-auth-wrap" class="accounts-field-subsection" style="display:none;">
-                  <div class="accounts-field">
-                    <label for="accounts-proxy-username">Proxy Username</label>
-                    <input type="text" id="accounts-proxy-username" placeholder="Optional" autocomplete="off" spellcheck="false">
+                <div id="accounts-custom-proxy-fields">
+                  <div class="accounts-row">
+                    <div class="accounts-field accounts-proxy-protocol-field">
+                      <label for="accounts-proxy-protocol">Type</label>
+                      <select id="accounts-proxy-protocol">
+                        <option value="http">HTTPS (CONNECT)</option>
+                        <option value="https">HTTPS (TLS proxy)</option>
+                        <option value="socks4">SOCKS4</option>
+                        <option value="socks5" selected>SOCKS5</option>
+                      </select>
+                    </div>
+                    <div class="accounts-field">
+                      <label for="accounts-proxy">Host:Port <span class="accounts-field-hint">or full proxy URL</span></label>
+                      <input type="text" id="accounts-proxy" placeholder="e.g. 127.0.0.1:1080" autocomplete="off" spellcheck="false">
+                    </div>
                   </div>
-                  <div class="accounts-field">
-                    <label for="accounts-proxy-password">Proxy Password</label>
-                    <input type="password" id="accounts-proxy-password" placeholder="Optional" autocomplete="new-password">
+                  <div id="accounts-proxy-auth-wrap" class="accounts-field-subsection" style="display:none;">
+                    <div class="accounts-field">
+                      <label for="accounts-proxy-username">Proxy Username</label>
+                      <input type="text" id="accounts-proxy-username" placeholder="Optional" autocomplete="off" spellcheck="false">
+                    </div>
+                    <div class="accounts-field">
+                      <label for="accounts-proxy-password">Proxy Password</label>
+                      <input type="password" id="accounts-proxy-password" placeholder="Optional" autocomplete="new-password">
+                    </div>
                   </div>
                 </div>
               </div>
@@ -705,6 +731,52 @@
             <div class="accounts-modal-actions">
               <button id="accounts-locked-ok-btn" class="setting-btn" data-i18n="accounts.modal.locked.ok">OK</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-proxies" class="tab-panel" style="display:none;">
+        <div class="proxy-manager">
+          <header class="proxy-manager-header">
+            <div>
+              <h2>Proxy Manager</h2>
+              <div id="proxy-manager-summary" class="proxy-manager-summary">0 proxies</div>
+            </div>
+            <div class="proxy-manager-header-actions">
+              <button type="button" id="proxy-add-btn" class="setting-btn">Add Proxy</button>
+              <button type="button" id="proxy-test-all-btn" class="setting-btn setting-btn-secondary">Test All</button>
+            </div>
+          </header>
+          <div class="proxy-manager-layout">
+            <section class="proxy-list-panel">
+              <div class="proxy-table-wrap">
+                <table class="proxy-table">
+                  <thead>
+                    <tr><th>On</th><th>Name</th><th>Type</th><th>Endpoint</th><th>Auth</th><th>Status</th><th>Latency</th><th></th></tr>
+                  </thead>
+                  <tbody id="proxy-table-body"></tbody>
+                </table>
+              </div>
+              <div id="proxy-list-empty" class="proxy-empty-state">No proxies saved.</div>
+            </section>
+            <aside class="proxy-editor-panel">
+              <div class="proxy-editor-title" id="proxy-editor-title">Select a proxy</div>
+              <div class="proxy-editor-grid">
+                <label class="proxy-editor-field proxy-editor-field-wide"><span>Name</span><input id="proxy-name-input" type="text" placeholder="Residential 1" autocomplete="off" /></label>
+                <label class="proxy-editor-field"><span>Type</span><select id="proxy-protocol-select"><option value="http">HTTPS (CONNECT)</option><option value="https">HTTPS (TLS proxy)</option><option value="socks4">SOCKS4</option><option value="socks5">SOCKS5</option></select></label>
+                <label class="proxy-editor-field"><span>Host or URL</span><input id="proxy-host-input" type="text" placeholder="127.0.0.1 or socks5://host:1080" autocomplete="off" spellcheck="false" /></label>
+                <label class="proxy-editor-field"><span>Port</span><input id="proxy-port-input" type="number" min="1" max="65535" placeholder="1080" /></label>
+                <label class="proxy-editor-field"><span>Username</span><input id="proxy-username-input" type="text" autocomplete="off" spellcheck="false" /></label>
+                <label class="proxy-editor-field"><span>Password</span><input id="proxy-password-input" type="password" autocomplete="new-password" /></label>
+                <label class="proxy-enabled-field"><input id="proxy-enabled-input" type="checkbox" checked /><span>Available for account launches</span></label>
+              </div>
+              <div id="proxy-editor-status" class="proxy-editor-status"></div>
+              <div class="proxy-editor-actions">
+                <button type="button" id="proxy-save-btn" class="setting-btn" disabled>Save</button>
+                <button type="button" id="proxy-test-btn" class="setting-btn setting-btn-secondary" disabled>Test</button>
+                <button type="button" id="proxy-delete-btn" class="setting-btn accounts-modal-danger-btn" disabled>Delete</button>
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -837,6 +909,43 @@
               <div id="damage-player-detail" class="damage-player-detail"></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div id="tab-packet-logger" class="tab-panel packet-logger-panel" style="display:none;">
+        <div class="packet-logger-toolbar">
+          <label class="nearby-toolbar-label" for="packet-logger-account-select">Account</label>
+          <select id="packet-logger-account-select" class="nearby-select"></select>
+          <div class="packet-logger-divider" aria-hidden="true"></div>
+          <label class="packet-logger-check"><input id="packet-logger-incoming" type="checkbox" checked> Incoming</label>
+          <label class="packet-logger-check"><input id="packet-logger-outgoing" type="checkbox" checked> Outgoing</label>
+          <label class="packet-logger-check"><input id="packet-logger-hide-noisy" type="checkbox"> Hide noisy</label>
+          <input id="packet-logger-search" class="packet-logger-search" type="search" placeholder="Filter type, ID, or hex" autocomplete="off">
+          <button id="packet-logger-pause" class="setting-btn" type="button">Pause</button>
+          <button id="packet-logger-clear" class="setting-btn" type="button">Clear</button>
+          <div class="packet-logger-stats"><span id="packet-logger-rate">0 pkt/s</span><span id="packet-logger-count">0 packets</span></div>
+        </div>
+        <div class="packet-logger-workspace">
+          <div class="packet-logger-list-wrap">
+            <table class="packet-logger-table">
+              <thead><tr><th>Time</th><th>Dir</th><th>ID</th><th>Packet</th><th>Size</th></tr></thead>
+              <tbody id="packet-logger-body"></tbody>
+            </table>
+            <div id="packet-logger-empty" class="packet-logger-empty">Select a connected account to inspect packet traffic.</div>
+          </div>
+          <aside id="packet-logger-detail" class="packet-logger-detail" aria-label="Packet details">
+            <div class="packet-logger-detail-head">
+              <div>
+                <div id="packet-logger-detail-name" class="packet-logger-detail-name">Packet details</div>
+                <div id="packet-logger-detail-meta" class="packet-logger-detail-meta">Select a packet from the log.</div>
+              </div>
+              <button id="packet-logger-copy" class="icon-btn" type="button" title="Copy packet details" aria-label="Copy packet details">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              </button>
+            </div>
+            <div class="packet-logger-detail-section">Payload hex</div>
+            <pre id="packet-logger-detail-hex" class="packet-logger-detail-hex">No packet selected.</pre>
+          </aside>
         </div>
       </div>
 
@@ -1007,6 +1116,52 @@
           </div>
         </div>
 
+      </div>
+
+      <div id="tab-chat" class="tab-panel" style="display:none;">
+        <div class="chat-workspace">
+          <aside class="chat-accounts" aria-label="Connected accounts">
+            <div class="chat-sidebar-header">
+              <div class="chat-sidebar-title">Accounts</div>
+              <div id="chat-account-count" class="chat-sidebar-count">0 online</div>
+            </div>
+            <div id="chat-account-list" class="chat-account-list" role="listbox" aria-label="Select an account"></div>
+          </aside>
+          <section class="chat-conversation" aria-label="Account chat">
+            <header class="chat-conversation-header">
+              <div class="chat-account-identity">
+                <div id="chat-selected-name" class="chat-selected-name">Select an account</div>
+                <div id="chat-selected-status" class="chat-selected-status">Choose a connected account to view its chat.</div>
+              </div>
+              <div id="chat-live-indicator" class="chat-live-indicator offline"><span></span>Offline</div>
+            </header>
+            <div id="chat-message-list" class="chat-message-list" role="log" aria-live="polite" aria-relevant="additions">
+              <div class="chat-empty-state">Select an account to view its current chat.</div>
+            </div>
+            <form id="chat-composer" class="chat-composer">
+              <div class="chat-composer-controls">
+                <label class="sr-only" for="chat-channel-select">Channel</label>
+                <select id="chat-channel-select" class="chat-channel-select" aria-label="Chat channel">
+                  <option value="say">Say</option>
+                  <option value="yell">Yell</option>
+                  <option value="party">Party</option>
+                  <option value="guild">Guild</option>
+                  <option value="tell">Tell</option>
+                </select>
+                <label class="sr-only" for="chat-recipient-input">Recipient</label>
+                <input id="chat-recipient-input" class="chat-recipient-input hidden" type="text" maxlength="64" placeholder="Player name" autocomplete="off" spellcheck="false" />
+                <div id="chat-send-status" class="chat-send-status" aria-live="polite"></div>
+              </div>
+              <div class="chat-composer-row">
+                <label class="sr-only" for="chat-message-input">Message</label>
+                <textarea id="chat-message-input" class="chat-message-input" rows="1" maxlength="512" placeholder="Message" disabled></textarea>
+                <button id="chat-send-button" class="chat-send-button" type="submit" title="Send message" aria-label="Send message" disabled>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       </div>
 
       <div id="tab-nearby" class="tab-panel" style="display:none;">

@@ -22,10 +22,6 @@ export class BridgeEnemies {
       warnUnimplemented('Enemies.getBoss');
       return null;
     };
-    Enemies.getTargetingMe = (): Enemy[] => {
-      warnUnimplemented('Enemies.getTargetingMe');
-      return [];
-    };
     Enemies.find = (_name: string): Enemy | null => {
       warnUnimplemented('Enemies.find');
       return null;

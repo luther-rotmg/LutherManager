@@ -15,25 +15,31 @@ export class ShootAckPacket implements Packet {
    * The current client time.
    */
   time: number;
-  /**
-   * A trailing short added in the current build (observed values 1-4).
-   * Purpose not yet confirmed.
-   */
-  unknownShort: number;
+  /** Number of shoot events acknowledged by this packet. */
+  ackCount: number;
   //#endregion
 
   constructor() {
     this.time = 0;
-    this.unknownShort = 0;
+    this.ackCount = 1;
   }
 
   write(writer: Writer): void {
     writer.writeInt32(this.time);
-    writer.writeShort(this.unknownShort);
+    writer.writeShort(this.ackCount);
   }
 
   read(reader: Reader): void {
     this.time = reader.readInt32();
-    this.unknownShort = reader.readShort();
+    this.ackCount = reader.readShort();
+  }
+
+  /** @deprecated Use {@link ackCount}. */
+  get unknownShort(): number {
+    return this.ackCount;
+  }
+
+  set unknownShort(value: number) {
+    this.ackCount = value;
   }
 }

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { createHash } from 'crypto';
 import { ENDPOINTS, UNITY_HEADERS } from './constants';
 import { getCachedToken, setCachedToken } from './token-cache';
+import { createProxyAgent, type ProxyConfig } from './proxy';
 
 /**
  * Resolves a class name ("Wizard", case-insensitive) or numeric class object
@@ -100,6 +101,8 @@ const MAX_HTTP_ATTEMPTS = 4;
 /** Per-request options, e.g. an AbortSignal to cancel in-flight auth calls. */
 export interface RequestOptions {
   signal?: AbortSignal;
+  /** Routes this AppEngine HTTPS request through the account's proxy. */
+  proxy?: ProxyConfig;
 }
 
 function appEngineTimeoutMs(): number {
@@ -148,6 +151,7 @@ async function postForm(
   options: RequestOptions = {},
 ): Promise<string> {
   let lastError: unknown;
+  const proxyAgent = options.proxy ? createProxyAgent(options.proxy) : undefined;
   for (let attempt = 1; attempt <= MAX_HTTP_ATTEMPTS; attempt++) {
     try {
       const res = await axios.post<string>(url, form(data), {
@@ -156,6 +160,9 @@ async function postForm(
         timeout: appEngineTimeoutMs(),
         validateStatus: () => true,
         signal: options.signal,
+        ...(proxyAgent
+          ? { httpAgent: proxyAgent, httpsAgent: proxyAgent, proxy: false as const }
+          : {}),
       });
       if (res.status >= 500 && attempt < MAX_HTTP_ATTEMPTS) {
         lastError = new Error(`AppEngine returned HTTP ${res.status}`);

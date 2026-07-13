@@ -45,6 +45,8 @@ export type {
   ItemPickedUpEvent,
   PortalOpenedEvent,
   ConnectionEvent,
+  ShotFiredEvent,
+  DamageTakenEvent,
   CharacterFameThresholdEvent,
   PlayerNearbyEvent,
   PlayerNearbyOptions,
@@ -95,9 +97,21 @@ export { Self } from './self/Self';
 export { Pet } from './self/Pet';
 export { connection } from './connection';
 export { character } from './character';
+export { AutoNexus } from './autoNexus/AutoNexus';
+export type {
+  AutoNexusOptions,
+  AutoNexusState,
+  AutoNexusTriggerSource,
+} from './autoNexus/AutoNexus';
 export { Walking } from './walking/Walking';
 export { Combat } from './combat/Combat';
-export type { CombatAimTarget } from './combat/Combat';
+export type {
+  AutoAbilityOptions,
+  AutoAimMode,
+  AutoAimOptions,
+  CombatAimTarget,
+  CombatAutomationState,
+} from './combat/Combat';
 export { Players } from './players/Players';
 export { Enemies } from './enemies/Enemies';
 export { Inventory } from './inventory/Inventory';

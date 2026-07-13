@@ -9,5 +9,4 @@ export interface Enemy extends GameObject {
     phase: number;
     isEnraged: boolean;
     isBoss: boolean;
-    isTargetingMe: boolean;
 }

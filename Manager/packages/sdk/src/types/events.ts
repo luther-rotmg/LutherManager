@@ -39,6 +39,24 @@ export interface ConnectionEvent {
   serverAddress?: string;
 }
 
+/** One local PLAYERSHOOT packet sent by the bound account. */
+export interface ShotFiredEvent {
+  bulletId: number;
+  weaponType: number;
+  attackIndex: number;
+  angle: number;
+}
+
+/** Local damage predicted before acknowledgement or confirmed by the server. */
+export interface DamageTakenEvent {
+  amount: number;
+  source: 'server' | 'projectile' | 'aoe' | 'ground';
+  hp: number | null;
+  maxHp: number | null;
+  ownerId?: number;
+  bulletId?: number;
+}
+
 /** Local player character fame (stat 57) crossed upward to at or above `threshold`. */
 export interface CharacterFameThresholdEvent {
   fame: number;

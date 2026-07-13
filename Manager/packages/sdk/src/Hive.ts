@@ -21,6 +21,7 @@ import { discord } from './discord';
 import { panel } from './ui/Panel';
 import { connection } from './connection';
 import { character } from './character';
+import { AutoNexus } from './autoNexus/AutoNexus';
 
 export const Hive = {
     self: Self,
@@ -29,9 +30,11 @@ export const Hive = {
     players: Players,
     enemies: Enemies,
     inventory,
+    /** @deprecated Use the vault storage and transfer methods on `Hive.inventory`. */
     vault: Vault,
     connection,
     character,
+    autoNexus: AutoNexus,
     world: {
         isNexus: World.isNexus,
         isRealm: World.isRealm,

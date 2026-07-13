@@ -189,6 +189,10 @@ export class BridgeObjects {
       warnUnimplemented('Objects.isEnemy');
       return false;
     };
+    Objects.isCombatEnemy = (_objectType: number): boolean => {
+      warnUnimplemented('Objects.isCombatEnemy');
+      return false;
+    };
     Objects.isPortal = (_objectType: number): boolean => {
       warnUnimplemented('Objects.isPortal');
       return false;

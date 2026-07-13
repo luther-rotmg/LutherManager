@@ -42,7 +42,7 @@ export class EnemyShootPacket implements Packet {
    */
   numShots: number;
   /**
-   * The angle in degrees between the projectiles if `numShots > 1`.
+   * The angle in radians between the projectiles if `numShots > 1`.
    */
   angleInc: number;
   //#endregion

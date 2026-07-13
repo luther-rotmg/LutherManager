@@ -21,7 +21,12 @@ import {
   FailurePacket,
   ReconnectPacket,
   ServerPlayerShootPacket,
+  PlayerShootPacket,
   EnemyShootPacket,
+  AoePacket,
+  AoeAckPacket,
+  GroundDamagePacket,
+  DamagePacket,
   CreateSuccessPacket,
   QueueInfoPacket,
   ChangeAllyShootPacket,
@@ -33,6 +38,7 @@ import {
   ObjectStatusData,
   StatType,
   RawPacket,
+  RawOutgoingPacket,
   PlayerData,
   Classes,
   FailureCode,
@@ -46,16 +52,36 @@ import {
   SlotObjectData,
   ConvertSeasonalCharacterPacket,
   inventorySlotIndex,
+  ConditionEffectBits,
+  ConditionEffectBits2,
 } from 'realmlib';
 import { deleteCharacter as deleteCharacterRequest } from './account-service';
+import {
+  AutoCombatController,
+  type AutoAbilityOptions,
+  type AutoAimMode,
+  type AutoAimOptions,
+  type AutoCombatState,
+} from './auto-combat';
+import {
+  AutoNexusMonitor,
+  calculateAutoNexusDamage,
+  isAutoNexusSafeMap,
+  type AutoNexusConfig,
+  type AutoNexusState,
+  type AutoNexusTrigger,
+  type AutoNexusTriggerSource,
+} from './auto-nexus';
 import { ClientLifecycle, ClientLifecycleState } from './client-lifecycle';
 import { CommandSender, type SlotRef } from './command-sender';
+import { CombatTracker } from './combat-tracker';
 import { BUILD_VERSION, GAME_ID, GAME_PORT, HELLO_TOKEN } from './constants';
 import { config } from './config';
 import { ClientEvent } from './events';
 import { MovementController } from './movement-controller';
 import { RealmPortal, ClientOptions, ClientServer, TrackedObject, TrackedTile } from './models';
 import { PortalTracker } from './portal-tracker';
+import { connectThroughProxy, proxyConfigToUrl } from './proxy';
 import { TimerBag, TimerHandle } from './timer-bag';
 export type { SlotRef } from './command-sender';
 export { Classes as ClassType } from 'realmlib';
@@ -65,6 +91,31 @@ export const VAULT_CHEST_OBJECT_TYPE = 1284;
 export const POTION_VAULT_OBJECT_TYPE = 1859;
 export const MAIN_INVENTORY_SLOT_IDS = [4, 5, 6, 7, 8, 9, 10, 11] as const;
 export const BACKPACK_SLOT_IDS = [12, 13, 14, 15, 16, 17, 18, 19] as const;
+
+export interface PacketTraffic {
+  direction: 'incoming' | 'outgoing';
+  id: number;
+  type?: PacketType;
+  size: number;
+  payload: Buffer;
+  timestamp: number;
+}
+
+export interface ClientShotFiredEvent {
+  bulletId: number;
+  weaponType: number;
+  attackIndex: number;
+  angle: number;
+}
+
+export interface ClientDamageTakenEvent {
+  amount: number;
+  source: AutoNexusTriggerSource;
+  hp: number | null;
+  maxHp: number | null;
+  ownerId?: number;
+  bulletId?: number;
+}
 
 export type ItemContainer =
   | 'inventory'
@@ -87,6 +138,7 @@ export interface ContainerSlotRef {
  * infers the listener arguments instead of falling back to EventEmitter's `any[]`.
  */
 export interface ClientEventMap {
+  [ClientEvent.PacketTraffic]: [traffic: PacketTraffic];
   [ClientEvent.Connected]: [];
   [ClientEvent.Ready]: [objectId: number];
   [ClientEvent.MapChange]: [mapName: string];
@@ -101,6 +153,9 @@ export interface ClientEventMap {
   [ClientEvent.Failure]: [packet: FailurePacket];
   [ClientEvent.Disconnect]: [];
   [ClientEvent.ReachedTarget]: [target: { x: number; y: number }];
+  [ClientEvent.AutoNexus]: [trigger: AutoNexusTrigger];
+  [ClientEvent.ShotFired]: [event: ClientShotFiredEvent];
+  [ClientEvent.DamageTaken]: [event: ClientDamageTakenEvent];
 }
 
 /** Context passed to packet hooks so one plugin can stop later hooks. */
@@ -135,6 +190,9 @@ export class Client extends EventEmitter {
   private readonly timers = new TimerBag();
   private readonly movement = new MovementController();
   private readonly portalTracker = new PortalTracker();
+  private readonly autoNexus: AutoNexusMonitor;
+  private readonly combat: CombatTracker | undefined;
+  private readonly autoCombat: AutoCombatController | undefined;
   private readonly commands = new CommandSender(() => ({
     io: this.io,
     time: this.time(),
@@ -142,6 +200,40 @@ export class Client extends EventEmitter {
     objectId: this.objectId,
     player: this.player,
     nextBulletId: () => this.nextBulletId++ % 128,
+    weapon: (weaponType: number) => {
+      const def = this.opts.combatData?.getObject(weaponType);
+      return {
+        rateOfFire: def?.rateOfFire ?? 1,
+        numProjectiles: def?.numProjectiles ?? 1,
+        arcGap: def?.arcGap ?? 11.25,
+        subattacks: def?.subattacks,
+      };
+    },
+    ability: (abilityType: number) => {
+      const def = this.opts.combatData?.getObject(abilityType);
+      return {
+        usable: def?.usable ?? true,
+        mpCost: def?.mpCost ?? 0,
+        cooldownMs: Math.max(550, def?.cooldownMs ?? 0),
+        activateEffects: def?.activateEffects ?? [],
+      };
+    },
+    trackShot: (shot: PlayerShootPacket, projectileId: number) => {
+      this.combat?.trackPlayerShoot(
+        this.objectId,
+        shot,
+        shot.time,
+        projectileId,
+        this.player?.projSpeedMult,
+        this.player?.projLifeMult,
+      );
+      this.emit(ClientEvent.ShotFired, {
+        bulletId: shot.bulletId,
+        weaponType: shot.containerType,
+        attackIndex: shot.attackIndex,
+        angle: shot.angle,
+      });
+    },
   }));
 
   /** Packet types any plugin has hooked; bridged onto each fresh io. */
@@ -153,6 +245,9 @@ export class Client extends EventEmitter {
   // Current server / map state
   private host: string;
   private port = GAME_PORT;
+  /** Last confirmed regional Nexus endpoint, retained while realm reconnects change host/port. */
+  private nexusHost: string;
+  private nexusPort = GAME_PORT;
   private gameId = GAME_ID.NEXUS;
   private key: number[] = [];
   private keyTime = -1;
@@ -172,6 +267,7 @@ export class Client extends EventEmitter {
   private serverPos: { x: number; y: number } | undefined;
   private connectStart = 0;
   private lastFrameTime = 0;
+  private lastGroundDamageAt = 0;
   private tickCount = 0;
   /** Tick id from the most recent NewTick, and the server-reported ms between the last two ticks. */
   private lastTickId = -1;
@@ -180,11 +276,13 @@ export class Client extends EventEmitter {
   private player: PlayerData | undefined;
   private inQueue = false;
   private mapName = 'Unknown';
+  private mapWidth = 0;
+  private mapHeight = 0;
   private lastInvResult: InvResultSnapshot | undefined;
   private lastVaultContent: VaultContentSnapshot | undefined;
   /** Latest slot contents learned from successful INVRESULTs, keyed by container object id. */
   private readonly containerSlotItems = new Map<number, Map<number, number>>();
-  private nextBulletId = 0;
+  private nextBulletId = 1;
   private stalled = false;
   private stalledAt = 0;
   private stallResumeTimer: TimerHandle | undefined;
@@ -198,6 +296,8 @@ export class Client extends EventEmitter {
   private wantVault = false;
   private readonly objects = new Map<number, TrackedObject>();
   private readonly tiles = new Map<string, TrackedTile>();
+  private readonly recentObjectTypes = new Map<number, number>();
+  private readonly predictedPlayerDamage = new Map<string, number>();
   private vaultPortalId: number | undefined;
   private enteringVault = false;
   private inVault = false;
@@ -221,6 +321,7 @@ export class Client extends EventEmitter {
   /** Latched on a fatal, non-recoverable failure so we stop auto-reconnecting until a manual connect. */
   private giveUp = false;
   private watchdogTimer: TimerHandle | undefined;
+  private combatTimer: TimerHandle | undefined;
   /** Wall-clock of the last byte/packet received from the server; drives the liveness watchdog. */
   private lastActivityAt = 0;
   /** Wall-clock at which the current connect attempt began; drives the handshake timeout. */
@@ -231,9 +332,31 @@ export class Client extends EventEmitter {
     super();
     this.setMaxListeners(config.maxEventListeners);
     this.host = opts.host;
+    this.nexusHost = opts.host;
     this.accessToken = opts.accessToken;
     this.clientToken = opts.clientToken;
     this.wantVault = opts.autoEnterVault ?? config.autoEnterVault;
+    this.autoNexus = new AutoNexusMonitor((trigger) => {
+      console.warn(
+        `${this.tag} autonexus at ${trigger.hp}/${trigger.maxHp} HP ` +
+          `(${trigger.thresholdPercent}% threshold, ${trigger.source})`,
+      );
+      this.emit(ClientEvent.AutoNexus, trigger);
+      this.nexusImmediately('autonexus');
+    });
+    this.combat = opts.combatData
+      ? new CombatTracker(
+          opts.combatData,
+          (packet) => this.io.send(packet),
+          (hit) => this.applyPredictedDamage(
+            hit.damage,
+            !!hit.projectile.armorPiercing,
+            'projectile',
+            { ownerId: hit.ownerId, bulletId: hit.bulletId },
+          ),
+        )
+      : undefined;
+    this.autoCombat = opts.combatData ? new AutoCombatController(opts.combatData) : undefined;
   }
 
   //#region typed event surface
@@ -337,6 +460,29 @@ export class Client extends EventEmitter {
     return this.player;
   }
 
+  /** Updates autonexus settings for this account. Autonexus defaults to off. */
+  configureAutoNexus(options: Partial<AutoNexusConfig>): AutoNexusState {
+    this.autoNexus.configure(options);
+    return this.autoNexus.getState();
+  }
+
+  /** Enables or disables autonexus without changing its threshold. */
+  setAutoNexusEnabled(enabled: boolean): AutoNexusState {
+    this.autoNexus.setEnabled(enabled);
+    return this.autoNexus.getState();
+  }
+
+  /** Sets the autonexus threshold as a percentage from 1 through 100. */
+  setAutoNexusThreshold(thresholdPercent: number): AutoNexusState {
+    this.autoNexus.setThreshold(thresholdPercent);
+    return this.autoNexus.getState();
+  }
+
+  /** Current autonexus configuration and predicted-health state. */
+  getAutoNexusState(): AutoNexusState {
+    return this.autoNexus.getState();
+  }
+
   /** Current estimated (dead-reckoned) player position. */
   getPosition(): { x: number; y: number } {
     return { x: this.pos.x, y: this.pos.y };
@@ -366,6 +512,7 @@ export class Client extends EventEmitter {
       alias: this.opts.alias,
       lifecycle: this.lifecycle.current,
       host: `${this.host}:${this.port}`,
+      nexusEndpoint: `${this.nexusHost}:${this.nexusPort}`,
       mapName: this.mapName,
       gameId: this.gameId,
       connected: !!this.socket && !this.socket.destroyed,
@@ -387,6 +534,7 @@ export class Client extends EventEmitter {
       tickTimeMs: this.lastTickTime,
       lastActivityAt: this.lastActivityAt > 0 ? new Date(this.lastActivityAt).toISOString() : undefined,
       activityAgeMs: this.lastActivityAt > 0 ? now - this.lastActivityAt : undefined,
+      autoNexus: this.autoNexus.getState(),
       connectAgeMs: this.connectStartedAt > 0 ? now - this.connectStartedAt : undefined,
       reconnectAttempts: this.reconnectAttempts,
       socket: this.socket
@@ -484,6 +632,11 @@ export class Client extends EventEmitter {
   /** Current map name from the latest MapInfo packet, or Unknown before entry. */
   getMapName(): string {
     return this.mapName;
+  }
+
+  /** Dimensions reported by the latest MAPINFO packet. */
+  getMapDimensions(): { width: number; height: number } {
+    return { width: this.mapWidth, height: this.mapHeight };
   }
 
   /** The realm portals currently tracked in the nexus. */
@@ -1193,6 +1346,64 @@ export class Client extends EventEmitter {
     return this.commands.shootAt(target, weaponSlot);
   }
 
+  /** Uses the equipped ability at a world position. */
+  useAbilityAt(target: { x: number; y: number }): boolean {
+    return this.commands.useAbilityAt(target);
+  }
+
+  /** Uses the equipped ability at the player's current position. */
+  useAbility(): boolean {
+    return this.commands.useAbilityAt(this.serverPos ?? this.pos);
+  }
+
+  aimAt(objectId: number): boolean {
+    return this.autoCombat?.aimAt(objectId) ?? false;
+  }
+
+  aimAtPosition(x: number, y: number): boolean {
+    return this.autoCombat?.aimAtPosition(x, y) ?? false;
+  }
+
+  stopAiming(): void {
+    this.autoCombat?.stopAiming();
+  }
+
+  enableAutoAim(options?: AutoAimOptions): boolean {
+    return this.autoCombat?.enableAutoAim(options) ?? false;
+  }
+
+  configureAutoAim(options: AutoAimMode | AutoAimOptions): boolean {
+    return this.autoCombat?.configureAutoAim(options) ?? false;
+  }
+
+  enableAutoAbility(options?: AutoAbilityOptions): boolean {
+    return this.autoCombat?.enableAutoAbility(options) ?? false;
+  }
+
+  configureAutoAbility(options: AutoAbilityOptions): boolean {
+    return this.autoCombat?.configureAutoAbility(options) ?? false;
+  }
+
+  disableAutoAbility(): void {
+    this.autoCombat?.disableAutoAbility();
+  }
+
+  getAutoCombatState(): AutoCombatState | undefined {
+    return this.autoCombat?.getState();
+  }
+
+  accuracy(): number {
+    return this.combat?.accuracy() ?? 0;
+  }
+
+  recentAccuracy(minutes: number): number {
+    return this.combat?.recentAccuracy(minutes) ?? 0;
+  }
+
+  resetAccuracy(): void {
+    this.combat?.resetAccuracy();
+  }
+
   //#endregion
 
   /** Records both active-pet identifiers from a player stat list, if present. */
@@ -1521,11 +1732,25 @@ export class Client extends EventEmitter {
     this.keyTime = -1;
   }
 
+  /** Drops the current socket and begins a fresh Nexus connection immediately. */
+  nexusImmediately(reason = 'emergency nexus'): boolean {
+    if (!this.socket || this.socket.destroyed) {
+      console.log(`${this.tag} ${reason} ignored - not connected`);
+      return false;
+    }
+    console.warn(`${this.tag} ${reason}: reconnecting directly to the nexus`);
+    this.wantVault = false;
+    this.resetForNexus();
+    this.connect();
+    return true;
+  }
+
   /** Disconnects and connects to the given game server (its nexus). */
   connectToServer(host: string): void {
     console.log(`${this.tag} connecting to server ${host}`);
+    this.nexusHost = host;
+    this.nexusPort = GAME_PORT;
     this.resetForNexus();
-    this.host = host;
     this.connect();
   }
 
@@ -1584,6 +1809,8 @@ export class Client extends EventEmitter {
     this.lifecycle.transition(ClientLifecycleState.Stopped);
     this.giveUp = true; // don't let an in-flight close schedule a reconnect
     this.stopWatchdog();
+    this.timers.clear(this.combatTimer);
+    this.combatTimer = undefined;
     this.timers.clear(this.reconnectTimer);
     this.reconnectTimer = undefined;
     this.reconnectAttempts = 0;
@@ -1643,10 +1870,18 @@ export class Client extends EventEmitter {
     this.seasonal = undefined;
     this.containerSlotItems.clear();
     this.posKnown = false;
+    this.serverPos = undefined;
     this.player = undefined;
     this.lastFrameTime = 0;
+    this.lastGroundDamageAt = 0;
     this.objects.clear();
     this.tiles.clear();
+    this.recentObjectTypes.clear();
+    this.predictedPlayerDamage.clear();
+    this.autoNexus.reset();
+    this.autoNexus.setSafeMap(true);
+    this.combat?.clear();
+    this.autoCombat?.clearMap();
     this.portalTracker.clear();
   }
 
@@ -1669,7 +1904,8 @@ export class Client extends EventEmitter {
   private resetForNexus(): void {
     this.clearMapState();
     this.clearNavState();
-    this.port = GAME_PORT; // a prior reconnect may have moved us to a custom port
+    this.host = this.nexusHost;
+    this.port = this.nexusPort;
     this.gameId = GAME_ID.NEXUS;
     this.key = [];
     this.keyTime = -1;
@@ -1795,31 +2031,35 @@ export class Client extends EventEmitter {
     const generation = this.lifecycle.nextGeneration();
     this.lifecycle.transition(ClientLifecycleState.Connecting);
     this.stopWatchdog();
+    this.timers.clear(this.combatTimer);
+    this.combatTimer = undefined;
+    this.combat?.clear();
     this.destroySocket();
     this.timers.clear(this.stallResumeTimer);
     this.stallResumeTimer = undefined;
     this.stallUntil = undefined;
     this.stalled = false;
     this.stallQueue.length = 0;
-    this.socket = new net.Socket();
+    this.connectStartedAt = Date.now();
+    this.lastActivityAt = 0;
+    void this.openSocket(generation);
+  }
+
+  private initializeSocket(socket: net.Socket, generation: number): void {
+    this.socket = socket;
     this.socket.setKeepAlive(true, 30_000); // surface dead peers at the OS level
     this.io = new PacketIO({ socket: this.socket });
     this.bridgedPacketTypes.clear();
     this.installStallGate();
     this.io.setMaxListeners(config.maxEventListeners);
     this.io.on('error', (err: Error) => console.error(`${this.tag} io error:`, err.message));
+    this.setupPacketTraffic();
     this.registerHandlers();
     this.setupDebug();
+    if (this.combat) {
+      this.combatTimer = this.timers.setInterval(() => this.updateCombat(this.time()), 16);
+    }
 
-    this.connectStartedAt = Date.now();
-    this.lastActivityAt = 0;
-
-    this.socket.on('connect', () => {
-      // Refresh credentials before Hello so a long-lived process never sends an
-      // expired access token on reconnect, then send Hello. Guarded against the
-      // socket being superseded while the async refresh is in flight.
-      void this.handleSocketConnected(generation);
-    });
     this.socket.on('close', () => {
       if (!this.lifecycle.isCurrent(generation)) {
         return;
@@ -1831,6 +2071,8 @@ export class Client extends EventEmitter {
         this.lifecycle.transition(ClientLifecycleState.Disconnected);
       }
       this.stopWatchdog();
+      this.timers.clear(this.combatTimer);
+      this.combatTimer = undefined;
       if (this.stalled) {
         this.unstall();
       }
@@ -1845,10 +2087,43 @@ export class Client extends EventEmitter {
         console.error(`${this.tag} socket error:`, err.message);
       }
     });
+  }
 
-    this.startWatchdog(generation);
-    console.log(`${this.tag} connecting to ${this.host}:${this.port}`);
-    this.socket.connect(this.port, this.host);
+  private async openSocket(generation: number): Promise<void> {
+    try {
+      if (this.opts.proxy) {
+        console.log(
+          `${this.tag} connecting to ${this.host}:${this.port} via ${proxyConfigToUrl(this.opts.proxy, false)}`,
+        );
+        const socket = await connectThroughProxy(this.opts.proxy, this.host, this.port);
+        if (!this.lifecycle.isCurrent(generation)) {
+          socket.destroy();
+          return;
+        }
+        this.initializeSocket(socket, generation);
+        this.startWatchdog(generation);
+        await this.handleSocketConnected(generation);
+        return;
+      }
+
+      const socket = new net.Socket();
+      this.initializeSocket(socket, generation);
+      socket.once('connect', () => {
+        // Refresh credentials before Hello so a long-lived process never sends an
+        // expired access token on reconnect, then send Hello.
+        void this.handleSocketConnected(generation);
+      });
+      this.startWatchdog(generation);
+      console.log(`${this.tag} connecting to ${this.host}:${this.port}`);
+      socket.connect(this.port, this.host);
+    } catch (error) {
+      if (!this.lifecycle.isCurrent(generation)) return;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`${this.tag} connection failed: ${message}`);
+      this.lifecycle.transition(ClientLifecycleState.Disconnected);
+      this.emit(ClientEvent.Disconnect);
+      this.scheduleBackoffReconnect();
+    }
   }
 
   /** Refreshes credentials (if a provider is configured) then sends Hello. */
@@ -2023,6 +2298,8 @@ export class Client extends EventEmitter {
     this.io.on(PacketType.PING, (p: PingPacket)                           => this.handlePing(p));
     this.io.on(PacketType.SERVERPLAYERSHOOT, (p: ServerPlayerShootPacket) => this.handleServerPlayerShoot(p));
     this.io.on(PacketType.ENEMYSHOOT, (p: EnemyShootPacket)               => this.handleEnemyShoot(p));
+    this.io.on(PacketType.AOE, (p: AoePacket)                             => this.handleAoe(p));
+    this.io.on(PacketType.DAMAGE, (p: DamagePacket)                       => this.handleDamage(p));
     this.io.on(PacketType.GOTO, (p: GotoPacket)                           => this.handleGoto(p));
     this.io.on(PacketType.VAULT_CONTENT,  (p: VaultContentPacket)         => this.handleVaultContent(p));
     this.io.on(PacketType.INVRESULT, (p: InvResultPacket)                 => this.handleInvResult(p));
@@ -2041,8 +2318,16 @@ export class Client extends EventEmitter {
   private handleMapInfo(p: MapInfoPacket): void {
     console.log(`${this.tag} ✓ MapInfo accepted: "${p.name}" (${p.width}x${p.height})`);
     this.mapName = p.name;
+    this.mapWidth = p.width;
+    this.mapHeight = p.height;
     this.enteringVault = false;
     this.inVault = /vault/i.test(p.name);
+    this.autoNexus.reset();
+    this.autoNexus.setSafeMap(isAutoNexusSafeMap(p.name));
+    if (p.name.trim().toLowerCase() === 'nexus') {
+      this.nexusHost = this.host;
+      this.nexusPort = this.port;
+    }
     // Reached a pending non-vault portal destination? Clear the intent.
     if (this.pendingPortal?.arrived.test(p.name)) {
       console.log(`${this.tag} arrived at ${this.pendingPortal.label}`);
@@ -2102,6 +2387,7 @@ export class Client extends EventEmitter {
         this.pos = { x: obj.status.pos.x, y: obj.status.pos.y };
         this.posKnown = true;
         this.player = processObject(obj);
+        this.reconcilePlayerHealth(this.player, true);
         this.capturePetObjectId(obj.status.stats);
         this.captureContainerSlots(obj.status.objectId, obj.status.stats);
       } else {
@@ -2115,6 +2401,7 @@ export class Client extends EventEmitter {
           player: processObject(obj),
           rawStats: this.rawStats(obj.status.stats),
         });
+        this.recentObjectTypes.set(obj.status.objectId, obj.objectType);
         if (obj.objectType === PortalType.RealmPortal) {
           this.trackRealmPortal(obj.status);
         }
@@ -2140,10 +2427,76 @@ export class Client extends EventEmitter {
     this.updateTarget(dt);
     this.sendMove(p, now);
     this.updateStatuses(p);
+    this.updateCombat(now);
     this.tryUseVaultPortal();
     this.tryUsePendingPortal();
     //this.logAlive(p);
     this.emit(ClientEvent.Tick, this.player);
+  }
+
+  /** Advances locally simulated projectiles against the latest world snapshot. */
+  private updateCombat(now: number): void {
+    this.combat?.update(now, {
+      playerId: this.objectId,
+      playerPos: this.pos,
+      mapWidth: this.mapWidth,
+      mapHeight: this.mapHeight,
+      entities: this.objects.values(),
+      tiles: this.tiles.values(),
+    });
+    this.updateGroundDamage(now);
+    this.autoCombat?.update(now, {
+      inWorld: this.isInWorld(),
+      safeMap: this.isInNexus() || this.isInVault() || this.isInPetYard()
+        || /guild\s*hall|daily\s*quest|quest\s*room/i.test(this.mapName),
+      player: this.player,
+      playerPos: this.serverPos ?? this.pos,
+      objects: this.objects.values(),
+    }, {
+      shootAt: (target, weaponSlot) => this.commands.shootAt(target, weaponSlot),
+      useAbilityAt: (target) => this.commands.useAbilityAt(target),
+    });
+  }
+
+  /** Mirrors the current client's 500 ms damaging-ground prediction and acknowledgement. */
+  private updateGroundDamage(now: number): void {
+    const data = this.opts.combatData;
+    if (!data?.getTileDamage || !this.posKnown || now - this.lastGroundDamageAt <= 500) return;
+
+    const playerPos = this.serverPos ?? this.pos;
+    const tileX = Math.floor(playerPos.x);
+    const tileY = Math.floor(playerPos.y);
+    const tile = this.tiles.get(`${tileX},${tileY}`);
+    if (!tile) return;
+    const damage = data.getTileDamage(tile.type) ?? 0;
+    if (damage <= 0) return;
+
+    for (const object of this.objects.values()) {
+      if (
+        Math.floor(object.x) === tileX &&
+        Math.floor(object.y) === tileY &&
+        data.getObject(object.type)?.protectFromGroundDamage
+      ) {
+        return;
+      }
+    }
+
+    const condition = (this.player?.condition ?? 0) >>> 0;
+    if (
+      (condition & ConditionEffectBits.INVINCIBLE) !== 0 ||
+      (condition & ConditionEffectBits.INVULNERABLE) !== 0
+    ) {
+      return;
+    }
+
+    this.lastGroundDamageAt = now;
+    if (this.recordDamageTaken(damage, 'ground')) return;
+
+    const ground = new GroundDamagePacket();
+    ground.time = Math.trunc(now);
+    ground.position.x = playerPos.x;
+    ground.position.y = playerPos.y;
+    this.io.send(ground);
   }
 
   /** Advances the local position toward a requested movement target. */
@@ -2189,10 +2542,12 @@ export class Client extends EventEmitter {
 
   /** Applies per-object status deltas from the tick to player and portal state. */
   private updateStatuses(p: NewTickPacket): void {
+    let selfUpdated = false;
     for (const status of p.statuses) {
       if (status.objectId === this.objectId) {
         this.serverPos = { x: status.pos.x, y: status.pos.y };
         this.player = processObjectStatus(status, this.player);
+        selfUpdated = true;
         this.capturePetObjectId(status.stats);
         this.captureContainerSlots(status.objectId, status.stats);
       } else {
@@ -2209,6 +2564,47 @@ export class Client extends EventEmitter {
         }
       }
     }
+    if (selfUpdated && this.player) {
+      this.reconcilePlayerHealth(this.player);
+    }
+  }
+
+  /** Emits any authoritative HP loss not already covered by local damage prediction. */
+  private reconcilePlayerHealth(player: PlayerData, full = false): void {
+    if (!full) {
+      const state = this.autoNexus.getState();
+      if (state.syncedHp !== null && state.predictedHp !== null) {
+        const serverDrop = Math.max(0, state.syncedHp - player.hp);
+        const predictedDamage = Math.max(0, state.syncedHp - state.predictedHp);
+        const unreportedDamage = Math.max(0, serverDrop - predictedDamage);
+        if (unreportedDamage > 0) this.recordDamageTaken(unreportedDamage, 'server');
+      }
+    }
+    this.autoNexus.reconcileServerHp(player.hp, player.maxHP, full);
+  }
+
+  /** Re-emits raw traffic from each fresh PacketIO for fleet diagnostics. */
+  private setupPacketTraffic(): void {
+    this.io.on('rawPacket', (raw: RawPacket) => {
+      this.emit(ClientEvent.PacketTraffic, {
+        direction: 'incoming',
+        id: raw.id,
+        type: raw.type,
+        size: raw.payload.length + 5,
+        payload: raw.payload,
+        timestamp: Date.now(),
+      });
+    });
+    this.io.on('sentRawPacket', (raw: RawOutgoingPacket) => {
+      this.emit(ClientEvent.PacketTraffic, {
+        direction: 'outgoing',
+        id: raw.id,
+        type: raw.type,
+        size: raw.size,
+        payload: raw.payload,
+        timestamp: Date.now(),
+      });
+    });
   }
 
   private rawStats(stats: Array<{ statType: number; statValue: number; stringStatValue: string }>): Record<string, number | string> {
@@ -2280,6 +2676,24 @@ export class Client extends EventEmitter {
     this.io.send(pong);
   }
 
+  /** Charges server-confirmed local damage that was not already predicted by projectile collision. */
+  private handleDamage(p: DamagePacket): void {
+    if (p.targetId !== this.objectId || p.damageAmount <= 0) return;
+    const now = Date.now();
+    for (const [key, at] of this.predictedPlayerDamage) {
+      if (now - at > 5000) this.predictedPlayerDamage.delete(key);
+    }
+    const key = `${p.objectId}:${p.bulletId}`;
+    if (this.predictedPlayerDamage.has(key)) {
+      this.predictedPlayerDamage.delete(key);
+      return;
+    }
+    this.recordDamageTaken(p.damageAmount, 'server', {
+      ownerId: p.objectId,
+      bulletId: p.bulletId,
+    });
+  }
+
   /** Acknowledges our own server-authoritative projectile events. */
   private handleServerPlayerShoot(p: ServerPlayerShootPacket): void {
     if (p.ownerId !== this.objectId) {
@@ -2287,14 +2701,88 @@ export class Client extends EventEmitter {
     }
     const ack = new ShootAckPacket();
     ack.time = this.lastFrameTime;
+    ack.ackCount = 1;
     this.io.send(ack);
+    this.combat?.trackOwnShoot(p, this.time());
   }
 
   /** Acknowledges enemy projectile events so the server does not drop us. */
-  private handleEnemyShoot(_p: EnemyShootPacket): void {
+  private handleEnemyShoot(p: EnemyShootPacket): void {
     const ack = new ShootAckPacket();
     ack.time = this.lastFrameTime;
+    ack.ackCount = 1;
     this.io.send(ack);
+    const ownerType = this.objects.get(p.ownerId)?.type ?? this.recentObjectTypes.get(p.ownerId);
+    this.combat?.trackEnemyShoot(p, ownerType, this.time());
+  }
+
+  /** Acknowledges an area attack with the position the server currently knows. */
+  private handleAoe(p: AoePacket): void {
+    const playerPos = this.serverPos ?? this.pos;
+    if (
+      this.posKnown &&
+      Math.hypot(playerPos.x - p.pos.x, playerPos.y - p.pos.y) < p.radius &&
+      this.applyPredictedDamage(p.damage, p.armorPiercing, 'aoe')
+    ) {
+      return;
+    }
+    const ack = new AoeAckPacket();
+    ack.time = this.lastFrameTime;
+    if (this.posKnown) {
+      ack.position.x = this.pos.x;
+      ack.position.y = this.pos.y;
+    }
+    this.io.send(ack);
+  }
+
+  /** Applies ProdMafia's local player-damage formula before hit acknowledgements. */
+  private applyPredictedDamage(
+    baseDamage: number,
+    armorPiercing: boolean,
+    source: Exclude<AutoNexusTriggerSource, 'server'>,
+    projectile?: { ownerId: number; bulletId: number },
+  ): boolean {
+    const player = this.player;
+    if (!player) return false;
+    const condition = player.condition >>> 0;
+    const condition2 = player.condition2 >>> 0;
+    const damage = calculateAutoNexusDamage({
+      baseDamage,
+      defense: player.def,
+      armorPiercing,
+      armorBroken: (condition & ConditionEffectBits.ARMOR_BROKEN) !== 0,
+      armored: (condition & ConditionEffectBits.ARMORED) !== 0,
+      invincible: (condition & ConditionEffectBits.INVINCIBLE) !== 0,
+      invulnerable: (condition & ConditionEffectBits.INVULNERABLE) !== 0,
+      exposed: (condition2 & ConditionEffectBits2.EXPOSED) !== 0,
+      petrified: (condition2 & ConditionEffectBits2.PETRIFIED) !== 0,
+      cursed: (condition2 & ConditionEffectBits2.CURSE) !== 0,
+    });
+    return this.recordDamageTaken(damage, source, projectile);
+  }
+
+  private recordDamageTaken(
+    amount: number,
+    source: AutoNexusTriggerSource,
+    projectile?: { ownerId: number; bulletId: number },
+  ): boolean {
+    const damage = Math.max(0, Math.trunc(Number(amount) || 0));
+    if (damage <= 0) return false;
+    if (source === 'projectile' && projectile) {
+      this.predictedPlayerDamage.set(`${projectile.ownerId}:${projectile.bulletId}`, Date.now());
+    }
+
+    const state = this.autoNexus.getState();
+    const currentHp = state.predictedHp ?? this.player?.hp ?? null;
+    const maxHp = state.maxHp ?? this.player?.maxHP ?? null;
+    this.emit(ClientEvent.DamageTaken, {
+      amount: damage,
+      source,
+      hp: currentHp === null ? null : Math.max(0, currentHp - damage),
+      maxHp,
+      ...projectile,
+    });
+    return this.autoNexus.applyDamage(damage, source);
   }
 
   /** Acknowledges server position corrections. */

@@ -26,8 +26,10 @@
   },
   "dependencies": {
     "axios": "^1.7.0",
+    "https-proxy-agent": "^7.0.6",
     "realmlib": "file:../realmlib",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "socks-proxy-agent": "^8.0.5"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

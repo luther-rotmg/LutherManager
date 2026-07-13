@@ -72,8 +72,13 @@ function sdkMatchesPackaged(packagedSdkDir: string, targetDir: string, packagedV
 
   const sentinelFiles = [
     join('dist', 'index.js'),
+    join('dist', 'events.js'),
+    join('dist', 'types', 'events.d.ts'),
+    join('dist', 'types', 'index.d.ts'),
     join('dist', 'ui', 'Panel.js'),
     join('dist', 'types', 'ui', 'Panel.d.ts'),
+    join('src', 'events.ts'),
+    join('src', 'types', 'events.ts'),
     join('src', 'ui', 'Panel.ts'),
   ];
 

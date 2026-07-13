@@ -20,11 +20,13 @@ import { Logger } from './Logger.js';
 // they never call extractLocalGameAssets. Dynamic + esbuild-external
 // keeps the plugin bundle clean.
 type SharpModule = typeof import('sharp');
-let _sharp: SharpModule['default'] | null = null;
-async function loadSharp(): Promise<SharpModule['default']> {
+let _sharp: SharpModule | null = null;
+async function loadSharp(): Promise<SharpModule> {
   if (_sharp) return _sharp;
-  const mod = await import('sharp');
-  _sharp = mod.default;
+  // sharp is CommonJS (`export =`); at runtime a dynamic import from ESM wraps
+  // it in a namespace whose `default` is the callable, so unwrap defensively.
+  const mod = (await import('sharp')) as unknown as { default?: SharpModule };
+  _sharp = mod.default ?? (mod as unknown as SharpModule);
   return _sharp;
 }
 

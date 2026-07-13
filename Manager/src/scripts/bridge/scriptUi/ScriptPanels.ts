@@ -89,7 +89,7 @@ export class ScriptPanelRegistry {
 
   /** Resolve the script id at the moment the SDK call runs. */
   private currentScriptId(): string | undefined {
-    const sid = this.deps.scriptSession.scriptId;
+    const sid = this.deps.getScriptSession?.().scriptId ?? this.deps.scriptSession.scriptId;
     return sid && String(sid).trim() ? String(sid).trim() : undefined;
   }
 

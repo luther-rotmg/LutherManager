@@ -161,7 +161,7 @@ and `client.unstall()` without loading a helper plugin.
 ## Status
 
 Working clientless client + plugin system, reconciled to build 6.11.
-Next up: SOCKS proxy support for multi-account, fuller game-state/entity
+Next up: fuller game-state/entity
 tracking, and a client-side test suite.
 
 ## Credits
@@ -174,7 +174,7 @@ This project would not exist without these reference implementations:
   reconciled against it.
 - **[nrelay](https://github.com/thomas-crane/nrelay)** — a TypeScript clientless
   framework. Architectural reference for the runtime, the plugin/hook system,
-  account handling, and proxy support.
+  account handling.
 - **[RealmShark](https://github.com/X-com/RealmShark)** — a Java pcap sniffer,
   used to cross-check current packet structures and data types.
 - **[realmlib](https://github.com/rotmg-network/realmlib)** — the wire-protocol library this client is built

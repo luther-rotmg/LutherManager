@@ -2,6 +2,40 @@ import { Position } from '../types/world/Position';
 import { Enemy } from '../types/entities/Enemy';
 
 export type CombatAimTarget = number | { objectId: number };
+export type AutoAimMode = 'closest' | 'maxHp' | 'lowestHp' | 'random';
+
+export interface AutoAimOptions {
+    mode?: AutoAimMode;
+    /** Maximum range in tiles. Zero derives it from the equipped weapon. */
+    range?: number;
+    bossPriority?: boolean;
+    leadTargets?: boolean;
+    includeInvulnerable?: boolean;
+    weaponSlot?: number;
+}
+
+export interface AutoAbilityOptions {
+    /** Minimum current MP percentage (0-100). */
+    minMpPercent?: number;
+    minTargetHp?: number;
+    minTargets?: number;
+    /** Maximum range in tiles. Zero derives it from the ability projectile. */
+    range?: number;
+    /** Additional minimum cooldown; item cooldowns are always respected. */
+    cooldownMs?: number;
+    /** Teleporting abilities are excluded by default. */
+    allowTeleport?: boolean;
+}
+
+export interface CombatAutomationState {
+    autoAimEnabled: boolean;
+    autoAbilityEnabled: boolean;
+    mode: AutoAimMode;
+    targetObjectId: number | null;
+    fixedPosition: { x: number; y: number } | null;
+    autoAim: Required<AutoAimOptions>;
+    autoAbility: Required<AutoAbilityOptions>;
+}
 
 export class Combat {
     static shootAt(x: number, y: number, weaponSlot = 0): boolean {
@@ -22,8 +56,30 @@ export class Combat {
         throw new Error('Must be run inside Hive client');
     }
 
+    /** Select and fire at visible enemies until disabled. */
+    static enableAutoAim(options?: AutoAimOptions): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    /** Update automatic target selection without changing its enabled state. */
+    static setAutoAim(options: AutoAimMode | AutoAimOptions): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    static disableAutoAim(): void {
+        throw new Error('Must be run inside Hive client');
+    }
+
     /** Disable SDK auto-aim and leave weapon shots at the player's manual aim angle. */
     static autoAimOff(): void {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    static getAutoAimTarget(): number | null {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    static getAutomationState(): CombatAutomationState | null {
         throw new Error('Must be run inside Hive client');
     }
 
@@ -37,6 +93,19 @@ export class Combat {
     }
 
     static useAbilityOn(enemy: Enemy): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    /** Automatically use the equipped ability during combat. */
+    static enableAutoAbility(options?: AutoAbilityOptions): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    static setAutoAbility(options: AutoAbilityOptions): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    static disableAutoAbility(): void {
         throw new Error('Must be run inside Hive client');
     }
 

@@ -2,6 +2,7 @@ import { chat, events } from '@hive/sdk';
 import type {
   CharacterFameThresholdEvent,
   ChatHandler,
+  DamageTakenEvent,
   PlayerNearbyEvent,
   PlayerNearbyOptions,
   PlayerNearbyPlayer,
@@ -11,6 +12,7 @@ import type {
   GuildNearbyMatchMode,
   PlayerJoinPartyEvent,
   PlayerJoinPartyMatchMode,
+  ShotFiredEvent,
 } from '@hive/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import type { ClientConnection } from '../../../proxy/ClientConnection.js';
@@ -417,6 +419,10 @@ export function install(deps: BridgeDeps): void {
 
   events.onDisconnected = (handler) => register('disconnected', handler);
 
+  events.onShotFired = (handler) => register('shotFired', handler);
+
+  events.onDamageTaken = (handler) => register('damageTaken', handler);
+
   events.onLevelUp = (handler) => register('levelUp', handler);
 
   events.onItemPickedUp = (handler) => register('itemPickedUp', handler);
@@ -522,6 +528,32 @@ export function install(deps: BridgeDeps): void {
         ? `${client.state.conTargetAddress}:${client.state.conTargetPort ?? 2050}`
         : undefined,
     });
+  });
+
+  deps.proxy.hookPacket('PLAYERSHOOT', (_client, packet) => {
+    if (!packet.isDefined) return;
+    const event: ShotFiredEvent = {
+      bulletId: Number(packet.data.bulletId) || 0,
+      weaponType: Number(packet.data.containerType) || 0,
+      attackIndex: Number(packet.data.attackIndex) || 0,
+      angle: Number(packet.data.angle) || 0,
+    };
+    fire('shotFired', event);
+  });
+
+  deps.proxy.hookPacket('DAMAGE', (client, packet) => {
+    if (!packet.isDefined || Number(packet.data.targetId) !== client.objectId) return;
+    const amount = Math.max(0, Number(packet.data.damageAmount) || 0);
+    if (amount <= 0) return;
+    const event: DamageTakenEvent = {
+      amount,
+      source: 'server',
+      hp: Math.max(0, client.playerData.health - amount),
+      maxHp: client.playerData.maxHealth || null,
+      ownerId: Number(packet.data.objectId) || 0,
+      bulletId: Number(packet.data.bulletId) || 0,
+    };
+    fire('damageTaken', event);
   });
 
   deps.proxy.hookPacket('UPDATE', (client, packet) => {

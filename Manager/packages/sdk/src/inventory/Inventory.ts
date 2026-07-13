@@ -1,3 +1,9 @@
+/**
+ * Legacy class-style inventory API retained for existing direct imports.
+ *
+ * @deprecated Use `Hive.inventory` (or the exported `inventory` object), which
+ * returns structured inventory data and contains the current transfer helpers.
+ */
 export class Inventory {
     /**
      * One entry per occupied slot (0–11 main, 12–27 backpack), ascending by slot.

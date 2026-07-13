@@ -2,10 +2,15 @@ import { EventEmitter } from 'events';
 import {
   Client,
   ClientEvent,
+  PacketType,
   getCharAndServers,
   login,
+  proxyConfigToUrl,
   resolveClassType,
   type Account,
+  type PacketTraffic,
+  type ProxyConfig,
+  type TextPacket,
   type TrackedObject,
   type TrackedTile,
 } from 'headless-client';
@@ -18,6 +23,7 @@ export interface FleetAccount {
   password: string;
   label?: string;
   serverName?: string;
+  proxy?: ProxyConfig;
 }
 
 export interface HeadlessSessionSummary {
@@ -35,11 +41,30 @@ export interface HeadlessSessionSummary {
   connectedAt: number;
   characterId: number;
   gameId: number;
+  proxy: string;
+}
+
+export type HeadlessChatChannel = 'say' | 'tell' | 'party' | 'guild' | 'global' | 'system';
+
+export interface HeadlessChatMessage {
+  id: string;
+  accountId: string;
+  sender: string;
+  recipient: string;
+  message: string;
+  channel: HeadlessChatChannel;
+  timestamp: number;
+  stars: number;
+  isLocal: boolean;
+  isSupporter: boolean;
+  starBackground: number;
 }
 
 export interface HeadlessFleetEvents {
   changed: [sessions: HeadlessSessionSummary[]];
   damage: [accountId: string, snapshot: HeadlessDamageSnapshot];
+  chat: [accountId: string, message: HeadlessChatMessage];
+  packet: [accountId: string, traffic: PacketTraffic];
 }
 
 interface FleetEntry {
@@ -55,6 +80,7 @@ export class HeadlessFleet extends EventEmitter {
   private readonly entries = new Map<string, FleetEntry>();
   private readonly pending = new Map<string, Promise<Client>>();
   private changedTimer: NodeJS.Timeout | undefined;
+  private chatSequence = 0;
 
   constructor(private readonly gameData: GameDataLoader) {
     super();
@@ -99,6 +125,7 @@ export class HeadlessFleet extends EventEmitter {
         connectedAt: entry.connectedAt,
         characterId: entry.client.getCharacterId(),
         gameId: entry.client.getGameId(),
+        proxy: entry.account.proxy ? proxyConfigToUrl(entry.account.proxy, false) : '',
       };
     });
   }
@@ -149,8 +176,9 @@ export class HeadlessFleet extends EventEmitter {
       password: account.password,
       alias: account.label || account.email,
     };
-    const { accessToken, clientToken } = await login(authAccount);
-    const { char, servers } = await getCharAndServers(accessToken);
+    const requestOptions = account.proxy ? { proxy: account.proxy } : undefined;
+    const { accessToken, clientToken } = await login(authAccount, requestOptions);
+    const { char, servers } = await getCharAndServers(accessToken, requestOptions);
     const preferred = servers.find((server) => server.name.toLowerCase() === String(account.serverName || '').toLowerCase());
     const server = preferred ?? servers[0];
     if (!server) throw new Error('No game servers were returned for this account.');
@@ -162,14 +190,37 @@ export class HeadlessFleet extends EventEmitter {
       charId: char.charId,
       needsNewChar: char.needsNewChar,
       host: server.address,
+      proxy: account.proxy,
       servers,
+      combatData: this.gameData,
       createClassType: resolveClassType(),
-      refreshCredentials: () => login(authAccount),
+      refreshCredentials: () => login(authAccount, requestOptions),
     });
     const damage = new HeadlessDamageTracker(client, this.gameData);
     const entry: FleetEntry = { account, client, serverName: server.name, stopping: false, connectedAt: Date.now(), damage };
     this.entries.set(account.id, entry);
     damage.on('changed', (snapshot: HeadlessDamageSnapshot) => this.emit('damage', account.id, snapshot));
+    client.on(ClientEvent.PacketTraffic, (traffic) => this.emit('packet', account.id, traffic));
+    client.onPacket<TextPacket>(PacketType.TEXT, (packet) => {
+      const message = String(packet.cleanText || packet.text || '').trim();
+      if (!message) return;
+      const sender = String(packet.name || 'System');
+      const self = client.getPlayer()?.name ?? '';
+      const chat: HeadlessChatMessage = {
+        id: `${Date.now()}-${++this.chatSequence}`,
+        accountId: account.id,
+        sender,
+        recipient: String(packet.recipient || ''),
+        message,
+        channel: this.classifyChat(packet, client),
+        timestamp: Date.now(),
+        stars: Number(packet.numStars || 0),
+        isLocal: !!self && sender.toLowerCase() === self.toLowerCase(),
+        isSupporter: !!packet.isSupporter,
+        starBackground: Number(packet.starBackground || 0),
+      };
+      this.emit('chat', account.id, chat);
+    }, { priority: 20_000 });
 
     const changed = () => this.scheduleChanged();
     client.on(ClientEvent.Connected, changed);
@@ -182,6 +233,20 @@ export class HeadlessFleet extends EventEmitter {
     client.connect();
     this.emitChanged();
     return client;
+  }
+
+  private classifyChat(packet: TextPacket, client: Client): HeadlessChatChannel {
+    const text = String(packet.text ?? '');
+    const name = String(packet.name ?? '');
+    const recipient = String(packet.recipient ?? '');
+    const self = client.getPlayer()?.name ?? '';
+    if (recipient && self && recipient.toLowerCase() === self.toLowerCase() && name.toLowerCase() !== self.toLowerCase()) return 'tell';
+    if (text.startsWith('Party>') || name.toLowerCase().includes('party')) return 'party';
+    if (text.startsWith('Guild>') || name.toLowerCase().includes('guild')) return 'guild';
+    if (text.startsWith('Tell>') || text.startsWith('[Tell]')) return 'tell';
+    if (/\[.*global.*\]/i.test(text)) return 'global';
+    if (packet.numStars === 65535 || packet.objectId <= 0 || name === '*' || name === '#') return 'system';
+    return 'say';
   }
 
   private emitChanged(): void {

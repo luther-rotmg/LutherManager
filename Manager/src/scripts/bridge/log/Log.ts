@@ -2,7 +2,7 @@ import { Log } from '@hive/sdk';
 import type { BridgeDeps, ScriptLogLevel } from '../BridgeDeps.js';
 
 function emit(deps: BridgeDeps, level: ScriptLogLevel, message: string): void {
-  const id = deps.scriptSession.scriptId;
+  const id = deps.getScriptSession?.().scriptId ?? deps.scriptSession.scriptId;
   const text = String(message);
   if (!id) {
     if (level === 'error') console.error(`[SCRIPT] ${text}`);
