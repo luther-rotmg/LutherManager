@@ -29,10 +29,16 @@ interface GridPoint {
 interface PlannedPath {
   startKey: string;
   rawTiles: GridPoint[];
+  routeTiles: GridPoint[];
   tileKeys: Set<string>;
   waypoints: PathPoint[];
   targetBlocked: boolean;
   revision: number;
+}
+
+interface SegmentTrace {
+  travelTiles: GridPoint[];
+  corridorTiles: GridPoint[];
 }
 
 interface OpenNode extends GridPoint {
@@ -227,16 +233,17 @@ export class ExplorativePathfinder {
   }
 
   /** Learns the first unentered route cell as blocked after an authoritative movement stall. */
-  reportStall(position: PathPoint): void {
+  reportStall(position: PathPoint): PathPoint | undefined {
     const plan = this.plan;
-    if (!plan) return;
+    if (!plan) return undefined;
     const currentKey = tileKey(Math.floor(position.x), Math.floor(position.y));
-    const currentIndex = plan.rawTiles.findIndex((point) => tileKey(point.x, point.y) === currentKey);
-    const blocked = plan.rawTiles[currentIndex >= 0 ? currentIndex + 1 : 0];
-    if (!blocked || tileKey(blocked.x, blocked.y) === plan.startKey) return;
+    const currentIndex = plan.routeTiles.findIndex((point) => tileKey(point.x, point.y) === currentKey);
+    const blocked = plan.routeTiles[currentIndex >= 0 ? currentIndex + 1 : 0];
+    if (!blocked || tileKey(blocked.x, blocked.y) === plan.startKey) return undefined;
     if (add(this.learnedBlocked, tileKey(blocked.x, blocked.y))) {
       this.invalidate();
     }
+    return { x: blocked.x, y: blocked.y };
   }
 
   private finishTarget(): PathfindingStep {
@@ -265,21 +272,162 @@ export class ExplorativePathfinder {
       rawTiles = this.aStar(start, [goal]);
     }
     if (!rawTiles) return undefined;
-    const waypoints = rawTiles.length === 0 && !targetBlocked
-      ? [{ x: target.x, y: target.y }]
-      : compressPath(start, rawTiles);
-    if (!targetBlocked && waypoints.length > 0) {
-      waypoints[waypoints.length - 1] = { x: target.x, y: target.y };
+    let waypoints: PathPoint[];
+    if (rawTiles.length === 0) {
+      waypoints = targetBlocked ? [] : [{ x: target.x, y: target.y }];
+    } else {
+      const candidates = compressPath(start, rawTiles);
+      if (!targetBlocked) {
+        candidates[candidates.length - 1] = { x: target.x, y: target.y };
+      }
+      const vectorized = this.vectorizePath(position, start, candidates);
+      if (!vectorized) return undefined;
+      waypoints = vectorized;
     }
+
     const startKey = tileKey(start.x, start.y);
+    const route = this.traceRoute(position, start, waypoints);
+    if (!route) return undefined;
     return {
       startKey,
       rawTiles,
-      tileKeys: new Set([startKey, ...rawTiles.map((point) => tileKey(point.x, point.y))]),
+      routeTiles: route.travelTiles.filter((point) => tileKey(point.x, point.y) !== startKey),
+      tileKeys: new Set([
+        startKey,
+        ...route.corridorTiles.map((point) => tileKey(point.x, point.y)),
+      ]),
       waypoints,
       targetBlocked,
       revision: this.revision,
     };
+  }
+
+  /** Pulls the grid route taut into the longest collision-free movement vectors. */
+  private vectorizePath(
+    position: PathPoint,
+    start: GridPoint,
+    candidates: PathPoint[],
+  ): PathPoint[] | undefined {
+    const result: PathPoint[] = [];
+    let anchor = { ...position };
+    let candidateIndex = 0;
+    let centeredOnStart = false;
+
+    while (candidateIndex < candidates.length) {
+      let selectedIndex = -1;
+      for (let index = candidates.length - 1; index >= candidateIndex; index--) {
+        if (this.traceSegment(anchor, candidates[index]!, start)) {
+          selectedIndex = index;
+          break;
+        }
+      }
+
+      if (selectedIndex < 0) {
+        const startCenter = tileCenter(start);
+        if (centeredOnStart || distance(anchor, startCenter) <= Number.EPSILON
+          || !this.traceSegment(anchor, startCenter, start)) {
+          return undefined;
+        }
+        result.push(startCenter);
+        anchor = startCenter;
+        centeredOnStart = true;
+        continue;
+      }
+
+      const selected = candidates[selectedIndex]!;
+      result.push({ ...selected });
+      anchor = selected;
+      candidateIndex = selectedIndex + 1;
+    }
+
+    return result;
+  }
+
+  private traceRoute(
+    position: PathPoint,
+    start: GridPoint,
+    waypoints: PathPoint[],
+  ): SegmentTrace | undefined {
+    const travelTiles: GridPoint[] = [];
+    const corridorTiles: GridPoint[] = [];
+    const corridorKeys = new Set<string>();
+    let anchor = { ...position };
+
+    for (const waypoint of waypoints) {
+      const segment = this.traceSegment(anchor, waypoint, start);
+      if (!segment) return undefined;
+      for (const point of segment.travelTiles) {
+        const previous = travelTiles[travelTiles.length - 1];
+        if (!previous || previous.x !== point.x || previous.y !== point.y) {
+          travelTiles.push(point);
+        }
+      }
+      for (const point of segment.corridorTiles) {
+        const key = tileKey(point.x, point.y);
+        if (corridorKeys.has(key)) continue;
+        corridorKeys.add(key);
+        corridorTiles.push(point);
+      }
+      anchor = waypoint;
+    }
+
+    return { travelTiles, corridorTiles };
+  }
+
+  /**
+   * Traces every grid cell crossed by a vector. Exact corner crossings require
+   * both neighboring cells to be open, matching A*'s no-corner-cutting rule.
+   */
+  private traceSegment(from: PathPoint, to: PathPoint, start: GridPoint): SegmentTrace | undefined {
+    let cellX = Math.floor(from.x);
+    let cellY = Math.floor(from.y);
+    const endX = Math.floor(to.x);
+    const endY = Math.floor(to.y);
+    if (this.isBlocked(cellX, cellY, start)) return undefined;
+
+    const travelTiles: GridPoint[] = [{ x: cellX, y: cellY }];
+    const corridorTiles: GridPoint[] = [{ x: cellX, y: cellY }];
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const stepX = Math.sign(dx);
+    const stepY = Math.sign(dy);
+    const tDeltaX = stepX === 0 ? Infinity : Math.abs(1 / dx);
+    const tDeltaY = stepY === 0 ? Infinity : Math.abs(1 / dy);
+    let tMaxX = stepX > 0
+      ? (cellX + 1 - from.x) / dx
+      : stepX < 0 ? (from.x - cellX) / -dx : Infinity;
+    let tMaxY = stepY > 0
+      ? (cellY + 1 - from.y) / dy
+      : stepY < 0 ? (from.y - cellY) / -dy : Infinity;
+
+    while (cellX !== endX || cellY !== endY) {
+      if (Math.abs(tMaxX - tMaxY) <= 1e-10) {
+        const sideX = { x: cellX + stepX, y: cellY };
+        const sideY = { x: cellX, y: cellY + stepY };
+        if (this.isBlocked(sideX.x, sideX.y, start)
+          || this.isBlocked(sideY.x, sideY.y, start)) {
+          return undefined;
+        }
+        corridorTiles.push(sideX, sideY);
+        cellX += stepX;
+        cellY += stepY;
+        tMaxX += tDeltaX;
+        tMaxY += tDeltaY;
+      } else if (tMaxX < tMaxY) {
+        cellX += stepX;
+        tMaxX += tDeltaX;
+      } else {
+        cellY += stepY;
+        tMaxY += tDeltaY;
+      }
+
+      if (this.isBlocked(cellX, cellY, start)) return undefined;
+      const point = { x: cellX, y: cellY };
+      travelTiles.push(point);
+      corridorTiles.push(point);
+    }
+
+    return { travelTiles, corridorTiles };
   }
 
   private nearbyGoals(goal: GridPoint, start: GridPoint, radius: number): GridPoint[] {

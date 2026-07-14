@@ -417,6 +417,8 @@ interface HeadlessViewerOptions {
   includeObjects: boolean;
   includeSelfProjectiles: boolean;
   includeOtherProjectiles: boolean;
+  includePathfindingPath: boolean;
+  includeDodgePath: boolean;
 }
 
 interface HeadlessViewerSubscription extends HeadlessViewerOptions {
@@ -425,6 +427,8 @@ interface HeadlessViewerSubscription extends HeadlessViewerOptions {
   mapName: string;
   tileKeys: Set<string>;
 }
+
+const VIEWER_DODGE_PATH_HORIZON_MS = 450;
 
 /**
  * Dev dashboard HTTP + WebSocket server.
@@ -3049,6 +3053,18 @@ export class DevServer {
       ? this.gameData.getObject(playerTextureType) ?? playerDef
       : playerDef;
     const tick = client.getTickInfo();
+    const pathfindingPath = options.includePathfindingPath
+      ? client.getNavigationPath()
+      : undefined;
+    const dodgeState = options.includeDodgePath ? client.getAutoDodgeState() : null;
+    const dodgePath = options.includeDodgePath
+      ? dodgeState?.overrideActive
+        ? [{
+            x: center.x + dodgeState.velocity.x * VIEWER_DODGE_PATH_HORIZON_MS,
+            y: center.y + dodgeState.velocity.y * VIEWER_DODGE_PATH_HORIZON_MS,
+          }]
+        : []
+      : undefined;
     return {
       mapName: client.getMapName(),
       center,
@@ -3056,6 +3072,8 @@ export class DevServer {
       tiles,
       objects,
       projectiles,
+      pathfindingPath,
+      dodgePath,
       tickId: tick.tickId,
       tickTimeMs: tick.tickTimeMs,
       msSinceTick: tick.msSinceTick,
@@ -3106,6 +3124,8 @@ export class DevServer {
         tiles: subscription.includeTiles ? [] : undefined,
         objects: subscription.includeObjects ? [] : undefined,
         projectiles: subscription.includeSelfProjectiles || subscription.includeOtherProjectiles ? [] : undefined,
+        pathfindingPath: subscription.includePathfindingPath ? [] : undefined,
+        dodgePath: subscription.includeDodgePath ? [] : undefined,
         player: null,
         tickId: -1,
         tickTimeMs: 200,
@@ -5164,6 +5184,8 @@ export class DevServer {
             includeObjects: msg.includeObjects !== false,
             includeSelfProjectiles: msg.includeSelfProjectiles !== false,
             includeOtherProjectiles: msg.includeOtherProjectiles !== false,
+            includePathfindingPath: msg.includePathfindingPath !== false,
+            includeDodgePath: msg.includeDodgePath !== false,
             mapName: previous?.accountId === accountId ? previous.mapName : '',
             tileKeys: previous?.accountId === accountId ? previous.tileKeys : new Set<string>(),
           };

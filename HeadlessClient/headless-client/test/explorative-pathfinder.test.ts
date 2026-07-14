@@ -37,6 +37,28 @@ test('unknown cells are traversable at the same cost as observed walkable cells'
   assert.equal(hasTile(pathfinder, 5, 5), false);
 });
 
+test('open stair-step routes are vectorized into one direct movement segment', () => {
+  const pathfinder = createPathfinder(12, 10);
+  const target = { x: 8.5, y: 5.5 };
+  pathfinder.setTarget(target, 0.2);
+
+  const initial = pathfinder.next({ x: 0.5, y: 0.5 });
+  assert.equal(initial.replanned, true);
+  assert.deepEqual(initial.waypoint, target);
+  assert.deepEqual(pathfinder.getRemainingPath(), [target]);
+  assert.equal(hasTile(pathfinder, 1, 0), false);
+
+  // The direct vector crosses this cell even though the original A* staircase does not.
+  const continued = pathfinder.next({ x: 1.1, y: 0.9 });
+  assert.equal(continued.replanned, false);
+  assert.deepEqual(continued.waypoint, target);
+
+  // A dodge onto the old staircase, but outside the vector corridor, must replan.
+  assert.equal(hasTile(pathfinder, 3, 3), true);
+  const deviated = pathfinder.next({ x: 3.5, y: 3.5 });
+  assert.equal(deviated.replanned, true);
+});
+
 test('refreshing an unchanged target preserves the active plan', () => {
   const pathfinder = createPathfinder(30, 30);
   const target = { x: 20.5, y: 20.5 };
@@ -65,6 +87,10 @@ test('known blocking ground is routed around without diagonal corner cutting', (
   const tiles = pathfinder.getPlannedTiles();
   assert.ok(tiles.some((tile) => tile.y >= 5));
   assert.ok(tiles.every((tile) => !blocked.has(`${tile.x},${tile.y}`)));
+  const vectors = pathfinder.getRemainingPath();
+  assert.ok(vectors.length > 1);
+  assert.ok(vectors.length < tiles.length);
+  assert.notDeepEqual(vectors[0], { x: 6.5, y: 1.5 });
 
   let previous = { x: 1, y: 1 };
   for (const tile of tiles) {
@@ -78,6 +104,29 @@ test('known blocking ground is routed around without diagonal corner cutting', (
   }
 });
 
+test('vectorization preserves the no-corner-cutting rule', () => {
+  const pathfinder = createPathfinder(5, 5);
+  pathfinder.observeTile(1, 0, BLOCKING_GROUND);
+  const target = { x: 2.5, y: 2.5 };
+  pathfinder.setTarget(target, 0.2);
+
+  const step = pathfinder.next({ x: 0.5, y: 0.5 });
+  assert.equal(step.noPath, undefined);
+  assert.notDeepEqual(step.waypoint, target);
+  assert.ok(pathfinder.getRemainingPath().length > 1);
+});
+
+test('stall learning follows vector cells instead of the original A* staircase', () => {
+  const pathfinder = createPathfinder(12, 10);
+  pathfinder.setTarget({ x: 8.5, y: 5.5 }, 0.2);
+  pathfinder.next({ x: 0.5, y: 0.5 });
+
+  assert.deepEqual(pathfinder.reportStall({ x: 0.5, y: 0.5 }), { x: 1, y: 0 });
+  const replanned = pathfinder.next({ x: 0.5, y: 0.5 });
+  assert.equal(replanned.replanned, true);
+  assert.equal(hasTile(pathfinder, 1, 0), false);
+});
+
 test('observed damaging ground is treated as blocked pathfinding terrain', () => {
   const pathfinder = createPathfinder(10, 5);
   pathfinder.observeTile(4, 2, DAMAGING_GROUND);
@@ -85,6 +134,7 @@ test('observed damaging ground is treated as blocked pathfinding terrain', () =>
 
   const step = pathfinder.next({ x: 1.5, y: 2.5 });
   assert.equal(step.noPath, undefined);
+  assert.notDeepEqual(step.waypoint, { x: 8.5, y: 2.5 });
   assert.equal(hasTile(pathfinder, 4, 2), false);
   assert.ok(pathfinder.getPlannedTiles().some((tile) => tile.y !== 2));
 });
@@ -95,12 +145,14 @@ test('OccupySquare objects block one cell and removing them permits a shorter ro
   pathfinder.upsertObject(51, NON_BLOCKING_ENEMY, 4.5, 2.5);
   pathfinder.setTarget({ x: 7.5, y: 2.5 }, 0.2);
 
-  pathfinder.next({ x: 1.5, y: 2.5 });
+  const blocked = pathfinder.next({ x: 1.5, y: 2.5 });
+  assert.notDeepEqual(blocked.waypoint, { x: 7.5, y: 2.5 });
   assert.equal(hasTile(pathfinder, 3, 2), false);
 
   pathfinder.removeObject(50);
   const replanned = pathfinder.next({ x: 1.5, y: 2.5 });
   assert.equal(replanned.replanned, true);
+  assert.deepEqual(replanned.waypoint, { x: 7.5, y: 2.5 });
   assert.equal(hasTile(pathfinder, 3, 2), true);
   assert.equal(hasTile(pathfinder, 4, 2), true);
 });
@@ -129,7 +181,7 @@ test('an authoritative stall learns the next unknown route cell as blocked', () 
   pathfinder.next({ x: 0.5, y: 1.5 });
   assert.equal(hasTile(pathfinder, 1, 1), true);
 
-  pathfinder.reportStall({ x: 0.5, y: 1.5 });
+  assert.deepEqual(pathfinder.reportStall({ x: 0.5, y: 1.5 }), { x: 1, y: 1 });
   const replanned = pathfinder.next({ x: 0.5, y: 1.5 });
   assert.equal(replanned.replanned, true);
   assert.equal(hasTile(pathfinder, 1, 1), false);

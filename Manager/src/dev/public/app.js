@@ -153,6 +153,7 @@
       'settings.viewer.frameRate': 'Animation frame rate',
       'settings.viewer.frameRateDesc': 'Caps viewer-only animation work. This does not affect headless clients.',
       'settings.viewer.layers': 'Loaded layers',
+      'settings.viewer.overlays': 'Path overlays',
       'settings.viewer.tiles': 'Tiles',
       'settings.viewer.tilesDesc': 'Load and draw nearby ground tiles.',
       'settings.viewer.objects': 'Objects',
@@ -161,6 +162,10 @@
       'settings.viewer.selfProjectilesDesc': 'Load projectiles fired by the selected account.',
       'settings.viewer.otherProjectiles': 'Other projectiles',
       'settings.viewer.otherProjectilesDesc': 'Load enemy and other-player projectiles. Extra visual tracking stops when disabled.',
+      'settings.viewer.pathfindingPath': 'Pathfinding path',
+      'settings.viewer.pathfindingPathDesc': 'Draw the current vectorized navigation route.',
+      'settings.viewer.dodgePath': 'Dodge path',
+      'settings.viewer.dodgePathDesc': 'Draw the active predictive dodge direction.',
       'settings.tab.developer': 'Developer',
       'settings.tab.plugins': 'Plugins',
       'comingSoon.title': 'Coming soon',
@@ -2046,6 +2051,8 @@
     loadObjects: localStorage.getItem('viewerLoadObjects') !== 'false',
     selfProjectiles: localStorage.getItem('viewerSelfProjectiles') !== 'false',
     otherProjectiles: localStorage.getItem('viewerOtherProjectiles') !== 'false',
+    pathfindingPath: localStorage.getItem('viewerPathfindingPath') !== 'false',
+    dodgePath: localStorage.getItem('viewerDodgePath') !== 'false',
     frameRate: localStorage.getItem('viewerFrameRate') === '60' ? 60 : 30,
   };
   let navbarTabOrder = JSON.parse(localStorage.getItem('navbarTabOrder') || 'null');
@@ -3110,6 +3117,8 @@
   const viewerObjectsToggle = document.getElementById('setting-viewer-objects');
   const viewerSelfProjectilesToggle = document.getElementById('setting-viewer-self-projectiles');
   const viewerOtherProjectilesToggle = document.getElementById('setting-viewer-other-projectiles');
+  const viewerPathfindingPathToggle = document.getElementById('setting-viewer-pathfinding-path');
+  const viewerDodgePathToggle = document.getElementById('setting-viewer-dodge-path');
   const nearbyRefreshBtn = document.getElementById('nearby-refresh-btn');
   const nearbyAccountSelect = document.getElementById('nearby-account-select');
   const nearbySortEl = document.getElementById('nearby-sort');
@@ -4199,6 +4208,8 @@
     localStorage.setItem('viewerLoadObjects', viewerSettings.loadObjects ? 'true' : 'false');
     localStorage.setItem('viewerSelfProjectiles', viewerSettings.selfProjectiles ? 'true' : 'false');
     localStorage.setItem('viewerOtherProjectiles', viewerSettings.otherProjectiles ? 'true' : 'false');
+    localStorage.setItem('viewerPathfindingPath', viewerSettings.pathfindingPath ? 'true' : 'false');
+    localStorage.setItem('viewerDodgePath', viewerSettings.dodgePath ? 'true' : 'false');
     localStorage.setItem('viewerFrameRate', String(viewerSettings.frameRate));
   }
 
@@ -4217,6 +4228,8 @@
     if (!viewerSettings.otherProjectiles) viewerOtherProjectileImages.clear();
     if (lastViewerData) {
       if (!viewerSettings.loadObjects) lastViewerData.objects = [];
+      if (!viewerSettings.pathfindingPath) lastViewerData.pathfindingPath = [];
+      if (!viewerSettings.dodgePath) lastViewerData.dodgePath = [];
       if (Array.isArray(lastViewerData.projectiles)) {
         lastViewerData.projectiles = lastViewerData.projectiles.filter(function (projectile) {
           return projectile.side === 'own'
@@ -4251,6 +4264,8 @@
     [viewerObjectsToggle, 'loadObjects'],
     [viewerSelfProjectilesToggle, 'selfProjectiles'],
     [viewerOtherProjectilesToggle, 'otherProjectiles'],
+    [viewerPathfindingPathToggle, 'pathfindingPath'],
+    [viewerDodgePathToggle, 'dodgePath'],
   ].forEach(function (entry) {
     var toggle = entry[0];
     var key = entry[1];
@@ -10787,6 +10802,84 @@
     return true;
   }
 
+  function drawViewerPathOverlay(
+    ctx,
+    origin,
+    points,
+    centerX,
+    centerY,
+    screenCenterX,
+    screenCenterY,
+    tileSize,
+    style
+  ) {
+    if (!origin || !Array.isArray(points) || points.length === 0) return;
+    var route = [{ x: Number(origin.x), y: Number(origin.y) }];
+    points.forEach(function (point) {
+      var x = Number(point && point.x);
+      var y = Number(point && point.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) route.push({ x: x, y: y });
+    });
+    if (route.length < 2 || !Number.isFinite(route[0].x) || !Number.isFinite(route[0].y)) return;
+
+    var screenPoints = route.map(function (point) {
+      return {
+        x: screenCenterX + (point.x - centerX) * tileSize,
+        y: screenCenterY + (point.y - centerY) * tileSize
+      };
+    });
+    var distance = 0;
+    for (var index = 1; index < route.length; index++) {
+      distance += Math.hypot(route[index].x - route[index - 1].x, route[index].y - route[index - 1].y);
+    }
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    var dash = Array.isArray(style.dash) ? style.dash : [];
+    ctx.setLineDash(dash);
+
+    if (distance <= 0.02) {
+      ctx.strokeStyle = 'rgba(4, 9, 15, 0.9)';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(screenPoints[0].x, screenPoints[0].y, Math.max(6, tileSize * 0.35), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = style.color;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    function strokeRoute(color, width) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
+      for (var pointIndex = 1; pointIndex < screenPoints.length; pointIndex++) {
+        ctx.lineTo(screenPoints[pointIndex].x, screenPoints[pointIndex].y);
+      }
+      ctx.stroke();
+    }
+
+    strokeRoute('rgba(4, 9, 15, 0.88)', style.width + 3);
+    strokeRoute(style.color, style.width);
+    ctx.setLineDash([]);
+    for (var waypointIndex = 1; waypointIndex < screenPoints.length; waypointIndex++) {
+      var waypoint = screenPoints[waypointIndex];
+      var final = waypointIndex === screenPoints.length - 1;
+      ctx.fillStyle = style.color;
+      ctx.strokeStyle = 'rgba(4, 9, 15, 0.92)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(waypoint.x, waypoint.y, final ? 4 : 2.75, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function renderViewer(now) {
     if (!viewerCanvas || !viewerStage || !viewerEmpty) return;
     now = Number.isFinite(Number(now)) ? Number(now) : performance.now();
@@ -10855,6 +10948,33 @@
           height + layerPadding * 2
         );
       }
+    }
+
+    if (viewerSettings.pathfindingPath) {
+      drawViewerPathOverlay(
+        ctx,
+        player,
+        data.pathfindingPath,
+        centerX,
+        centerY,
+        screenCenterX,
+        screenCenterY,
+        tileSize,
+        { color: '#4b9cff', width: 2.5, dash: [] }
+      );
+    }
+    if (viewerSettings.dodgePath) {
+      drawViewerPathOverlay(
+        ctx,
+        player,
+        data.dodgePath,
+        centerX,
+        centerY,
+        screenCenterX,
+        screenCenterY,
+        tileSize,
+        { color: '#f4b942', width: 2.5, dash: [7, 5] }
+      );
     }
 
     var viewerObjects = Array.isArray(data.objects) ? data.objects.slice() : [];
@@ -13006,6 +13126,8 @@
         includeObjects: viewerSettings.loadObjects,
         includeSelfProjectiles: viewerSettings.selfProjectiles,
         includeOtherProjectiles: viewerSettings.otherProjectiles,
+        includePathfindingPath: viewerSettings.pathfindingPath,
+        includeDodgePath: viewerSettings.dodgePath,
       }));
     }
   }

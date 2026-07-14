@@ -61,9 +61,10 @@ export class Walking {
 
     /**
      * Pathfind toward a tile. Unknown map space remains traversable while observed
-     * blocking ground and objects are routed around.
+     * blocking ground and objects are routed around. `arriveThreshold` stops the
+     * route once the player is within that many tiles of the destination.
      */
-    static pathfindingWalkTo(x: number, y: number): boolean {
+    static pathfindingWalkTo(x: number, y: number, arriveThreshold?: number): boolean {
         throw new Error('Must be run inside Hive client');
     }
 

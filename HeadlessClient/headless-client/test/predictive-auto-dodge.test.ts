@@ -5,7 +5,7 @@ import type {
   CombatProjectileDefinition,
   CombatProjectileSnapshot,
 } from '../src/combat-tracker';
-import { DodgeCollisionWorld } from '../src/dodge-collision-world';
+import { DodgeCollisionWorld, ENEMY_AVOID_RADIUS } from '../src/dodge-collision-world';
 import {
   PredictiveAutoDodgeController,
   ThrownAoeTracker,
@@ -133,6 +133,54 @@ test('dodge collision world rejects damaging and occupied tiles', () => {
   world.removeObject(20);
   world.upsertObject(21, 2, 4.5, 5.5);
   assert.equal(world.canOccupy(5.25, 5.5, true), false);
+});
+
+test('dodge collision world treats unknown cells as open only for exploratory paths', () => {
+  const data: CombatDataProvider = {
+    getObject: () => undefined,
+    getProjectile: () => undefined,
+  };
+  const world = new DodgeCollisionWorld(data);
+  world.setMapBounds(10, 10);
+
+  assert.equal(world.canOccupy(5.5, 5.5, true), false);
+  world.setExplorativeUnknown(true);
+  assert.equal(world.canOccupy(5.5, 5.5, true), true);
+  assert.equal(world.canOccupy(-0.5, 5.5, true), false);
+
+  world.observeTile(5, 5, 0xffff);
+  assert.equal(world.canOccupy(5.5, 5.5, true), false);
+  world.observeTile(5, 5, 0);
+  world.markBlocked(6, 5);
+  assert.equal(world.canOccupy(5.75, 5.5, true), false);
+
+  world.setExplorativeUnknown(false);
+  assert.equal(world.canOccupy(4.5, 4.5, true), false);
+});
+
+test('dodge collision world keeps candidates 1.3 tiles from combat enemies', () => {
+  const data: CombatDataProvider = {
+    getObject: (type) => type === 3
+      ? { isEnemy: true, occupySquare: false }
+      : type === 4
+        ? { isEnemy: true, invincible: true, occupySquare: false }
+        : undefined,
+    getProjectile: () => undefined,
+  };
+  const world = new DodgeCollisionWorld(data);
+  world.setMapBounds(10, 10);
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 10; x++) world.observeTile(x, y, 0);
+  }
+
+  world.upsertObject(30, 3, 5.5, 5.5);
+  assert.equal(world.canOccupy(5.5 + ENEMY_AVOID_RADIUS - 0.01, 5.5, true), false);
+  assert.equal(world.canOccupy(5.5 + ENEMY_AVOID_RADIUS, 5.5, true), true);
+
+  world.removeObject(30);
+  assert.equal(world.canOccupy(5.5, 5.5, true), true);
+  world.upsertObject(31, 4, 5.5, 5.5);
+  assert.equal(world.canOccupy(5.5, 5.5, true), true);
 });
 
 test('dodge collision world stops non-passing projectiles at cover', () => {

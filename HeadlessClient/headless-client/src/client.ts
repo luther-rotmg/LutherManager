@@ -3059,6 +3059,7 @@ export class Client extends EventEmitter {
     const intentVelocity = movementLocked
       ? { x: 0, y: 0 }
       : this.movement.getIntendedVelocity(snapshot, integrateFromLocal);
+    this.dodgeWorld?.setExplorativeUnknown(this.pathfinder.hasTarget());
     const dodgeState = this.autoDodge?.isEnabled() && this.combat && this.dodgeWorld && this.thrownAoes
       ? this.autoDodge.evaluate({
           time: now,
@@ -3081,7 +3082,8 @@ export class Client extends EventEmitter {
     this.pos = update.pos;
     if (update.stalled && this.serverPos) {
       if (usingPathfinding) {
-        this.pathfinder.reportStall(this.serverPos);
+        const blocked = this.pathfinder.reportStall(this.serverPos);
+        if (blocked) this.dodgeWorld?.markBlocked(blocked.x, blocked.y);
         this.movement.clear();
         console.warn(
           `${this.tag} movement stalled ${update.stalled.distance.toFixed(1)} tiles from waypoint at ` +

@@ -349,10 +349,10 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
     stopFollowing(client);
     return client.moveTo({ x, y });
   };
-  Walking.pathfindingWalkTo = (x: number, y: number) => {
+  Walking.pathfindingWalkTo = (x: number, y: number, arriveThreshold?: number) => {
     const client = active(deps);
     stopFollowing(client);
-    return client.pathfindingWalkTo({ x, y });
+    return client.pathfindingWalkTo({ x, y }, arriveThreshold);
   };
   Walking.walkToPosition = (position: Position) => {
     const client = active(deps);

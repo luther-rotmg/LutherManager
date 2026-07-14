@@ -8,27 +8,36 @@ interface DodgeObjectRecord {
 }
 
 const INVALID_TILE_TYPE = 0xffff;
+export const ENEMY_AVOID_RADIUS = 1.3;
+const ENEMY_AVOID_RADIUS_SQUARED = ENEMY_AVOID_RADIUS * ENEMY_AVOID_RADIUS;
+const DISTANCE_EPSILON = 1e-9;
 
 /** Incrementally maintained collision view used by predictive auto-dodge. */
 export class DodgeCollisionWorld {
   private width = 0;
   private height = 0;
+  private explorativeUnknown = false;
   private readonly tiles = new Map<string, number>();
+  private readonly learnedBlocked = new Set<string>();
   private readonly objects = new Map<number, DodgeObjectRecord>();
   private readonly occupyCounts = new Map<string, number>();
   private readonly fullOccupyCounts = new Map<string, number>();
   private readonly enemyOccupyCounts = new Map<string, number>();
+  private readonly combatEnemies = new Map<number, { x: number; y: number }>();
 
   constructor(private readonly data: CombatDataProvider) {}
 
   reset(): void {
     this.width = 0;
     this.height = 0;
+    this.explorativeUnknown = false;
     this.tiles.clear();
+    this.learnedBlocked.clear();
     this.objects.clear();
     this.occupyCounts.clear();
     this.fullOccupyCounts.clear();
     this.enemyOccupyCounts.clear();
+    this.combatEnemies.clear();
   }
 
   setMapBounds(width: number, height: number): void {
@@ -40,18 +49,30 @@ export class DodgeCollisionWorld {
     this.tiles.set(tileKey(Math.trunc(x), Math.trunc(y)), Math.trunc(type));
   }
 
+  /** Allows in-bounds, unobserved cells while an exploratory path is active. */
+  setExplorativeUnknown(enabled: boolean): void {
+    this.explorativeUnknown = enabled;
+  }
+
+  /** Shares collision cells learned from authoritative pathfinding stalls. */
+  markBlocked(x: number, y: number): void {
+    this.learnedBlocked.add(tileKey(Math.floor(x), Math.floor(y)));
+  }
+
   upsertObject(objectId: number, objectType: number, x: number, y: number): void {
     this.removeObject(objectId);
     const definition = this.data.getObject(objectType);
     if (!definition) return;
+    const isCombatEnemy = !!definition.isEnemy && !definition.invincible;
     const record: DodgeObjectRecord = {
       key: tileKey(Math.floor(x), Math.floor(y)),
       occupySquare: !!definition.occupySquare,
       fullOccupy: !!definition.fullOccupy,
       enemyOccupySquare: !!definition.enemyOccupySquare,
     };
-    if (!record.occupySquare && !record.fullOccupy && !record.enemyOccupySquare) return;
+    if (!record.occupySquare && !record.fullOccupy && !record.enemyOccupySquare && !isCombatEnemy) return;
     this.objects.set(objectId, record);
+    if (isCombatEnemy) this.combatEnemies.set(objectId, { x, y });
     this.adjust(this.occupyCounts, record.key, record.occupySquare ? 1 : 0);
     this.adjust(this.fullOccupyCounts, record.key, record.fullOccupy ? 1 : 0);
     this.adjust(this.enemyOccupyCounts, record.key, record.enemyOccupySquare ? 1 : 0);
@@ -61,6 +82,7 @@ export class DodgeCollisionWorld {
     const record = this.objects.get(objectId);
     if (!record) return;
     this.objects.delete(objectId);
+    this.combatEnemies.delete(objectId);
     this.adjust(this.occupyCounts, record.key, record.occupySquare ? -1 : 0);
     this.adjust(this.fullOccupyCounts, record.key, record.fullOccupy ? -1 : 0);
     this.adjust(this.enemyOccupyCounts, record.key, record.enemyOccupySquare ? -1 : 0);
@@ -69,12 +91,22 @@ export class DodgeCollisionWorld {
   canOccupy(x: number, y: number, safeWalk: boolean): boolean {
     const tileX = Math.floor(x);
     const tileY = Math.floor(y);
-    const type = this.tiles.get(tileKey(tileX, tileY));
-    if (type === undefined || type === INVALID_TILE_TYPE || !this.inBounds(tileX, tileY)
-      || this.data.tileIsBlockingWalk?.(type)
-      || safeWalk && (this.data.getTileDamage?.(type) ?? 0) > 0
-      || (this.occupyCounts.get(tileKey(tileX, tileY)) ?? 0) > 0) {
+    const key = tileKey(tileX, tileY);
+    const type = this.tiles.get(key);
+    if (!this.inBounds(tileX, tileY)
+      || type === INVALID_TILE_TYPE
+      || type === undefined && !this.explorativeUnknown
+      || this.learnedBlocked.has(key)
+      || type !== undefined && !!this.data.tileIsBlockingWalk?.(type)
+      || type !== undefined && safeWalk && (this.data.getTileDamage?.(type) ?? 0) > 0
+      || (this.occupyCounts.get(key) ?? 0) > 0) {
       return false;
+    }
+
+    for (const enemy of this.combatEnemies.values()) {
+      const dx = x - enemy.x;
+      const dy = y - enemy.y;
+      if (dx * dx + dy * dy < ENEMY_AVOID_RADIUS_SQUARED - DISTANCE_EPSILON) return false;
     }
 
     const fracX = x - tileX;
@@ -88,8 +120,10 @@ export class DodgeCollisionWorld {
         if (neighborX === tileX && neighborY === tileY) continue;
         const key = tileKey(neighborX, neighborY);
         const neighborType = this.tiles.get(key);
-        if (neighborType === undefined || neighborType === INVALID_TILE_TYPE
-          || !this.inBounds(neighborX, neighborY)
+        if (!this.inBounds(neighborX, neighborY)
+          || neighborType === INVALID_TILE_TYPE
+          || neighborType === undefined && !this.explorativeUnknown
+          || this.learnedBlocked.has(key)
           || (this.fullOccupyCounts.get(key) ?? 0) > 0) {
           return false;
         }

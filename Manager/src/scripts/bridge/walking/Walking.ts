@@ -13,7 +13,7 @@ export class BridgeWalking {
       return false;
     };
 
-    Walking.pathfindingWalkTo = (_x, _y) => {
+    Walking.pathfindingWalkTo = (_x, _y, _arriveThreshold) => {
       warnUnimplemented('Walking.pathfindingWalkTo');
       return false;
     };
