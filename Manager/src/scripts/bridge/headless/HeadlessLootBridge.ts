@@ -128,7 +128,7 @@ function subscribe(deps: BridgeDeps, key: LootEventKey, handler: LootHandler): (
 }
 
 function inventoryDestinations(client: Client, useBackpack: boolean): ReturnType<Client['getInventorySlots']> {
-  const maximumSlot = useBackpack ? 19 : 11;
+  const maximumSlot = useBackpack ? 11 + client.getBackpackSlotCount() : 11;
   return client.getInventorySlots().filter(
     (slot) => slot.slotId >= 4 && slot.slotId <= maximumSlot && slot.objectType === -1,
   );
@@ -181,8 +181,10 @@ export function installHeadlessLootBridge(deps: BridgeDeps): void {
     const object = visibleLootObject(client, bag.objectId, deps);
     if (!object) return false;
     const source = client.getWorldContainerSlot(object.objectId, slotIndex);
-    const destination = client.getInventorySlot(inventorySlotIndex);
-    return !!source && source.objectType > 0 && !!destination && client.swapSlots(source, destination);
+    const destination = client.getContainerSlot('inventory', inventorySlotIndex);
+    return !!source && source.objectType > 0 && !!destination && destination.objectType < 0
+      && client.getCarriedInventorySlotIds().includes(inventorySlotIndex)
+      && client.swapSlots(source, destination);
   };
 
   loot.pickupId = (bagObjectId, options) => {
@@ -207,7 +209,7 @@ export function installHeadlessLootBridge(deps: BridgeDeps): void {
     const client = active(deps);
     if (!client || !visibleLootObject(client, bag.objectId, deps)) return false;
     const source = client.getWorldContainerSlot(bag.objectId, slotIndex);
-    return !!source && source.objectType > 0 && client.useItemNear(source);
+    return !!source && source.objectType > 0 && client.useItemNear(source, undefined, 1);
   };
   loot.getItemInfo = (objectType) => deps.gameData.buildSdkItem(objectType);
 }

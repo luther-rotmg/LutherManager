@@ -19,9 +19,9 @@ describe('inventory stat<->slot helpers', () => {
     expect(inventorySlotIndex(StatType.INVENTORY_11_STAT)).to.equal(11);
   });
 
-  it('maps BACKPACK_0..7 to flat slots 12..19', () => {
+  it('maps BACKPACK_0..15 to flat slots 12..27', () => {
     expect(inventorySlotIndex(StatType.BACKPACK_0_STAT)).to.equal(INVENTORY_SLOT_COUNT);
-    expect(inventorySlotIndex(StatType.BACKPACK_7_STAT)).to.equal(INVENTORY_SLOT_COUNT + BACKPACK_SLOT_COUNT - 1);
+    expect(inventorySlotIndex(StatType.BACKPACK_15_STAT)).to.equal(INVENTORY_SLOT_COUNT + BACKPACK_SLOT_COUNT - 1);
   });
 
   it('returns null for non-inventory stats', () => {

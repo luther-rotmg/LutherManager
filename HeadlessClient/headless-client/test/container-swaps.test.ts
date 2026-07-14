@@ -105,6 +105,23 @@ test('protocol-native slot getters select filled and empty slots with correct ob
   assert.equal(client.hasInventorySpace(), true);
 });
 
+test('carried inventory capacity follows backpack tier and extender ownership', () => {
+  const { client, state } = readyClient();
+  state.player.inventory = Array(28).fill(100);
+  state.player.inventory[20] = -1;
+
+  state.player.hasBackpack = true;
+  state.player.backpackTier = 8;
+  assert.equal(client.getBackpackSlotCount(), 8);
+  assert.equal(client.hasBackpackExtender(), false);
+  assert.equal(client.getEmptyInventorySlot(), null);
+
+  state.player.backpackTier = 16;
+  assert.equal(client.getBackpackSlotCount(), 16);
+  assert.equal(client.hasBackpackExtender(), true);
+  assertSlot(client.getEmptyInventorySlot(), 500, 20, -1);
+});
+
 test('pet-bag slots published on PET_OBJECT_ID are addressed through PET_INSTANCEID', () => {
   const { client, state } = readyClient();
   state.containerSlotItems.set(7331, new Map([[0, 777], [1, -1]]));

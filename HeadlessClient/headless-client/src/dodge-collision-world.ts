@@ -9,7 +9,6 @@ interface DodgeObjectRecord {
 
 const INVALID_TILE_TYPE = 0xffff;
 export const ENEMY_AVOID_RADIUS = 1.3;
-const ENEMY_AVOID_RADIUS_SQUARED = ENEMY_AVOID_RADIUS * ENEMY_AVOID_RADIUS;
 const DISTANCE_EPSILON = 1e-9;
 
 /** Incrementally maintained collision view used by predictive auto-dodge. */
@@ -88,7 +87,7 @@ export class DodgeCollisionWorld {
     this.adjust(this.enemyOccupyCounts, record.key, record.enemyOccupySquare ? -1 : 0);
   }
 
-  canOccupy(x: number, y: number, safeWalk: boolean): boolean {
+  canOccupy(x: number, y: number, safeWalk: boolean, avoidEnemies = true): boolean {
     const tileX = Math.floor(x);
     const tileY = Math.floor(y);
     const key = tileKey(tileX, tileY);
@@ -103,11 +102,8 @@ export class DodgeCollisionWorld {
       return false;
     }
 
-    for (const enemy of this.combatEnemies.values()) {
-      const dx = x - enemy.x;
-      const dy = y - enemy.y;
-      if (dx * dx + dy * dy < ENEMY_AVOID_RADIUS_SQUARED - DISTANCE_EPSILON) return false;
-    }
+    if (avoidEnemies
+      && this.enemyClearance(x, y) < ENEMY_AVOID_RADIUS - DISTANCE_EPSILON) return false;
 
     const fracX = x - tileX;
     const fracY = y - tileY;
@@ -130,6 +126,16 @@ export class DodgeCollisionWorld {
       }
     }
     return true;
+  }
+
+  enemyClearance(x: number, y: number): number {
+    let clearance = Infinity;
+    for (const enemy of this.combatEnemies.values()) {
+      const dx = x - enemy.x;
+      const dy = y - enemy.y;
+      clearance = Math.min(clearance, Math.hypot(dx, dy));
+    }
+    return clearance;
   }
 
   isProjectileSegmentOpen(

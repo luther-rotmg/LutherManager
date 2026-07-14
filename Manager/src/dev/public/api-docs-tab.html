@@ -1315,6 +1315,7 @@ async function switchToAnotherCharacter(): Promise&lt;void&gt; {
                   <tr><td><code>getMPPercent()</code></td><td><code>number</code></td><td><code>0–1</code> ratio (0 if max MP is 0).</td></tr>
                   <tr><td><code>getStats()</code></td><td><code>Stats</code></td><td>Final combat stats including gear and exaltation bonuses.</td></tr>
                   <tr><td><code>getBaseStats()</code></td><td><code>Stats</code></td><td>Base stats before gear and exaltation bonuses.</td></tr>
+                  <tr><td><code>getStatCaps()</code></td><td><code>Stats</code></td><td>Natural 8/8 caps for the active class from game data, before gear and exaltation bonuses.</td></tr>
                   <tr><td><code>getStatsWithGear()</code></td><td><code>Stats</code></td><td>Base stats plus gear bonuses, excluding exaltation bonuses.</td></tr>
                   <tr><td><code>getBaseMaxHP()</code> / <code>getBaseMaxMP()</code></td><td><code>number</code></td><td>Base max HP / MP before gear and exaltation bonuses.</td></tr>
                   <tr><td><code>getMaxHPWithGear()</code> / <code>getMaxMPWithGear()</code></td><td><code>number</code></td><td>Max HP / MP including gear but excluding exaltations.</td></tr>
@@ -2208,6 +2209,7 @@ interface LootItemEnchantments {
                   <tr><td><code>nexus()</code></td><td><code>void</code></td><td>Immediately nexus the local player.</td></tr>
                   <tr><td><code>walkTo(x, y)</code></td><td><code>boolean</code></td><td>Walk directly toward world coordinates without pathfinding.</td></tr>
                   <tr><td><code>pathfindingWalkTo(x, y)</code></td><td><code>boolean</code></td><td>Pathfind around observed blocking ground and objects. Unknown map space remains traversable.</td></tr>
+                  <tr><td><code>pathfindingWalkToCombatTarget(x, y, options?)</code></td><td><code>boolean</code></td><td>Maintain a reachable firing band around a combat target. By default the equipped weapon supplies the range, 75% is preferred, and all visible enemies have a 1.3-tile exclusion radius.</td></tr>
                   <tr><td><code>walkToPosition(position)</code></td><td><code>boolean</code></td><td>Walk directly toward a <code>Position</code>.</td></tr>
                   <tr><td><code>walkToEnemy()</code></td><td><code>boolean</code></td><td>Walk directly to within 1.3 tiles of the nearest visible combat-targetable enemy.</td></tr>
                   <tr><td><code>pathfindingWalkToEnemy()</code></td><td><code>boolean</code></td><td>Pathfind to within 1.3 tiles of the nearest visible combat-targetable enemy.</td></tr>

@@ -111,7 +111,12 @@ export type {
   AutoNexusTriggerSource,
 } from './autoNexus/AutoNexus';
 export { Walking } from './walking/Walking';
-export type { AutoDodgeOptions, AutoDodgeState, TeleportBeaconDestination } from './walking/Walking';
+export type {
+  AutoDodgeOptions,
+  AutoDodgeState,
+  CombatPathfindingOptions,
+  TeleportBeaconDestination,
+} from './walking/Walking';
 export { Combat } from './combat/Combat';
 export type {
   AutoAbilityOptions,

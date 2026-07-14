@@ -115,6 +115,8 @@ export interface CombatWorldSnapshot {
   mapHeight: number;
   entities: Iterable<CombatEntity>;
   tiles: Iterable<CombatTile>;
+  /** Resolves the render-time position of a server-tick-interpolated entity. */
+  resolveEntityPosition?(entity: CombatEntity): { x: number; y: number };
 }
 
 export type CombatProjectileSide = 'enemy' | 'own';
@@ -344,7 +346,11 @@ export class CombatTracker {
     const covers = new Map<string, CombatEntity[]>();
     const enemies: CombatEntity[] = [];
     const players: CombatEntity[] = [];
-    for (const entity of snapshot.entities) {
+    for (const source of snapshot.entities) {
+      const position = snapshot.resolveEntityPosition?.(source);
+      const entity = position && (position.x !== source.x || position.y !== source.y)
+        ? { ...source, x: position.x, y: position.y }
+        : source;
       const definition = this.data.getObject(entity.type);
       if (!definition) {
         continue;

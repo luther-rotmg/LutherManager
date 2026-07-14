@@ -3,8 +3,10 @@ import {
   PlayerData,
   StatType,
 } from 'realmlib';
-import type { CombatDataProvider } from './combat-tracker';
+import type { CombatDataProvider, CombatProjectileDefinition } from './combat-tracker';
+import type { WeaponAimPreview } from './command-sender';
 import type { TrackedObject } from './models';
+import { TargetMotionPredictor, type MotionObservation } from './target-motion-predictor';
 
 export type AutoAimMode = 'closest' | 'maxHp' | 'lowestHp' | 'random';
 
@@ -52,6 +54,7 @@ export interface AutoCombatSnapshot {
 }
 
 export interface AutoCombatActions {
+  previewWeaponAim?(weaponSlot: number): WeaponAimPreview | null;
   shootAt(target: { x: number; y: number }, weaponSlot: number): boolean;
   useAbilityAt(target: { x: number; y: number }): boolean;
 }
@@ -62,17 +65,6 @@ interface TargetCandidate {
   maxHp: number;
   distance: number;
   boss: boolean;
-}
-
-interface PositionSample {
-  x: number;
-  y: number;
-  at: number;
-}
-
-interface Velocity {
-  x: number;
-  y: number;
 }
 
 const DEFAULT_AUTO_AIM: Required<AutoAimOptions> = {
@@ -96,7 +88,8 @@ const DEFAULT_AUTO_ABILITY: Required<AutoAbilityOptions> = {
 const DEFAULT_WEAPON_RANGE = 8;
 const DEFAULT_ABILITY_RANGE = 12;
 const DEFAULT_ABILITY_COOLDOWN_MS = 550;
-const TARGET_VELOCITY_MAX_AGE_MS = 750;
+const SHOT_SPAWN_OFFSET = 0.3;
+const INTERCEPT_SAMPLE_MS = 8;
 
 /** Per-client target selection and firing state. Driven by Client's combat timer. */
 export class AutoCombatController {
@@ -109,8 +102,7 @@ export class AutoCombatController {
   private selectedObjectId: number | null = null;
   private lastAbilityAt = -Infinity;
   private lastUpdateAt = -Infinity;
-  private readonly samples = new Map<number, PositionSample>();
-  private readonly velocities = new Map<number, Velocity>();
+  private readonly motion = new TargetMotionPredictor();
 
   constructor(private readonly data: CombatDataProvider) {}
 
@@ -201,17 +193,36 @@ export class AutoCombatController {
     this.fixedObjectId = null;
     this.fixedPosition = null;
     this.selectedObjectId = null;
-    this.samples.clear();
-    this.velocities.clear();
+    this.motion.clear();
     this.lastUpdateAt = -Infinity;
     this.lastAbilityAt = -Infinity;
+  }
+
+  /** Records authoritative NEWTICK endpoints before frame-level aiming resumes. */
+  observeWorldTick(now: number, tickTime: number, observations: Iterable<MotionObservation>): void {
+    this.motion.observeTick(now, tickTime, observations);
+  }
+
+  snapObject(objectId: number, position: { x: number; y: number }, now: number): void {
+    this.motion.snap(objectId, position, now);
+  }
+
+  removeObject(objectId: number): void {
+    this.motion.remove(objectId);
+  }
+
+  currentObjectPosition(object: MotionObservation, now: number): { x: number; y: number } {
+    return this.motion.currentPosition(object.objectId, object, now);
   }
 
   update(now: number, snapshot: AutoCombatSnapshot, actions: AutoCombatActions): void {
     const objects = [...snapshot.objects];
     if (now < this.lastUpdateAt) this.clearMap();
     this.lastUpdateAt = now;
-    this.updateMotion(now, objects);
+    this.motion.observeSnapshot(now, objects.filter((object) => {
+      const definition = this.data.getObject(object.type);
+      return !!definition?.isEnemy && !definition.invincible;
+    }));
 
     if (!snapshot.inWorld || snapshot.safeMap || !snapshot.player) {
       this.selectedObjectId = null;
@@ -220,8 +231,12 @@ export class AutoCombatController {
 
     const player = snapshot.player;
     const weaponType = player.inventory?.[this.aim.weaponSlot] ?? -1;
-    const weaponProjectile = weaponType >= 0 ? this.data.getProjectile(weaponType, 0) : undefined;
-    const weaponRange = this.aim.range || projectileRange(weaponProjectile) || DEFAULT_WEAPON_RANGE;
+    const weaponAim = actions.previewWeaponAim?.(this.aim.weaponSlot) ?? undefined;
+    const rangeProjectile = weaponType >= 0 ? this.data.getProjectile(weaponType, 0) : undefined;
+    const weaponProjectile = weaponType >= 0 && weaponAim
+      ? this.data.getProjectile(weaponType, weaponAim.projectileId) ?? rangeProjectile
+      : rangeProjectile;
+    const weaponRange = this.aim.range || projectileRange(rangeProjectile) || DEFAULT_WEAPON_RANGE;
     const weaponCandidates = this.candidates(objects, snapshot.playerPos, weaponRange);
     const selected = this.resolveTarget(weaponCandidates);
     const fixedPoint = this.fixedPosition;
@@ -229,7 +244,14 @@ export class AutoCombatController {
 
     if (shouldShoot) {
       const point = fixedPoint ?? (selected
-        ? this.aimPoint(selected.object, snapshot.playerPos, weaponProjectile)
+        ? this.aimPoint(
+            selected.object,
+            snapshot.playerPos,
+            weaponProjectile,
+            player.projSpeedMult,
+            player.projLifeMult,
+            weaponAim,
+          )
         : null);
       this.selectedObjectId = selected?.object.objectId ?? null;
       if (point) actions.shootAt(point, this.aim.weaponSlot);
@@ -331,46 +353,22 @@ export class AutoCombatController {
   private aimPoint(
     object: TrackedObject,
     playerPos: { x: number; y: number },
-    projectile: { speed: number; lifetimeMs: number } | undefined,
+    projectile: CombatProjectileDefinition | undefined,
+    speedMultiplier = 1,
+    lifetimeMultiplier = 1,
+    shotProfile?: WeaponAimPreview,
   ): { x: number; y: number } {
-    if (!this.aim.leadTargets || !projectile || projectile.speed <= 0) return { x: object.x, y: object.y };
-    const velocity = this.velocities.get(object.objectId);
-    const sample = this.samples.get(object.objectId);
-    if (!velocity || !sample || this.lastUpdateAt - sample.at > TARGET_VELOCITY_MAX_AGE_MS
-      || (velocity.x === 0 && velocity.y === 0)) {
-      return { x: object.x, y: object.y };
-    }
-    const speed = projectile.speed / 10_000;
-    const time = interceptTime(playerPos, object, velocity, speed);
-    if (time === null || time > projectile.lifetimeMs) return { x: object.x, y: object.y };
-    return { x: object.x + velocity.x * time, y: object.y + velocity.y * time };
-  }
-
-  private updateMotion(now: number, objects: TrackedObject[]): void {
-    const visible = new Set<number>();
-    for (const object of objects) {
-      visible.add(object.objectId);
-      const previous = this.samples.get(object.objectId);
-      if (!previous) {
-        this.samples.set(object.objectId, { x: object.x, y: object.y, at: now });
-        continue;
-      }
-      if (previous.x === object.x && previous.y === object.y) continue;
-      const elapsed = now - previous.at;
-      if (elapsed > 0) {
-        this.velocities.set(object.objectId, {
-          x: (object.x - previous.x) / elapsed,
-          y: (object.y - previous.y) / elapsed,
-        });
-      }
-      this.samples.set(object.objectId, { x: object.x, y: object.y, at: now });
-    }
-    for (const objectId of this.samples.keys()) {
-      if (!visible.has(objectId)) {
-        this.samples.delete(objectId);
-        this.velocities.delete(objectId);
-      }
-    }
+    const current = this.motion.currentPosition(object.objectId, object, this.lastUpdateAt);
+    if (!this.aim.leadTargets || !projectile) return current;
+    return predictedInterceptPoint(
+      playerPos,
+      current,
+      projectile,
+      speedMultiplier,
+      lifetimeMultiplier,
+      shotProfile,
+      (futureMs) => this.motion.predictPosition(object.objectId, object, this.lastUpdateAt, futureMs),
+    ) ?? current;
   }
 }
 
@@ -380,7 +378,9 @@ function rawNumber(object: TrackedObject, stat: number, fallback: number): numbe
   return Number.isFinite(number) ? number : fallback;
 }
 
-function projectileRange(projectile: { speed: number; lifetimeMs: number } | undefined): number {
+function projectileRange(
+  projectile: CombatProjectileDefinition | undefined,
+): number {
   return projectile && projectile.speed > 0 && projectile.lifetimeMs > 0
     ? projectile.speed * projectile.lifetimeMs / 10_000
     : 0;
@@ -405,28 +405,169 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function interceptTime(
+function predictedInterceptPoint(
   shooter: { x: number; y: number },
-  target: { x: number; y: number },
-  velocity: Velocity,
-  projectileSpeed: number,
-): number | null {
-  if (projectileSpeed <= 0) return null;
-  const px = target.x - shooter.x;
-  const py = target.y - shooter.y;
-  const a = velocity.x * velocity.x + velocity.y * velocity.y - projectileSpeed * projectileSpeed;
-  const b = 2 * (px * velocity.x + py * velocity.y);
-  const c = px * px + py * py;
-  if (Math.abs(a) < 1e-12) {
-    if (Math.abs(b) < 1e-12) return null;
-    const time = -c / b;
-    return time >= 0 ? time : null;
+  currentTarget: { x: number; y: number },
+  projectile: CombatProjectileDefinition,
+  speedMultiplier: number,
+  lifetimeMultiplier: number,
+  shotProfile: WeaponAimPreview | undefined,
+  targetAt: (futureMs: number) => { x: number; y: number },
+): { x: number; y: number } | null {
+  const lifetime = projectile.lifetimeMs * validMultiplier(lifetimeMultiplier);
+  if (lifetime <= 0) return null;
+  const separation = (time: number): number => {
+    const target = time === 0 ? currentTarget : targetAt(time);
+    const projectilePosition = projectileLocalPositionAt(
+      projectile,
+      time,
+      speedMultiplier,
+      lifetimeMultiplier,
+      shotProfile,
+    );
+    return Math.hypot(target.x - shooter.x, target.y - shooter.y)
+      - Math.hypot(projectilePosition.x, projectilePosition.y);
+  };
+  const aimAt = (time: number): { x: number; y: number } | null => {
+    const target = time === 0 ? currentTarget : targetAt(time);
+    const targetX = target.x - shooter.x;
+    const targetY = target.y - shooter.y;
+    const targetDistance = Math.hypot(targetX, targetY);
+    const projectilePosition = projectileLocalPositionAt(
+      projectile,
+      time,
+      speedMultiplier,
+      lifetimeMultiplier,
+      shotProfile,
+    );
+    const projectileDistance = Math.hypot(projectilePosition.x, projectilePosition.y);
+    if (targetDistance <= 1e-9 || projectileDistance <= 1e-9) return null;
+    const baseAngle = Math.atan2(targetY, targetX)
+      - Math.atan2(projectilePosition.y, projectilePosition.x);
+    return {
+      x: shooter.x + targetDistance * Math.cos(baseAngle),
+      y: shooter.y + targetDistance * Math.sin(baseAngle),
+    };
+  };
+
+  let previousTime = 0;
+  let previousSeparation = separation(0);
+  if (Math.abs(previousSeparation) <= 1e-9) return aimAt(0);
+  for (let time = Math.min(INTERCEPT_SAMPLE_MS, lifetime); time <= lifetime; time += INTERCEPT_SAMPLE_MS) {
+    const currentTime = Math.min(time, lifetime);
+    const currentSeparation = separation(currentTime);
+    if (Math.abs(currentSeparation) <= 1e-9
+      || Math.sign(currentSeparation) !== Math.sign(previousSeparation)) {
+      let low = previousTime;
+      let high = currentTime;
+      const lowSign = Math.sign(previousSeparation);
+      for (let iteration = 0; iteration < 20; iteration++) {
+        const middle = (low + high) * 0.5;
+        if (Math.sign(separation(middle)) === lowSign) low = middle;
+        else high = middle;
+      }
+      return aimAt(high);
+    }
+    previousTime = currentTime;
+    previousSeparation = currentSeparation;
+    if (currentTime === lifetime) break;
+    if (time + INTERCEPT_SAMPLE_MS > lifetime) time = lifetime - INTERCEPT_SAMPLE_MS;
   }
-  const discriminant = b * b - 4 * a * c;
-  if (discriminant < 0) return null;
-  const root = Math.sqrt(discriminant);
-  const first = (-b - root) / (2 * a);
-  const second = (-b + root) / (2 * a);
-  const valid = [first, second].filter((time) => Number.isFinite(time) && time >= 0).sort((x, y) => x - y);
-  return valid[0] ?? null;
+  return null;
+}
+
+function projectileLocalPositionAt(
+  projectile: CombatProjectileDefinition,
+  elapsedMs: number,
+  speedMultiplier = 1,
+  lifetimeMultiplier = 1,
+  shotProfile?: WeaponAimPreview,
+): { x: number; y: number } {
+  const profile = shotProfile ?? {
+    projectileId: 0,
+    bulletId: 0,
+    angleOffset: 0,
+    spawnDistance: SHOT_SPAWN_OFFSET,
+    spawnOffsetX: 0,
+  };
+  const trajectoryLifetime = projectile.trajectoryLifetimeMs ?? projectile.lifetimeMs;
+  const elapsed = Math.max(0, Math.min(
+    projectile.lifetimeMs * validMultiplier(lifetimeMultiplier),
+    elapsedMs,
+  ));
+  const phase = profile.bulletId % 2 === 0 ? 0 : Math.PI;
+  let travelX: number;
+  let travelY: number;
+
+  if (projectile.parametric) {
+    const t = trajectoryLifetime > 0 ? elapsed / trajectoryLifetime * 2 * Math.PI : 0;
+    travelX = Math.sin(t) * (profile.bulletId % 2 ? 1 : -1) * projectile.magnitude;
+    travelY = Math.sin(2 * t) * (profile.bulletId % 4 < 2 ? 1 : -1) * projectile.magnitude;
+  } else {
+    const distance = projectileDistanceAt(projectile, elapsed, speedMultiplier, lifetimeMultiplier);
+    if (projectile.wavy) {
+      const waveAngle = Math.PI / 64 * Math.sin(phase + 6 * Math.PI * elapsed / 1000);
+      travelX = distance * Math.cos(waveAngle);
+      travelY = distance * Math.sin(waveAngle);
+    } else {
+      travelX = distance;
+      travelY = projectile.amplitude * Math.sin(
+        phase + (trajectoryLifetime > 0 ? elapsed / trajectoryLifetime : 0)
+          * projectile.frequency * 2 * Math.PI,
+      );
+    }
+  }
+
+  const cos = Math.cos(profile.angleOffset);
+  const sin = Math.sin(profile.angleOffset);
+  return {
+    x: profile.spawnDistance + travelX * cos - travelY * sin,
+    y: profile.spawnOffsetX + travelX * sin + travelY * cos,
+  };
+}
+
+function projectileDistanceAt(
+  projectile: CombatProjectileDefinition,
+  elapsedMs: number,
+  speedMultiplier = 1,
+  lifetimeMultiplier = 1,
+): number {
+  const elapsed = Math.max(0, Math.min(
+    projectile.lifetimeMs * validMultiplier(lifetimeMultiplier),
+    elapsedMs,
+  ));
+  const scaledSpeed = projectile.speed * validMultiplier(speedMultiplier);
+  const baseSpeed = scaledSpeed / 10_000;
+  let distance: number;
+  if (projectile.acceleration === 0 || elapsed < projectile.accelerationDelay) {
+    distance = elapsed * baseSpeed;
+  } else {
+    const accelerationElapsed = elapsed - projectile.accelerationDelay;
+    let accelerationTime = accelerationElapsed;
+    let clampedTime = 0;
+    let clampedSpeed = 0;
+    if (projectile.speedClamp !== -1 && projectile.acceleration !== 0) {
+      clampedSpeed = projectile.speedClamp / 10_000;
+      const speedNeeded = Math.abs(projectile.speedClamp - scaledSpeed);
+      const timeToClamp = speedNeeded / Math.abs(projectile.acceleration) * 1000;
+      accelerationTime = Math.min(accelerationElapsed, timeToClamp);
+      clampedTime = Math.max(0, accelerationElapsed - accelerationTime);
+    }
+    distance = projectile.accelerationDelay * baseSpeed
+      + accelerationTime * baseSpeed
+      + accelerationTime * accelerationTime / 1000 * 0.5 * (projectile.acceleration / 10_000)
+      + clampedTime * clampedSpeed;
+  }
+
+  if (projectile.boomerang) {
+    const trajectoryLifetime = projectile.trajectoryLifetimeMs ?? projectile.lifetimeMs;
+    const halfway = trajectoryLifetime * baseSpeed * 0.5;
+    if (distance > halfway) distance = halfway - (distance - halfway);
+  }
+  return Math.max(0, distance);
+}
+
+function validMultiplier(value: number | undefined): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 1;
 }

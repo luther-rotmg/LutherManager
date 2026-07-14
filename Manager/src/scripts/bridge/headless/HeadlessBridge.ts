@@ -10,6 +10,7 @@ import {
   connection,
   inventory,
   type InventoryContainer,
+  type CombatPathfindingOptions,
   type Stats,
 } from '@hive/sdk';
 import { ClientEvent, type Client } from 'headless-client';
@@ -42,9 +43,56 @@ const STORAGE_CONTAINERS = new Set<InventoryContainer>([
   'spoilsChest',
 ]);
 
+const DEFAULT_WEAPON_RANGE = 8;
+const DEFAULT_COMBAT_RANGE_RATIO = 0.75;
+const DEFAULT_ENEMY_EXCLUSION = 1.3;
+
+function finitePositive(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+}
+
+function resolveCombatPathfindingRange(
+  deps: BridgeDeps,
+  client: Client,
+  options: CombatPathfindingOptions,
+) {
+  const weaponType = client.getInventory()?.[0] ?? -1;
+  const weaponDefinition = weaponType >= 0 ? deps.gameData.getObject(weaponType) : undefined;
+  const projectile = weaponType >= 0
+    ? deps.gameData.getProjectile(weaponType, 0) ?? weaponDefinition?.projectiles.values().next().value
+    : undefined;
+  const derivedWeaponRange = projectile && projectile.speed > 0 && projectile.lifetimeMs > 0
+    ? projectile.speed * projectile.lifetimeMs / 10_000
+    : DEFAULT_WEAPON_RANGE;
+  const weaponRange = finitePositive(options.weaponRange) ?? derivedWeaponRange;
+  const exclusion = Math.max(DEFAULT_ENEMY_EXCLUSION,
+    finitePositive(options.minimumEnemyDistance) ?? DEFAULT_ENEMY_EXCLUSION);
+  if (weaponRange <= exclusion + 0.25) return undefined;
+
+  const ratio = Math.max(0.1, Math.min(0.95,
+    finitePositive(options.preferredRangeRatio) ?? DEFAULT_COMBAT_RANGE_RATIO));
+  const shotMargin = Math.max(0.1, finitePositive(options.shotRangeMargin)
+    ?? Math.max(0.5, weaponRange * 0.1));
+  const maximumFiringDistance = weaponRange - shotMargin;
+  if (maximumFiringDistance <= exclusion) return undefined;
+
+  const bandWidth = Math.max(0.1, finitePositive(options.rangeBandWidth)
+    ?? Math.max(0.25, Math.min(0.75, weaponRange * 0.08)));
+  const preferredDistance = Math.max(exclusion, Math.min(maximumFiringDistance, weaponRange * ratio));
+  const minimumDistance = Math.max(exclusion, preferredDistance - bandWidth);
+  const maximumDistance = Math.max(minimumDistance,
+    Math.min(maximumFiringDistance, preferredDistance + bandWidth));
+  return { minimumDistance, preferredDistance, maximumDistance };
+}
+
 /** SDK storage slots use one flattened logical index across physical chests. */
 function sdkContainerSlots(client: Client, container: InventoryContainer) {
   const slots = client.getContainerSlots(container);
+  if (container === 'inventory') {
+    const maximumSlot = 11 + client.getBackpackSlotCount();
+    return slots.filter((slot) => slot.slotId <= maximumSlot);
+  }
   if (!STORAGE_CONTAINERS.has(container)) return slots;
   return slots.map((slot, slotId) => ({
     objectId: slot.objectId,
@@ -214,6 +262,23 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   Self.getLevel = () => optional(deps)?.getPlayer()?.level ?? 0;
   Self.getStats = () => headlessStats(deps, 'total');
   Self.getBaseStats = () => headlessStats(deps, 'base');
+  Self.getStatCaps = () => {
+    const classType = optional(deps)?.getPlayer()?.class;
+    const caps = classType ? deps.gameData.getPlayerClassStatMaxes(classType) : undefined;
+    return caps ? {
+      maxHP: caps.maxHitPoints,
+      maxMP: caps.maxMagicPoints,
+      attack: caps.attack,
+      defense: caps.defense,
+      speed: caps.speed,
+      dexterity: caps.dexterity,
+      vitality: caps.hpRegen,
+      wisdom: caps.mpRegen,
+    } : {
+      maxHP: 0, maxMP: 0, attack: 0, defense: 0,
+      speed: 0, dexterity: 0, vitality: 0, wisdom: 0,
+    };
+  };
   Self.getStatsWithGear = () => headlessStats(deps, 'withGear');
   Self.getBaseMaxHP = () => headlessStats(deps, 'base').maxHP;
   Self.getMaxHPWithGear = () => headlessStats(deps, 'withGear').maxHP;
@@ -353,6 +418,16 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
     const client = active(deps);
     stopFollowing(client);
     return client.pathfindingWalkTo({ x, y }, arriveThreshold);
+  };
+  Walking.pathfindingWalkToCombatTarget = (x: number, y: number, options = {}) => {
+    const client = active(deps);
+    stopFollowing(client);
+    const range = resolveCombatPathfindingRange(deps, client, options);
+    if (!range) {
+      Logger.warn('Walking', 'pathfindingWalkToCombatTarget: equipped weapon range is too short');
+      return false;
+    }
+    return client.combatPathfindingWalkTo({ x, y }, range);
   };
   Walking.walkToPosition = (position: Position) => {
     const client = active(deps);
@@ -540,11 +615,13 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   inventory.findItem = (query: number | string) => {
     const client = optional(deps);
     if (!client) return null;
-    const slot = client.getInventorySlots().find((candidate) => candidate.objectType >= 0 && itemMatches(deps, candidate.objectType, query));
+    const slot = sdkContainerSlots(client, 'inventory')
+      .find((candidate) => candidate.objectType >= 0 && itemMatches(deps, candidate.objectType, query));
     return slot ? { objectType: slot.objectType, slotIndex: slot.slotId } : null;
   };
   inventory.findItems = (query: number | string) => {
-    return (optional(deps)?.getInventorySlots() ?? [])
+    const client = optional(deps);
+    return (client ? sdkContainerSlots(client, 'inventory') : [])
       .filter((slot) => slot.objectType >= 0 && itemMatches(deps, slot.objectType, query))
       .map((slot) => ({ objectType: slot.objectType, slotIndex: slot.slotId }));
   };
@@ -555,8 +632,13 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   };
   inventory.swapSlots = (from: number, to: number) => { active(deps).swapInventorySlots(from, to); };
   inventory.isFull = () => !optional(deps)?.hasInventorySpace();
-  inventory.emptySlotCount = () => (optional(deps)?.getInventorySlots() ?? []).filter((slot) => slot.slotId >= 4 && slot.objectType < 0).length;
-  inventory.getBackpack = () => optional(deps)?.hasPetBag() ? 3 : optional(deps)?.hasBackpack() ? 2 : 1;
+  inventory.emptySlotCount = () => {
+    const client = optional(deps);
+    if (!client) return 0;
+    const carried = new Set(client.getCarriedInventorySlotIds());
+    return client.getInventorySlots().filter((slot) => carried.has(slot.slotId) && slot.objectType < 0).length;
+  };
+  inventory.getBackpack = () => optional(deps)?.hasBackpackExtender() ? 3 : optional(deps)?.hasBackpack() ? 2 : 1;
   inventory.getContainerSlots = (container: InventoryContainer) => {
     const client = optional(deps);
     return client ? sdkContainerSlots(client, container) : [];

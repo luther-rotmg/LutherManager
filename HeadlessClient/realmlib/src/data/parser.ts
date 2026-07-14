@@ -1,5 +1,5 @@
 import { ObjectData, ObjectStatusData, StatData} from '.';
-import { PlayerData, StatType } from '../models';
+import { inventorySlotIndex, PlayerData, StatType } from '../models';
 
 /**
  * Processes the `data` and returns the resulting `PlayerData` object
@@ -143,7 +143,12 @@ export function processStatData(stats: StatData[], currentData?: PlayerData): Pl
                 playerData.mpPots = stat.statValue;
                 continue;
             case StatType.HASBACKPACK_STAT:
-                playerData.hasBackpack = stat.statValue === 1;
+                playerData.legacyHasBackpack = stat.statValue !== 0;
+                playerData.hasBackpack = (playerData.backpackTier ?? 0) > 0 || playerData.legacyHasBackpack;
+                continue;
+            case StatType.BACKPACK_SLOTS_STAT:
+                playerData.backpackTier = stat.statValue;
+                playerData.hasBackpack = stat.statValue > 0 || (playerData.legacyHasBackpack ?? false);
                 continue;
             case StatType.ENCHANTMENTS_STAT:
                 playerData.enchantmentsRaw = stat.stringStatValue;
@@ -239,12 +244,8 @@ export function processStatData(stats: StatData[], currentData?: PlayerData): Pl
                 playerData.forgefire = stat.statValue;
                 continue;
             default:
-                if (stat.statType >= StatType.INVENTORY_0_STAT && stat.statType <= StatType.INVENTORY_11_STAT) {
-                    playerData.inventory[stat.statType - StatType.INVENTORY_0_STAT] = stat.statValue;
-                } else if (stat.statType >= StatType.BACKPACK_0_STAT && stat.statType <= StatType.BACKPACK_7_STAT) {
-                    const inventorySlots = StatType.INVENTORY_11_STAT - StatType.INVENTORY_0_STAT + 1;
-                    playerData.inventory[inventorySlots + stat.statType - StatType.BACKPACK_0_STAT] = stat.statValue;
-                }
+                const slotIndex = inventorySlotIndex(stat.statType);
+                if (slotIndex !== null) playerData.inventory[slotIndex] = stat.statValue;
         }
     }
     return playerData;

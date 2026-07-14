@@ -75,6 +75,8 @@ describe('processStatData (current build ids)', () => {
       statData(StatType.TEXTURE_STAT, 1234), // id 25, numeric
       statData(StatType.INVENTORY_0_STAT, 2711),
       statData(StatType.BACKPACK_0_STAT, 999), // id 131 -> inventory slot 12
+      statData(StatType.BACKPACK_15_STAT, 1001), // id 146 -> extender slot 27
+      statData(StatType.BACKPACK_SLOTS_STAT, 16),
       statData(StatType.NAME_STAT, 0, 'Wizard'), // string stat
       statData(StatType.EXP_STAT, 0, '9814'), // string stat parsed to a number
       statData(StatType.BXP_STAT, 14561542),
@@ -92,6 +94,9 @@ describe('processStatData (current build ids)', () => {
     expect(playerData.texture).to.equal(1234);
     expect(playerData.inventory[0]).to.equal(2711);
     expect(playerData.inventory[12]).to.equal(999);
+    expect(playerData.inventory[27]).to.equal(1001);
+    expect(playerData.backpackTier).to.equal(16);
+    expect(playerData.hasBackpack).to.equal(true);
     expect(playerData.name).to.equal('Wizard');
     expect(playerData.exp).to.equal(9814);
     expect(playerData.bxp).to.equal(14561542);
@@ -100,6 +105,16 @@ describe('processStatData (current build ids)', () => {
     expect(playerData.accountLevelExp).to.equal(406026);
     expect(playerData.powerLevel).to.equal(151);
     expect(playerData.enchantmentsRaw).to.equal('slot-zero,slot-one');
+  });
+
+  it('retains the legacy backpack signal when tier stat 130 is zero', () => {
+    const playerData = processStatData([
+      statData(StatType.HASBACKPACK_STAT, 1),
+      statData(StatType.BACKPACK_SLOTS_STAT, 0),
+    ]);
+    expect(playerData.backpackTier).to.equal(0);
+    expect(playerData.legacyHasBackpack).to.equal(true);
+    expect(playerData.hasBackpack).to.equal(true);
   });
 
   it('separates name decoration metadata from the visible name', () => {

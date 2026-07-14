@@ -18,6 +18,19 @@ export interface AutoDodgeState {
     decision: string;
 }
 
+export interface CombatPathfindingOptions {
+    /** Weapon range in tiles. Zero or omitted derives it from the equipped weapon. */
+    weaponRange?: number;
+    /** Preferred fraction of weapon range. Defaults to 0.75. */
+    preferredRangeRatio?: number;
+    /** Hard enemy exclusion floor. Defaults to 1.3 tiles. */
+    minimumEnemyDistance?: number;
+    /** Distance reserved inside the weapon's maximum range. Defaults to max(0.5, range * 0.1). */
+    shotRangeMargin?: number;
+    /** Half-width of the acceptable firing band around the preferred distance. */
+    rangeBandWidth?: number;
+}
+
 /**
  * A Realm teleport-beacon destination. Canonical region names and common
  * short aliases are suggested while future game destinations remain valid.
@@ -65,6 +78,18 @@ export class Walking {
      * route once the player is within that many tiles of the destination.
      */
     static pathfindingWalkTo(x: number, y: number, arriveThreshold?: number): boolean {
+        throw new Error('Must be run inside Hive client');
+    }
+
+    /**
+     * Pathfind to a reachable firing band around a combat target. The equipped
+     * weapon determines the range unless `weaponRange` is supplied.
+     */
+    static pathfindingWalkToCombatTarget(
+        x: number,
+        y: number,
+        options?: CombatPathfindingOptions,
+    ): boolean {
         throw new Error('Must be run inside Hive client');
     }
 

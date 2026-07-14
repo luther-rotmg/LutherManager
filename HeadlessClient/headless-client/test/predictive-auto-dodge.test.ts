@@ -6,6 +6,7 @@ import type {
   CombatProjectileSnapshot,
 } from '../src/combat-tracker';
 import { DodgeCollisionWorld, ENEMY_AVOID_RADIUS } from '../src/dodge-collision-world';
+import { MovementController } from '../src/movement-controller';
 import {
   PredictiveAutoDodgeController,
   ThrownAoeTracker,
@@ -92,6 +93,96 @@ test('predictive auto-dodge moves out of a thrown AOE before landing', () => {
   assert.equal(state.overrideActive, true);
   assert.equal(state.earliestImpactMs, 200);
   assert.ok(Math.hypot(state.velocity.x, state.velocity.y) > 0);
+});
+
+test('predictive auto-dodge starts moving as soon as a future impact is known', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  const state = controller.evaluate({
+    time: 0,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.0096,
+    intentVelocity: { x: 0, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [],
+    aoes: [{ x: 5, y: 5, radius: 1, landingTime: 500 }],
+    environment: openEnvironment,
+  });
+
+  assert.equal(state.overrideActive, true);
+  assert.equal(state.earliestImpactMs, 500);
+  assert.notEqual(state.decision, 'impact_not_imminent');
+});
+
+test('predictive auto-dodge may cross an enemy buffer when it is the safe escape', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  let requestedWithoutEnemyAvoidance = false;
+  const state = controller.evaluate({
+    time: 300,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.0096,
+    intentVelocity: { x: 0, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [hostileProjectile()],
+    aoes: [],
+    environment: {
+      canOccupy: (_x, _y, _safeWalk, avoidEnemies = true) => {
+        if (!avoidEnemies) requestedWithoutEnemyAvoidance = true;
+        return !avoidEnemies;
+      },
+      enemyClearance: () => 0.5,
+      isProjectileSegmentOpen: () => true,
+    },
+  });
+
+  assert.equal(requestedWithoutEnemyAvoidance, true);
+  assert.equal(state.overrideActive, true);
+});
+
+test('predictive auto-dodge prefers a broad safe corridor over an isolated direction', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  const state = controller.evaluate({
+    time: 0,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.004,
+    intentVelocity: { x: 0.004, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [],
+    aoes: [{ x: 5, y: 5, radius: 1.2, landingTime: 100 }],
+    environment: {
+      canOccupy: (x, y) => x <= 5 || Math.abs(y - 5) < 1e-8,
+      isProjectileSegmentOpen: () => true,
+    },
+  });
+
+  assert.equal(state.overrideActive, true);
+  assert.ok(state.velocity.x < 0, `expected broad western corridor, got ${state.velocity.x}`);
+});
+
+test('dodge velocity overrides the active pathfinding waypoint velocity', () => {
+  const movement = new MovementController();
+  movement.setTarget({ x: 10, y: 5 }, 0.1);
+  const snapshot = {
+    playerSpeed: 75,
+    playerSpeedBoost: 0,
+    localPos: { x: 5, y: 5 },
+    serverPos: { x: 5, y: 5 },
+  };
+  const intended = movement.getIntendedVelocity(snapshot);
+  assert.ok(intended.x > 0);
+  assert.equal(intended.y, 0);
+
+  const update = movement.update(snapshot, 100, {
+    velocityOverride: { x: 0, y: 0.0096 },
+  });
+  assert.equal(update.pos.x, 5);
+  assert.ok(update.pos.y > 5);
+  assert.equal(movement.hasTarget(), true);
 });
 
 test('thrown AOE tracker learns a radius for later matching effects', () => {

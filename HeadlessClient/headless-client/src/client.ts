@@ -93,7 +93,7 @@ import {
 import { BUILD_VERSION, GAME_ID, GAME_PORT, HELLO_TOKEN } from './constants';
 import { config } from './config';
 import { ClientEvent } from './events';
-import { ExplorativePathfinder } from './explorative-pathfinder';
+import { ExplorativePathfinder, type CombatPathfindingRange } from './explorative-pathfinder';
 import { DodgeCollisionWorld } from './dodge-collision-world';
 import { MovementController, movementSpeed, type MovementSnapshot } from './movement-controller';
 import {
@@ -113,7 +113,10 @@ export { Classes as ClassType } from 'realmlib';
 export const VAULT_CHEST_OBJECT_TYPE = 1284;
 export const POTION_VAULT_OBJECT_TYPE = 1859;
 export const MAIN_INVENTORY_SLOT_IDS = [4, 5, 6, 7, 8, 9, 10, 11] as const;
-export const BACKPACK_SLOT_IDS = [12, 13, 14, 15, 16, 17, 18, 19] as const;
+export const BACKPACK_SLOT_IDS = [
+  12, 13, 14, 15, 16, 17, 18, 19,
+  20, 21, 22, 23, 24, 25, 26, 27,
+] as const;
 
 export interface ViewerProjectileSnapshot extends Omit<CombatProjectileSnapshot, 'side'> {
   side: 'own' | 'enemy' | 'other';
@@ -276,6 +279,7 @@ export class Client extends EventEmitter {
     pos: this.serverPos ?? this.pos,
     objectId: this.objectId,
     player: this.player,
+    peekBulletId: () => this.nextBulletId % 128,
     nextBulletId: () => this.nextBulletId++ % 128,
     weapon: (weaponType: number) => {
       const def = this.opts.combatData?.getObject(weaponType);
@@ -553,6 +557,17 @@ export class Client extends EventEmitter {
     }
     // Script loops commonly refresh the same target. Preserve the active
     // waypoint so its authoritative stall timer can still trigger recovery.
+    if (!wasPathfinding) this.movement.clear();
+    return true;
+  }
+
+  /** Maintains a reachable firing band around a moving combat target. */
+  combatPathfindingWalkTo(
+    target: { x: number; y: number },
+    range: CombatPathfindingRange,
+  ): boolean {
+    const wasPathfinding = this.pathfinder.hasTarget();
+    if (!this.pathfinder.setCombatTarget(target, range)) return false;
     if (!wasPathfinding) this.movement.clear();
     return true;
   }
@@ -1231,12 +1246,18 @@ export class Client extends EventEmitter {
   }
 
   /** Walks into range of a world-container slot, then sends USEITEM. */
-  useItemNear(slot: SlotObjectData, arriveThreshold = Math.max(config.arriveThreshold, 1)): boolean {
-    if (slot.objectId === this.objectId) return this.useItem(slot);
+  useItemNear(
+    slot: SlotObjectData,
+    arriveThreshold = Math.max(config.arriveThreshold, 1),
+    useType = 0,
+  ): boolean {
+    if (slot.objectId === this.objectId) return this.useItem(slot, useType);
     const object = this.objects.get(slot.objectId);
     if (!object) return false;
     const target = { x: object.x, y: object.y };
-    if (distance(this.serverPos ?? this.pos, target) <= arriveThreshold) return this.useItem(slot);
+    if (distance(this.serverPos ?? this.pos, target) <= arriveThreshold) {
+      return this.useItem(slot, useType);
+    }
 
     const cancel = (): void => {
       this.off(ClientEvent.ReachedTarget, onReached);
@@ -1245,7 +1266,7 @@ export class Client extends EventEmitter {
       if (distance(reached, target) > arriveThreshold) return;
       this.off(ClientEvent.MapChange, cancel);
       const current = this.getWorldContainerSlot(slot.objectId, slot.slotId);
-      if (current && current.objectType > 0) this.useItem(current);
+      if (current && current.objectType > 0) this.useItem(current, useType);
     };
     this.once(ClientEvent.ReachedTarget, onReached);
     this.once(ClientEvent.MapChange, cancel);
@@ -1434,7 +1455,7 @@ export class Client extends EventEmitter {
     return completed;
   }
 
-  /** Current player inventory snapshot (20 slots: 0-3 equip, 4-11 inventory, 12-19 backpack), or undefined. */
+  /** Current player inventory snapshot (28 slots including backpack and extender), or undefined. */
   getInventory(): number[] | undefined {
     return this.player ? [...this.player.inventory] : undefined;
   }
@@ -1443,7 +1464,11 @@ export class Client extends EventEmitter {
   getContainerSlots(container: ItemContainer): SlotObjectData[] {
     const objectId = this.getContainerObjectId(container);
     if (container === 'inventory') {
-      return (this.player?.inventory ?? []).map((itemType, slotId) => SlotObjectData.from(objectId, slotId, itemType));
+      if (!this.player) return [];
+      return Array.from(
+        { length: 28 },
+        (_, slotId) => SlotObjectData.from(objectId, slotId, this.player?.inventory[slotId] ?? -1),
+      );
     }
     const key = storageSectionKey(container);
     if (key) {
@@ -1487,8 +1512,12 @@ export class Client extends EventEmitter {
 
   /** First known empty slot in a container. */
   getFirstEmptySlot(container: ItemContainer): SlotObjectData | null {
+    const carried = container === 'inventory'
+      ? new Set(this.getCarriedInventorySlotIds())
+      : null;
     return this.getContainerSlots(container).find(
-      (slot) => slot.objectType === -1 && (container !== 'inventory' || slot.slotId >= 4),
+      (slot) => slot.objectType === -1
+        && (container !== 'inventory' || (slot.slotId >= 4 && carried?.has(slot.slotId))),
     ) ?? null;
   }
 
@@ -1501,7 +1530,7 @@ export class Client extends EventEmitter {
       const slot = this.getContainerSlot('inventory', slotIndex);
       return slot && slot.objectType !== -1 ? slot : null;
     }
-    const slots = [...MAIN_INVENTORY_SLOT_IDS, ...BACKPACK_SLOT_IDS];
+    const slots = this.getCarriedInventorySlotIds();
     return slots.map((slot) => this.getContainerSlot('inventory', slot)).find((slot) => !!slot && slot.objectType !== -1) ?? null;
   }
 
@@ -1570,20 +1599,26 @@ export class Client extends EventEmitter {
 
   /** First empty carried-inventory slot (main inventory, then backpack). */
   getEmptyInventorySlot(): SlotObjectData | null {
-    const slots = [...MAIN_INVENTORY_SLOT_IDS, ...BACKPACK_SLOT_IDS];
+    const slots = this.getCarriedInventorySlotIds();
     return slots.map((slot) => this.getContainerSlot('inventory', slot)).find((slot) => slot?.objectType === -1) ?? null;
   }
 
   /** First carried-inventory slot holding the requested item type. */
   findInventoryItem(itemType: number): SlotObjectData | null {
+    const carried = new Set(this.getCarriedInventorySlotIds());
     return this.getContainerSlots('inventory').find(
-      (slot) => slot.slotId >= 4 && slot.objectType === itemType,
+      (slot) => carried.has(slot.slotId) && slot.objectType === itemType,
     ) ?? null;
   }
 
   /** Number of non-empty known slots in a logical container. */
   getContainerItemCount(container: ItemContainer): number {
-    return this.getContainerSlots(container).filter((slot) => slot.objectType !== -1).length;
+    const carried = container === 'inventory'
+      ? new Set([0, 1, 2, 3, ...this.getCarriedInventorySlotIds()])
+      : null;
+    return this.getContainerSlots(container).filter(
+      (slot) => slot.objectType !== -1 && (!carried || carried.has(slot.slotId)),
+    ).length;
   }
 
   /** Whether the carried inventory has at least one known empty slot. */
@@ -1696,9 +1731,27 @@ export class Client extends EventEmitter {
     return this.visibleObjects().find((object) => object.type === objectType)?.objectId ?? -1;
   }
 
+  /** Number of usable backpack slots derived from stat 130 with legacy fallback. */
+  getBackpackSlotCount(): 0 | 8 | 16 {
+    const tier = this.player?.backpackTier ?? 0;
+    if (tier >= 16) return 16;
+    if (tier > 0 || this.player?.hasBackpack) return 8;
+    return 0;
+  }
+
+  /** Main inventory followed by only the backpack slots this character owns. */
+  getCarriedInventorySlotIds(): number[] {
+    return [...MAIN_INVENTORY_SLOT_IDS, ...BACKPACK_SLOT_IDS.slice(0, this.getBackpackSlotCount())];
+  }
+
   /** Whether the player has a backpack (slots 12-19 usable). */
   hasBackpack(): boolean {
-    return this.player?.hasBackpack ?? false;
+    return this.getBackpackSlotCount() >= 8;
+  }
+
+  /** Whether the backpack extender is unlocked (slots 20-27 usable). */
+  hasBackpackExtender(): boolean {
+    return this.getBackpackSlotCount() >= 16;
   }
 
   /** Aims at a world position and sends a PLAYERSHOOT packet with the equipped weapon. */
@@ -2856,6 +2909,7 @@ export class Client extends EventEmitter {
   /** Acknowledges object updates and refreshes tracked entities and portals. */
   private handleUpdate(p: UpdatePacket): void {
     this.io.send(new UpdateAckPacket());
+    const now = this.time();
     if (!this.posKnown && p.pos) {
       this.pos = { x: p.pos.x, y: p.pos.y };
       this.posKnown = true;
@@ -2885,6 +2939,11 @@ export class Client extends EventEmitter {
           rawStats: this.rawStats(obj.status.stats),
         };
         this.objects.set(obj.status.objectId, tracked);
+        this.autoCombat?.snapObject(
+          tracked.objectId,
+          { x: tracked.x, y: tracked.y },
+          now,
+        );
         this.pathfinder.upsertObject(
           obj.status.objectId,
           obj.objectType,
@@ -2910,6 +2969,7 @@ export class Client extends EventEmitter {
     for (const id of p.drops) {
       const removed = this.objects.get(id);
       this.objects.delete(id);
+      this.autoCombat?.removeObject(id);
       this.pathfinder.removeObject(id);
       this.dodgeWorld?.removeObject(id);
       this.portalTracker.delete(id);
@@ -2934,6 +2994,22 @@ export class Client extends EventEmitter {
     this.lastTickTime = p.tickTime;
     this.tickCount++;
     if (this.updateStatuses(p)) return;
+    this.autoCombat?.observeWorldTick(
+      now,
+      p.tickTime,
+      p.statuses
+        .filter((status) => {
+          if (status.objectId === this.objectId) return false;
+          const tracked = this.objects.get(status.objectId);
+          const definition = tracked ? this.opts.combatData?.getObject(tracked.type) : undefined;
+          return !!definition?.isEnemy && !definition.invincible;
+        })
+        .map((status) => ({
+          objectId: status.objectId,
+          x: status.pos.x,
+          y: status.pos.y,
+        })),
+    );
     this.sendMove(p, now);
     this.updateCombat(now);
     this.tryUseVaultPortal();
@@ -2969,6 +3045,9 @@ export class Client extends EventEmitter {
       mapHeight: this.mapHeight,
       entities: this.objects.values(),
       tiles: this.tiles.values(),
+      resolveEntityPosition: this.autoCombat
+        ? (entity) => this.autoCombat!.currentObjectPosition(entity, now)
+        : undefined,
     });
     this.updateGroundDamage(now);
     this.autoCombat?.update(now, {
@@ -2979,6 +3058,7 @@ export class Client extends EventEmitter {
       playerPos: this.serverPos ?? this.pos,
       objects: this.objects.values(),
     }, {
+      previewWeaponAim: (weaponSlot) => this.commands.previewWeaponAim(weaponSlot),
       shootAt: (target, weaponSlot) => this.commands.shootAt(target, weaponSlot),
       useAbilityAt: (target) => this.commands.useAbilityAt(target),
     });
@@ -3506,6 +3586,7 @@ export class Client extends EventEmitter {
       if (tracked) {
         tracked.x = position.x;
         tracked.y = position.y;
+        this.autoCombat?.snapObject(tracked.objectId, position, this.time());
         this.pathfinder.upsertObject(tracked.objectId, tracked.type, tracked.x, tracked.y);
         this.dodgeWorld?.upsertObject(tracked.objectId, tracked.type, tracked.x, tracked.y);
       }

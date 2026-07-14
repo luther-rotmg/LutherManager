@@ -91,6 +91,21 @@ test('own projectile reports ENEMYHIT with kill false', () => {
   assert.equal(sent[0].mainId, 10);
 });
 
+test('own projectile collision uses the interpolated entity position', () => {
+  const sent: Packet[] = [];
+  const tracker = new CombatTracker(data(), (packet) => sent.push(packet));
+  tracker.trackOwnShoot(ownShot(), 0);
+
+  tracker.update(600, world({
+    entities: [{ objectId: 30, type: 100, x: 9, y: 1 }],
+    resolveEntityPosition: () => ({ x: 5, y: 1 }),
+  }));
+
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0] instanceof EnemyHitPacket);
+  assert.equal(sent[0].targetId, 30);
+});
+
 test('own projectile ignores permanently invincible enemy-tagged objects', () => {
   const sent: Packet[] = [];
   const tracker = new CombatTracker(data(), (packet) => sent.push(packet));

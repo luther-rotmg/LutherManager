@@ -1,5 +1,11 @@
+import { ENEMY_AVOID_RADIUS } from './dodge-collision-world';
+
 export interface PathfindingDataProvider {
-  getObject(type: number): { occupySquare: boolean } | undefined;
+  getObject(type: number): {
+    occupySquare: boolean;
+    isEnemy?: boolean;
+    invincible?: boolean;
+  } | undefined;
   tileIsBlockingWalk?(tileType: number): boolean;
   getTileDamage?(tileType: number): number | undefined;
 }
@@ -11,6 +17,12 @@ export interface PathPoint {
 
 export interface PathTarget extends PathPoint {
   threshold: number;
+}
+
+export interface CombatPathfindingRange {
+  minimumDistance: number;
+  preferredDistance: number;
+  maximumDistance: number;
 }
 
 export interface PathfindingStep {
@@ -33,6 +45,7 @@ interface PlannedPath {
   tileKeys: Set<string>;
   waypoints: PathPoint[];
   targetBlocked: boolean;
+  combat: boolean;
   revision: number;
 }
 
@@ -53,6 +66,9 @@ const DIAGONAL_COST = Math.SQRT2;
 const INTERMEDIATE_THRESHOLD = 0.25;
 const BLOCKED_TARGET_SEARCH_RADIUS = 4;
 const MAX_EXPANDED_NODES = 200_000;
+const COMBAT_TARGET_REPLAN_DISTANCE = 0.35;
+const ENEMY_POSITION_REPLAN_DISTANCE = 0.25;
+const DISTANCE_EPSILON = 1e-9;
 
 const DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
   [1, 0, 1],
@@ -76,7 +92,9 @@ export class ExplorativePathfinder {
   private readonly learnedBlocked = new Set<string>();
   private readonly objectTiles = new Map<number, string>();
   private readonly objectBlockCounts = new Map<string, number>();
+  private readonly combatEnemies = new Map<number, PathPoint>();
   private target: PathTarget | undefined;
+  private combatRange: CombatPathfindingRange | undefined;
   private plan: PlannedPath | undefined;
   private waypointIndex = 0;
   private revision = 0;
@@ -92,6 +110,7 @@ export class ExplorativePathfinder {
     this.learnedBlocked.clear();
     this.objectTiles.clear();
     this.objectBlockCounts.clear();
+    this.combatEnemies.clear();
     this.clearTarget();
     this.revision++;
   }
@@ -115,13 +134,38 @@ export class ExplorativePathfinder {
     if (!this.inBounds(tileX, tileY)) {
       return false;
     }
-    if (this.target
+    if (!this.combatRange && this.target
       && this.target.x === target.x
       && this.target.y === target.y
       && this.target.threshold === threshold) {
       return true;
     }
+    this.combatRange = undefined;
     this.target = { x: target.x, y: target.y, threshold };
+    this.plan = undefined;
+    this.waypointIndex = 0;
+    this.failedRevision = -1;
+    this.failedStartKey = '';
+    return true;
+  }
+
+  setCombatTarget(target: PathPoint, range: CombatPathfindingRange): boolean {
+    if (!Number.isFinite(target.x) || !Number.isFinite(target.y)
+      || !validCombatRange(range)) {
+      return false;
+    }
+    const tileX = Math.floor(target.x);
+    const tileY = Math.floor(target.y);
+    if (!this.inBounds(tileX, tileY)) return false;
+
+    if (this.target && this.combatRange
+      && sameCombatRange(this.combatRange, range)
+      && distance(this.target, target) < COMBAT_TARGET_REPLAN_DISTANCE) {
+      return true;
+    }
+
+    this.target = { x: target.x, y: target.y, threshold: INTERMEDIATE_THRESHOLD };
+    this.combatRange = { ...range };
     this.plan = undefined;
     this.waypointIndex = 0;
     this.failedRevision = -1;
@@ -131,6 +175,7 @@ export class ExplorativePathfinder {
 
   clearTarget(): void {
     this.target = undefined;
+    this.combatRange = undefined;
     this.plan = undefined;
     this.waypointIndex = 0;
     this.failedRevision = -1;
@@ -166,31 +211,56 @@ export class ExplorativePathfinder {
     const oldKey = this.objectTiles.get(objectId);
     const definition = this.data?.getObject(objectType);
     const newKey = definition?.occupySquare ? tileKey(Math.floor(x), Math.floor(y)) : undefined;
-    if (oldKey === newKey) return;
+    let changed = false;
 
-    if (oldKey !== undefined) {
+    if (oldKey !== newKey && oldKey !== undefined) {
       this.adjustObjectBlockCount(oldKey, -1);
       this.objectTiles.delete(objectId);
+      changed = true;
     }
-    if (newKey !== undefined) {
+    if (oldKey !== newKey && newKey !== undefined) {
       this.objectTiles.set(objectId, newKey);
       this.adjustObjectBlockCount(newKey, 1);
+      changed = true;
     }
-    this.invalidate();
+
+    const oldEnemy = this.combatEnemies.get(objectId);
+    const isCombatEnemy = !!definition?.isEnemy && !definition.invincible;
+    if (!isCombatEnemy) {
+      if (oldEnemy) {
+        this.combatEnemies.delete(objectId);
+        changed = changed || !!this.combatRange;
+      }
+    } else if (!oldEnemy || !this.combatRange
+      || distance(oldEnemy, { x, y }) >= ENEMY_POSITION_REPLAN_DISTANCE) {
+      this.combatEnemies.set(objectId, { x, y });
+      changed = changed || !!this.combatRange;
+    }
+
+    if (changed) this.invalidate();
   }
 
   removeObject(objectId: number): void {
     const key = this.objectTiles.get(objectId);
-    if (key === undefined) return;
-    this.objectTiles.delete(objectId);
-    this.adjustObjectBlockCount(key, -1);
-    this.invalidate();
+    let changed = false;
+    if (key !== undefined) {
+      this.objectTiles.delete(objectId);
+      this.adjustObjectBlockCount(key, -1);
+      changed = true;
+    }
+    if (this.combatEnemies.delete(objectId) && this.combatRange) changed = true;
+    if (changed) this.invalidate();
   }
 
   next(position: PathPoint): PathfindingStep {
     const target = this.target;
     if (!target) return {};
-    if (distance(position, target) <= target.threshold) {
+    if (this.combatRange && withinCombatRange(position, target, this.combatRange)) {
+      this.plan = undefined;
+      this.waypointIndex = 0;
+      return {};
+    }
+    if (!this.combatRange && distance(position, target) <= target.threshold) {
       return this.finishTarget();
     }
 
@@ -220,7 +290,7 @@ export class ExplorativePathfinder {
     while (this.waypointIndex < this.plan.waypoints.length) {
       const waypoint = this.plan.waypoints[this.waypointIndex]!;
       const final = this.waypointIndex === this.plan.waypoints.length - 1;
-      const threshold = final && !this.plan.targetBlocked
+      const threshold = final && !this.plan.targetBlocked && !this.plan.combat
         ? target.threshold
         : INTERMEDIATE_THRESHOLD;
       if (distance(position, waypoint) > threshold) {
@@ -229,6 +299,11 @@ export class ExplorativePathfinder {
       this.waypointIndex++;
     }
 
+    if (this.combatRange) {
+      this.plan = undefined;
+      this.waypointIndex = 0;
+      return { replanned };
+    }
     return this.finishTarget();
   }
 
@@ -254,30 +329,37 @@ export class ExplorativePathfinder {
 
   private buildPlan(position: PathPoint, target: PathTarget): PlannedPath | undefined {
     const start = { x: Math.floor(position.x), y: Math.floor(position.y) };
-    const goal = { x: Math.floor(target.x), y: Math.floor(target.y) };
-    const targetBlocked = this.isBlocked(goal.x, goal.y, start);
+    const combat = !!this.combatRange;
+    let targetBlocked = false;
     let rawTiles: GridPoint[] | undefined;
-    if (targetBlocked) {
-      for (let radius = 1; radius <= BLOCKED_TARGET_SEARCH_RADIUS && !rawTiles; radius++) {
-        const goals = this.nearbyGoals(goal, start, radius);
-        if (goals.some((candidate) => candidate.x === start.x && candidate.y === start.y)) {
-          rawTiles = [];
-          break;
-        }
-        if (goals.length > 0) rawTiles = this.aStar(start, goals);
-      }
-    } else if (goal.x === start.x && goal.y === start.y) {
-      rawTiles = [];
+    if (this.combatRange) {
+      const goals = this.combatGoals(target, start, this.combatRange);
+      if (goals.length > 0) rawTiles = this.aStar(start, goals);
     } else {
-      rawTiles = this.aStar(start, [goal]);
+      const goal = { x: Math.floor(target.x), y: Math.floor(target.y) };
+      targetBlocked = this.isBlocked(goal.x, goal.y, start);
+      if (targetBlocked) {
+        for (let radius = 1; radius <= BLOCKED_TARGET_SEARCH_RADIUS && !rawTiles; radius++) {
+          const goals = this.nearbyGoals(goal, start, radius);
+          if (goals.some((candidate) => candidate.x === start.x && candidate.y === start.y)) {
+            rawTiles = [];
+            break;
+          }
+          if (goals.length > 0) rawTiles = this.aStar(start, goals);
+        }
+      } else if (goal.x === start.x && goal.y === start.y) {
+        rawTiles = [];
+      } else {
+        rawTiles = this.aStar(start, [goal]);
+      }
     }
     if (!rawTiles) return undefined;
     let waypoints: PathPoint[];
     if (rawTiles.length === 0) {
-      waypoints = targetBlocked ? [] : [{ x: target.x, y: target.y }];
+      waypoints = targetBlocked || combat ? [] : [{ x: target.x, y: target.y }];
     } else {
       const candidates = compressPath(start, rawTiles);
-      if (!targetBlocked) {
+      if (!targetBlocked && !combat) {
         candidates[candidates.length - 1] = { x: target.x, y: target.y };
       }
       const vectorized = this.vectorizePath(position, start, candidates);
@@ -298,8 +380,35 @@ export class ExplorativePathfinder {
       ]),
       waypoints,
       targetBlocked,
+      combat,
       revision: this.revision,
     };
+  }
+
+  private combatGoals(
+    target: PathPoint,
+    start: GridPoint,
+    range: CombatPathfindingRange,
+  ): GridPoint[] {
+    const goals: Array<GridPoint & { preference: number }> = [];
+    const minX = Math.floor(target.x - range.maximumDistance - 0.5);
+    const maxX = Math.ceil(target.x + range.maximumDistance - 0.5);
+    const minY = Math.floor(target.y - range.maximumDistance - 0.5);
+    const maxY = Math.ceil(target.y + range.maximumDistance - 0.5);
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (x === start.x && y === start.y) continue;
+        const center = tileCenter({ x, y });
+        const targetDistance = distance(center, target);
+        if (targetDistance < range.minimumDistance || targetDistance > range.maximumDistance
+          || this.isPathBlocked(x, y, start)) {
+          continue;
+        }
+        goals.push({ x, y, preference: Math.abs(targetDistance - range.preferredDistance) });
+      }
+    }
+    goals.sort((a, b) => a.preference - b.preference);
+    return goals.map(({ x, y }) => ({ x, y }));
   }
 
   /** Pulls the grid route taut into the longest collision-free movement vectors. */
@@ -383,7 +492,9 @@ export class ExplorativePathfinder {
     let cellY = Math.floor(from.y);
     const endX = Math.floor(to.x);
     const endY = Math.floor(to.y);
-    if (this.isBlocked(cellX, cellY, start)) return undefined;
+    if (this.isPathBlocked(cellX, cellY, start) || !this.segmentAvoidsCombatEnemies(from, to)) {
+      return undefined;
+    }
 
     const travelTiles: GridPoint[] = [{ x: cellX, y: cellY }];
     const corridorTiles: GridPoint[] = [{ x: cellX, y: cellY }];
@@ -404,8 +515,8 @@ export class ExplorativePathfinder {
       if (Math.abs(tMaxX - tMaxY) <= 1e-10) {
         const sideX = { x: cellX + stepX, y: cellY };
         const sideY = { x: cellX, y: cellY + stepY };
-        if (this.isBlocked(sideX.x, sideX.y, start)
-          || this.isBlocked(sideY.x, sideY.y, start)) {
+        if (this.isPathBlocked(sideX.x, sideX.y, start)
+          || this.isPathBlocked(sideY.x, sideY.y, start)) {
           return undefined;
         }
         corridorTiles.push(sideX, sideY);
@@ -421,7 +532,7 @@ export class ExplorativePathfinder {
         tMaxY += tDeltaY;
       }
 
-      if (this.isBlocked(cellX, cellY, start)) return undefined;
+      if (this.isPathBlocked(cellX, cellY, start)) return undefined;
       const point = { x: cellX, y: cellY };
       travelTiles.push(point);
       corridorTiles.push(point);
@@ -464,10 +575,10 @@ export class ExplorativePathfinder {
       for (const [dx, dy, moveCost] of DIRECTIONS) {
         const x = current.x + dx;
         const y = current.y + dy;
-        if (this.isBlocked(x, y, start)) continue;
+        if (this.isPathBlocked(x, y, start)) continue;
         if (dx !== 0 && dy !== 0
-          && (this.isBlocked(current.x + dx, current.y, start)
-            || this.isBlocked(current.x, current.y + dy, start))) {
+          && (this.isPathBlocked(current.x + dx, current.y, start)
+            || this.isPathBlocked(current.x, current.y + dy, start))) {
           continue;
         }
         const key = tileKey(x, y);
@@ -491,6 +602,29 @@ export class ExplorativePathfinder {
     return this.blockedTerrain.has(key)
       || this.learnedBlocked.has(key)
       || (this.objectBlockCounts.get(key) ?? 0) > 0;
+  }
+
+  private isPathBlocked(x: number, y: number, start?: GridPoint): boolean {
+    if (this.isBlocked(x, y, start)) return true;
+    if (!this.combatRange || !this.target || start && x === start.x && y === start.y) return false;
+    const point = tileCenter({ x, y });
+    const startPoint = start ? tileCenter(start) : undefined;
+    if (violatesExclusion(point, this.target, this.combatRange.minimumDistance, startPoint)) {
+      return true;
+    }
+    for (const enemy of this.combatEnemies.values()) {
+      if (violatesExclusion(point, enemy, ENEMY_AVOID_RADIUS, startPoint)) return true;
+    }
+    return false;
+  }
+
+  private segmentAvoidsCombatEnemies(from: PathPoint, to: PathPoint): boolean {
+    if (!this.combatRange || !this.target) return true;
+    if (!segmentClearsCircle(from, to, this.target, this.combatRange.minimumDistance)) return false;
+    for (const enemy of this.combatEnemies.values()) {
+      if (!segmentClearsCircle(from, to, enemy, ENEMY_AVOID_RADIUS)) return false;
+    }
+    return true;
   }
 
   private inBounds(x: number, y: number): boolean {
@@ -613,6 +747,75 @@ function tileKey(x: number, y: number): string {
 
 function distance(a: PathPoint, b: PathPoint): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function validCombatRange(range: CombatPathfindingRange): boolean {
+  return Number.isFinite(range.minimumDistance)
+    && Number.isFinite(range.preferredDistance)
+    && Number.isFinite(range.maximumDistance)
+    && range.minimumDistance >= ENEMY_AVOID_RADIUS
+    && range.minimumDistance <= range.preferredDistance
+    && range.preferredDistance <= range.maximumDistance;
+}
+
+function sameCombatRange(a: CombatPathfindingRange, b: CombatPathfindingRange): boolean {
+  return a.minimumDistance === b.minimumDistance
+    && a.preferredDistance === b.preferredDistance
+    && a.maximumDistance === b.maximumDistance;
+}
+
+function withinCombatRange(
+  position: PathPoint,
+  target: PathPoint,
+  range: CombatPathfindingRange,
+): boolean {
+  const targetDistance = distance(position, target);
+  return targetDistance >= range.minimumDistance && targetDistance <= range.maximumDistance;
+}
+
+function segmentClearsCircle(
+  from: PathPoint,
+  to: PathPoint,
+  center: PathPoint,
+  radius: number,
+): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const fromX = from.x - center.x;
+  const fromY = from.y - center.y;
+  const fromDistanceSquared = fromX * fromX + fromY * fromY;
+  const radiusSquared = radius * radius;
+  if (lengthSquared <= DISTANCE_EPSILON) {
+    return fromDistanceSquared >= radiusSquared - DISTANCE_EPSILON;
+  }
+
+  const projection = -(fromX * dx + fromY * dy) / lengthSquared;
+  const toX = to.x - center.x;
+  const toY = to.y - center.y;
+  const toDistanceSquared = toX * toX + toY * toY;
+  if (fromDistanceSquared < radiusSquared - DISTANCE_EPSILON) {
+    return projection <= 0 && toDistanceSquared > fromDistanceSquared;
+  }
+
+  const closest = Math.max(0, Math.min(1, projection));
+  const closestX = fromX + dx * closest;
+  const closestY = fromY + dy * closest;
+  return closestX * closestX + closestY * closestY >= radiusSquared - DISTANCE_EPSILON;
+}
+
+function violatesExclusion(
+  point: PathPoint,
+  center: PathPoint,
+  radius: number,
+  start: PathPoint | undefined,
+): boolean {
+  const pointDistance = distance(point, center);
+  if (pointDistance >= radius - DISTANCE_EPSILON) return false;
+  if (!start) return true;
+  const startDistance = distance(start, center);
+  return startDistance >= radius - DISTANCE_EPSILON
+    || pointDistance <= startDistance + DISTANCE_EPSILON;
 }
 
 function add(values: Set<string>, value: string): boolean {

@@ -82,6 +82,60 @@ test('target leading expires velocity after an enemy stops moving', () => {
   assert.deepEqual(shots[2], { x: 3, y: 0 });
 });
 
+test('target leading uses the player projectile speed multiplier', () => {
+  const normal = movingTargetShot(projectile, 1);
+  const accelerated = movingTargetShot(projectile, 2);
+
+  assert.ok(normal.y > accelerated.y);
+  assert.ok(accelerated.y > 1);
+});
+
+test('target leading accounts for projectile acceleration', () => {
+  const constant = movingTargetShot({ ...projectile, speed: 100, lifetimeMs: 1_500 }, 1);
+  const accelerating = movingTargetShot({
+    ...projectile,
+    speed: 100,
+    lifetimeMs: 1_500,
+    acceleration: 200,
+    accelerationDelay: 0,
+  }, 1);
+
+  assert.ok(constant.y > accelerating.y);
+  assert.ok(accelerating.y > 1);
+});
+
+test('auto aim uses the next packet pattern and counter-aims its projectile offset', () => {
+  const provider = data();
+  const requestedProjectileIds: number[] = [];
+  provider.getProjectile = (type, id) => {
+    if (type !== 1_000) return undefined;
+    requestedProjectileIds.push(id);
+    return id === 0 || id === 2 ? projectile : undefined;
+  };
+  const controller = new AutoCombatController(provider);
+  const state = snapshot();
+  state.objects = [
+    { objectId: 1, type: 101, x: 5, y: 0, rawStats: { '0': 1_000, '1': 900 } },
+  ];
+  const shots: Array<{ x: number; y: number }> = [];
+  controller.enableAutoAim({ bossPriority: false, leadTargets: true });
+  controller.update(1_000, state, {
+    previewWeaponAim: () => ({
+      projectileId: 2,
+      bulletId: 6,
+      angleOffset: Math.PI / 6,
+      spawnDistance: 0.3,
+      spawnOffsetX: 0.2,
+    }),
+    shootAt: (target) => { shots.push(target); return true; },
+    useAbilityAt: () => false,
+  });
+
+  assert.deepEqual(requestedProjectileIds, [0, 2]);
+  const baseAngle = Math.atan2(shots[0]!.y, shots[0]!.x);
+  assert.ok(baseAngle < -0.5 && baseAngle > -0.56);
+});
+
 test('auto ability skips teleport abilities unless explicitly allowed', () => {
   const controller = new AutoCombatController(data(true));
   let uses = 0;
@@ -140,4 +194,28 @@ function snapshot(): AutoCombatSnapshot {
       { objectId: 3, type: 103, x: 7, y: 0, rawStats: { '0': 8_000, '1': 7_000 } },
     ],
   };
+}
+
+function movingTargetShot(
+  shotProjectile: CombatProjectileDefinition,
+  speedMultiplier: number,
+): { x: number; y: number } {
+  const provider = data();
+  provider.getProjectile = (type, id) => type === 1_000 && id === 0 ? shotProjectile : undefined;
+  const controller = new AutoCombatController(provider);
+  const enemy = { objectId: 1, type: 101, x: 5, y: 0, rawStats: { '0': 1_000, '1': 900 } };
+  const state = snapshot();
+  state.player!.projSpeedMult = speedMultiplier;
+  state.player!.projLifeMult = 1;
+  state.objects = [enemy];
+  const shots: Array<{ x: number; y: number }> = [];
+  const actions = {
+    shootAt: (target: { x: number; y: number }) => { shots.push(target); return true; },
+    useAbilityAt: () => false,
+  };
+  controller.enableAutoAim({ bossPriority: false, leadTargets: true });
+  controller.update(1_000, state, actions);
+  enemy.y = 1;
+  controller.update(1_200, state, actions);
+  return shots[1]!;
 }

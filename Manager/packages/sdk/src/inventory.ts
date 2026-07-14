@@ -187,7 +187,7 @@ export const inventory = {
   },
 
   /**
-   * Backpack tier for UI and branching: **1** = none · **2** = unlocked · **3** = unlocked + extender (pet bag).
+   * Backpack tier for UI and branching: **1** = none · **2** = unlocked · **3** = unlocked + extender.
    * Derived from wire stat **130** (BackpackTier: `0` / `8` / `16`+) with legacy stat **75** when tier is absent or `0`.
    */
   getBackpack(): InventoryBackpackTier {

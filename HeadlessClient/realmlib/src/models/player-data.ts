@@ -175,6 +175,10 @@ export interface PlayerData {
      * Whether or not this player has a backpack
      */
     hasBackpack: boolean;
+    /** Stat 130: 0 = none, 8 = backpack, 16 = backpack plus extender. */
+    backpackTier: number;
+    /** Legacy backpack-presence stat retained as a fallback when tier is zero. */
+    legacyHasBackpack: boolean;
     /**
      * The contents of the players inventory.
      * Items are represented by their item id, or `-1` if the slot is empty

@@ -90,6 +90,21 @@ function buildStats(p: PlayerData): Stats {
   };
 }
 
+function classStatCaps(deps: BridgeDeps, classType: number | undefined): Stats {
+  const caps = classType ? deps.gameData.getPlayerClassStatMaxes(classType) : undefined;
+  if (!caps) return { ...EMPTY_STATS };
+  return {
+    maxHP: caps.maxHitPoints,
+    maxMP: caps.maxMagicPoints,
+    attack: caps.attack,
+    defense: caps.defense,
+    speed: caps.speed,
+    dexterity: caps.dexterity,
+    vitality: caps.hpRegen,
+    wisdom: caps.mpRegen,
+  };
+}
+
 function buildBaseStats(p: PlayerData): Stats {
   return {
     maxHP: p.maxHealth - p.healthBonus - p.exaltedMaxHP,
@@ -206,6 +221,7 @@ export class BridgeSelf {
       if (!p) return { ...EMPTY_STATS };
       return buildBaseStats(p);
     };
+    Self.getStatCaps = () => classStatCaps(deps, playerData(deps)?.classType);
     Self.getStatsWithGear = () => {
       const p = playerData(deps);
       if (!p) return { ...EMPTY_STATS };

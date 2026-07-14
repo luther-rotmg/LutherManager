@@ -12,7 +12,7 @@ const NON_BLOCKING_ENEMY = 101;
 const data: PathfindingDataProvider = {
   getObject: (type) => type === BLOCKING_OBJECT
     ? { occupySquare: true }
-    : type === NON_BLOCKING_ENEMY ? { occupySquare: false } : undefined,
+    : type === NON_BLOCKING_ENEMY ? { occupySquare: false, isEnemy: true } : undefined,
   tileIsBlockingWalk: (type) => type === BLOCKING_GROUND,
   getTileDamage: (type) => type === DAMAGING_GROUND ? 100 : undefined,
 };
@@ -127,6 +127,72 @@ test('stall learning follows vector cells instead of the original A* staircase',
   assert.equal(hasTile(pathfinder, 1, 0), false);
 });
 
+test('combat pathfinding stops in the preferred weapon-range band', () => {
+  const pathfinder = createPathfinder(16, 10);
+  const target = { x: 10.5, y: 5.5 };
+  const range = { minimumDistance: 3.35, preferredDistance: 3.75, maximumDistance: 4.15 };
+  pathfinder.upsertObject(70, NON_BLOCKING_ENEMY, target.x, target.y);
+  assert.equal(pathfinder.setCombatTarget(target, range), true);
+
+  const step = pathfinder.next({ x: 0.5, y: 5.5 });
+  assert.equal(step.noPath, undefined);
+  assert.notDeepEqual(step.waypoint, target);
+  const endpoint = pathfinder.getRemainingPath().at(-1)!;
+  const endpointDistance = Math.hypot(endpoint.x - target.x, endpoint.y - target.y);
+  assert.ok(endpointDistance >= range.minimumDistance);
+  assert.ok(endpointDistance <= range.maximumDistance);
+
+  const holding = pathfinder.next(endpoint);
+  assert.equal(holding.waypoint, undefined);
+  assert.equal(holding.reached, undefined);
+  assert.equal(pathfinder.hasTarget(), true);
+});
+
+test('combat pathfinding retreats out of the exclusion radius', () => {
+  const pathfinder = createPathfinder(12, 8);
+  const target = { x: 6.5, y: 3.5 };
+  const range = { minimumDistance: 2.5, preferredDistance: 3, maximumDistance: 3.5 };
+  pathfinder.upsertObject(70, NON_BLOCKING_ENEMY, target.x, target.y);
+  pathfinder.setCombatTarget(target, range);
+
+  const start = { x: 5.5, y: 3.5 };
+  const step = pathfinder.next(start);
+  assert.ok(step.waypoint);
+  assert.ok(Math.hypot(step.waypoint.x - target.x, step.waypoint.y - target.y)
+    > Math.hypot(start.x - target.x, start.y - target.y));
+  let previousDistance = Math.hypot(start.x - target.x, start.y - target.y);
+  for (const tile of pathfinder.getPlannedTiles()) {
+    const tileDistance = Math.hypot(tile.x + 0.5 - target.x, tile.y + 0.5 - target.y);
+    assert.ok(tileDistance > previousDistance);
+    previousDistance = tileDistance;
+  }
+  assert.ok(previousDistance >= range.minimumDistance);
+});
+
+test('combat pathfinding routes and vectorizes around other nearby enemies', () => {
+  const pathfinder = createPathfinder(16, 8);
+  const target = { x: 11.5, y: 3.5 };
+  const blockingEnemy = { x: 5.5, y: 3.5 };
+  pathfinder.upsertObject(70, NON_BLOCKING_ENEMY, target.x, target.y);
+  pathfinder.upsertObject(71, NON_BLOCKING_ENEMY, blockingEnemy.x, blockingEnemy.y);
+  pathfinder.setCombatTarget(target, {
+    minimumDistance: 3.25,
+    preferredDistance: 3.75,
+    maximumDistance: 4.25,
+  });
+
+  pathfinder.next({ x: 0.5, y: 3.5 });
+  assert.ok(pathfinder.getPlannedTiles().some((tile) => tile.y !== 3));
+  assert.ok(pathfinder.getPlannedTiles().every((tile) =>
+    Math.hypot(tile.x + 0.5 - blockingEnemy.x, tile.y + 0.5 - blockingEnemy.y) >= 1.3));
+
+  let previous = { x: 0.5, y: 3.5 };
+  for (const waypoint of pathfinder.getRemainingPath()) {
+    assert.ok(segmentDistance(blockingEnemy, previous, waypoint) >= 1.3 - 1e-9);
+    previous = waypoint;
+  }
+});
+
 test('observed damaging ground is treated as blocked pathfinding terrain', () => {
   const pathfinder = createPathfinder(10, 5);
   pathfinder.observeTile(4, 2, DAMAGING_GROUND);
@@ -227,6 +293,12 @@ test('Client keeps direct walking separate from pathfinding walking', () => {
   assert.equal(state.movement.hasTarget(), false);
   assert.equal(state.pathfinder.hasTarget(), true);
 
+  assert.equal(client.combatPathfindingWalkTo(
+    { x: 8.5, y: 2.5 },
+    { minimumDistance: 2.5, preferredDistance: 3, maximumDistance: 3.5 },
+  ), true);
+  assert.equal(state.pathfinder.hasTarget(), true);
+
   client.stopMoving();
   assert.equal(client.isMoving(), false);
 });
@@ -300,4 +372,14 @@ function createPathfinder(width: number, height: number): ExplorativePathfinder 
 
 function hasTile(pathfinder: ExplorativePathfinder, x: number, y: number): boolean {
   return pathfinder.getPlannedTiles().some((tile) => tile.x === x && tile.y === y);
+}
+
+function segmentDistance(point: { x: number; y: number }, from: { x: number; y: number }, to: { x: number; y: number }): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(point.x - from.x, point.y - from.y);
+  const projection = Math.max(0, Math.min(1,
+    ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared));
+  return Math.hypot(point.x - (from.x + dx * projection), point.y - (from.y + dy * projection));
 }

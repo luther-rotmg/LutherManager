@@ -17,7 +17,8 @@ export interface AutoDodgeAoeThreat {
 }
 
 export interface AutoDodgeEnvironment {
-  canOccupy(x: number, y: number, safeWalk: boolean): boolean;
+  canOccupy(x: number, y: number, safeWalk: boolean, avoidEnemies?: boolean): boolean;
+  enemyClearance?(x: number, y: number): number;
   isProjectileSegmentOpen(
     fromX: number,
     fromY: number,
@@ -56,17 +57,17 @@ const DIRECTION_COUNT = 32;
 const INTENT_CANDIDATE = DIRECTION_COUNT + 1;
 const CANDIDATE_COUNT = DIRECTION_COUNT + 2;
 const SAMPLE_MS = 30;
-const HORIZON_MS = 450;
+const HORIZON_MS = 600;
 const HIT_HALF_SIZE = 0.5;
 const RELEVANCE_CLEARANCE = 1;
 const INTENT_SAFE_CLEARANCE = 0.08;
 const EMERGENCY_INTENT_BAND = 0.14;
 const UNAVOIDABLE_IMPACT_BAND_MS = 60;
 const UNAVOIDABLE_CLEARANCE_BAND = 0.05;
-const GENTLE_OVERRIDE_MS = 250;
 const EMERGENCY_OVERRIDE_MS = 100;
 const HYSTERESIS_MS = 100;
 const HYSTERESIS_SCORE_GAIN = 0.25;
+const CORRIDOR_NEIGHBORS = 3;
 const MAX_TIME = 0x7fffffff;
 
 /** Port of ProdMafia's short-horizon predictive auto-dodge controller. */
@@ -78,6 +79,7 @@ export class PredictiveAutoDodgeController {
   private readonly candidateScore = new Float64Array(CANDIDATE_COUNT);
   private readonly candidateImpactMs = new Int32Array(CANDIDATE_COUNT);
   private readonly candidateBlockMs = new Int32Array(CANDIDATE_COUNT);
+  private readonly candidateEnemyClearance = new Float64Array(CANDIDATE_COUNT);
   private readonly candidateValid = new Uint8Array(CANDIDATE_COUNT);
   private readonly relevantProjectiles: CombatProjectileSnapshot[] = [];
   private readonly projectilePosition = { x: 0, y: 0 };
@@ -220,6 +222,9 @@ export class PredictiveAutoDodgeController {
         false, 0, 1, 0, MAX_TIME, 'no_threat');
     }
 
+    this.candidateEnemyClearance[0] = snapshot.environment.enemyClearance?.(
+      snapshot.position.x, snapshot.position.y,
+    ) ?? Infinity;
     this.validateCandidatePaths(snapshot);
     let earliestImpactMs = MAX_TIME;
     let threatCount = 0;
@@ -329,13 +334,31 @@ export class PredictiveAutoDodgeController {
     if (threatCount > 0) {
       let bestScore = this.candidateScore[0];
       let bestImpact = this.candidateImpactMs[0];
-      for (let candidate = 1; candidate < CANDIDATE_COUNT; candidate++) {
-        if (this.candidateValid[candidate]
-          && (this.candidateImpactMs[candidate] > bestImpact
-            || this.candidateImpactMs[candidate] === bestImpact
-              && this.candidateScore[candidate] > bestScore)) {
+      let bestCorridor = this.corridorSafety(0);
+      let bestEnemyClearance = this.candidateEnemyClearance[0];
+      const intentX = this.candidateX[INTENT_CANDIDATE];
+      const intentY = this.candidateY[INTENT_CANDIDATE];
+      let bestIntentDot = this.candidateX[0] * intentX + this.candidateY[0] * intentY;
+      for (let candidate = 1; candidate <= DIRECTION_COUNT; candidate++) {
+        if (!this.candidateValid[candidate]) continue;
+        const impact = this.candidateImpactMs[candidate];
+        const corridor = this.corridorSafety(candidate);
+        const score = this.candidateScore[candidate];
+        const enemyClearance = this.candidateEnemyClearance[candidate];
+        const intentDot = this.candidateX[candidate] * intentX
+          + this.candidateY[candidate] * intentY;
+        if (impact > bestImpact
+          || impact === bestImpact && corridor > bestCorridor
+          || impact === bestImpact && corridor === bestCorridor && score > bestScore
+          || impact === bestImpact && corridor === bestCorridor && score === bestScore
+            && enemyClearance > bestEnemyClearance
+          || impact === bestImpact && corridor === bestCorridor && score === bestScore
+            && enemyClearance === bestEnemyClearance && intentDot > bestIntentDot) {
           bestScore = this.candidateScore[candidate];
           bestImpact = this.candidateImpactMs[candidate];
+          bestCorridor = corridor;
+          bestEnemyClearance = enemyClearance;
+          bestIntentDot = intentDot;
           proposedCandidate = candidate;
         }
       }
@@ -358,10 +381,10 @@ export class PredictiveAutoDodgeController {
         threatCount === 0 ? 'no_threat' : 'movement_locked');
     }
     const intendedScore = this.candidateScore[INTENT_CANDIDATE];
-    if (intendedScore >= INTENT_SAFE_CLEARANCE || earliestImpactMs > GENTLE_OVERRIDE_MS) {
+    if (intendedScore >= INTENT_SAFE_CLEARANCE) {
       return this.finish(snapshot, snapshot.intentVelocity.x, snapshot.intentVelocity.y,
         false, this.selectedCandidate, 1, threatCount, earliestImpactMs,
-        intendedScore >= INTENT_SAFE_CLEARANCE ? 'preserve_safe_intent' : 'impact_not_imminent');
+        'preserve_safe_intent');
     }
 
     let choice = proposedCandidate;
@@ -458,7 +481,12 @@ export class PredictiveAutoDodgeController {
           + this.candidateX[candidate] * snapshot.moveSpeed * movementOffset;
         const y = snapshot.position.y
           + this.candidateY[candidate] * snapshot.moveSpeed * movementOffset;
-        if (snapshot.environment.canOccupy(x, y, this.safeWalk)) continue;
+        const enemyClearance = snapshot.environment.enemyClearance?.(x, y) ?? Infinity;
+        this.candidateEnemyClearance[candidate] = Math.min(
+          this.candidateEnemyClearance[candidate], enemyClearance,
+        );
+        // Enemy proximity is scored separately so it can never veto the only safe escape.
+        if (snapshot.environment.canOccupy(x, y, this.safeWalk, false)) continue;
         this.candidateBlockMs[candidate] = offset;
         this.candidateImpactMs[candidate] = offset;
         if (offset === 0) this.candidateValid[candidate] = 0;
@@ -503,6 +531,7 @@ export class PredictiveAutoDodgeController {
         snapshot.position.x + velocityX * movementOffset,
         snapshot.position.y + velocityY * movementOffset,
         this.safeWalk,
+        false,
       )) return false;
     }
     for (const aoe of aoes) {
@@ -565,8 +594,25 @@ export class PredictiveAutoDodgeController {
       this.candidateScore[index] = Infinity;
       this.candidateImpactMs[index] = MAX_TIME;
       this.candidateBlockMs[index] = MAX_TIME;
+      this.candidateEnemyClearance[index] = Infinity;
       this.candidateValid[index] = 1;
     }
+  }
+
+  /** Favors broad safe lanes over isolated directions that are safe by only a few degrees. */
+  private corridorSafety(candidate: number): number {
+    const cappedImpact = (index: number): number => this.candidateValid[index]
+      ? Math.min(this.candidateImpactMs[index], HORIZON_MS + SAMPLE_MS)
+      : 0;
+    if (candidate === 0) return cappedImpact(0) * (CORRIDOR_NEIGHBORS * 2 + 1);
+
+    let score = cappedImpact(candidate);
+    const direction = candidate - 1;
+    for (let gap = 1; gap <= CORRIDOR_NEIGHBORS; gap++) {
+      score += cappedImpact(((direction + gap) % DIRECTION_COUNT) + 1);
+      score += cappedImpact(((direction - gap + DIRECTION_COUNT) % DIRECTION_COUNT) + 1);
+    }
+    return score;
   }
 
   private finish(

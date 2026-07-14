@@ -42,6 +42,18 @@ export interface WeaponSubattackInfo {
   patterns: readonly WeaponFirePatternInfo[];
 }
 
+/** Exact geometry of one projectile in the next weapon volley. */
+export interface WeaponAimPreview {
+  projectileId: number;
+  bulletId: number;
+  /** Projectile angle relative to the base aim angle, in radians. */
+  angleOffset: number;
+  /** Forward offset of PLAYERSHOOT.startingPos from the player. */
+  spawnDistance: number;
+  /** Leftward offset of PLAYERSHOOT.startingPos from the player. */
+  spawnOffsetX: number;
+}
+
 export interface AbilityUseInfo {
   usable: boolean;
   mpCost: number;
@@ -55,6 +67,7 @@ interface CommandState {
   pos: { x: number; y: number };
   objectId: number;
   player: PlayerData | undefined;
+  peekBulletId(): number;
   nextBulletId(): number;
   /** Firing data for a weapon item type (defaults when game data is absent). */
   weapon(weaponType: number): WeaponFireInfo;
@@ -169,6 +182,68 @@ export class CommandSender {
       { objectId: state.objectId, slotId: fromSlotId, itemType },
       { objectId: state.objectId, slotId: consumableSlotId, itemType: -1 },
     );
+  }
+
+  /**
+   * Describes the projectile nearest the base aim line in the next accepted
+   * volley. This mirrors shootAt's pattern/counter logic without advancing it.
+   */
+  previewWeaponAim(weaponSlot = 0): WeaponAimPreview | null {
+    const state = this.state();
+    if (!state.player || state.objectId === -1) return null;
+    const weaponType = state.player.inventory?.[weaponSlot] ?? -1;
+    if (weaponType === -1) return null;
+    const info = state.weapon(weaponType);
+    const subattacks = normalizeSubattacks(info);
+    const fastestRate = subattacks.reduce(
+      (fastest, subattack) => Math.max(fastest, validRate(subattack.rateOfFire)),
+      validRate(info.rateOfFire),
+    );
+    if (state.time < this.attackStart) {
+      this.attackStart = -Infinity;
+      this.subattackStates.clear();
+    }
+
+    const nextVolleyAt = Math.max(
+      state.time,
+      this.attackStart + this.attackPeriod(state.player, fastestRate),
+    );
+    const fireStates = this.fireStates(weaponType, subattacks.length);
+    let bulletId = normalizeBulletId(state.peekBulletId());
+    let best: WeaponAimPreview | null = null;
+    let bestOffset = Infinity;
+
+    for (let attackIndex = 0; attackIndex < subattacks.length; attackIndex++) {
+      const subattack = subattacks[attackIndex]!;
+      const fireState = fireStates[attackIndex]!;
+      const lastFire = state.time < fireState.lastFire ? -Infinity : fireState.lastFire;
+      const subattackPeriod = Math.max(0, this.attackPeriod(state.player, subattack.rateOfFire) - 2);
+      if (nextVolleyAt < lastFire + subattackPeriod) continue;
+
+      const pattern = subattack.patterns[fireState.patternIndex % subattack.patterns.length]!;
+      const count = positiveInteger(pattern.numProjectiles, 1);
+      const arcGap = finiteNumber(pattern.arcGap, 11.25) * Math.PI / 180;
+      const defaultAngle = finiteNumber(pattern.defaultAngle, 0) * Math.PI / 180;
+      const angleIncrease = finiteNumber(subattack.defaultAngleIncrease, 0) * Math.PI / 180
+        * fireState.incrCounter;
+      const startOffset = -arcGap * (count - 1) / 2 + defaultAngle + angleIncrease;
+      for (let projectileIndex = 0; projectileIndex < count; projectileIndex++) {
+        const angleOffset = startOffset + projectileIndex * arcGap;
+        const absoluteOffset = Math.abs(boundAngle(angleOffset));
+        if (absoluteOffset < bestOffset) {
+          bestOffset = absoluteOffset;
+          best = {
+            projectileId: pattern.projectileId,
+            bulletId,
+            angleOffset,
+            spawnDistance: SHOT_SPAWN_OFFSET + finiteNumber(pattern.posOffsetY, 0),
+            spawnOffsetX: finiteNumber(pattern.posOffsetX, 0),
+          };
+        }
+        bulletId = (bulletId + 1) % 128;
+      }
+    }
+    return best;
   }
 
   shootAt(target: { x: number; y: number }, weaponSlot = 0): boolean {
@@ -373,4 +448,13 @@ function positiveInteger(value: number, fallback: number): number {
 
 function validRate(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+function normalizeBulletId(value: number): number {
+  const integer = Number.isFinite(value) ? Math.trunc(value) : 0;
+  return ((integer % 128) + 128) % 128;
+}
+
+function boundAngle(value: number): number {
+  return Math.atan2(Math.sin(value), Math.cos(value));
 }

@@ -2729,9 +2729,9 @@ export class DevServer {
         mapName: session.mapName,
         server: session.serverName,
         hasBackpack: player.hasBackpack,
-        backpackTier: client?.hasPetBag() ? 16 : player.hasBackpack ? 8 : 0,
+        backpackTier: player.backpackTier >= 16 ? 16 : player.hasBackpack ? 8 : 0,
         inventory: carried.slice(0, 12),
-        backpack: carried.slice(12, 20),
+        backpack: carried.slice(12, 28),
         conditionEffects: [],
       } : {
         name: session.alias,
@@ -3206,8 +3206,8 @@ export class DevServer {
         guildRank: player.guildRank,
         skin: player.texture,
         hasBackpack: player.hasBackpack,
-        backpackTier: player.hasBackpack ? 8 : 0,
-        hasBackpackExtender: false,
+        backpackTier: player.backpackTier >= 16 ? 16 : player.hasBackpack ? 8 : 0,
+        hasBackpackExtender: player.backpackTier >= 16,
       },
       position: {
         x: object.x,

@@ -72,6 +72,11 @@ export class Self {
         throw new Error('Must be run inside Hive client');
     }
 
+    /** Natural 8/8 stat caps for the active class, before gear and exaltation bonuses. */
+    static getStatCaps(): Stats {
+        throw new Error('Must be run inside Hive client');
+    }
+
     /** Stats after gear bonuses but before exaltation bonuses. */
     static getStatsWithGear(): Stats {
         throw new Error('Must be run inside Hive client');

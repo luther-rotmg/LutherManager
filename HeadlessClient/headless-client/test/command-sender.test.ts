@@ -11,6 +11,7 @@ test('CommandSender builds outgoing portal, teleport, and chat packets', () => {
     pos: { x: 10, y: 20 },
     objectId: 99,
     player: undefined,
+    peekBulletId: () => 1,
     nextBulletId: () => 1,
     weapon: () => ({ rateOfFire: 1, numProjectiles: 1, arcGap: 11.25 }),
     ability: () => ({ usable: true, mpCost: 0, cooldownMs: 550, activateEffects: [] }),
@@ -41,6 +42,7 @@ test('CommandSender validates player state before inventory swaps and shooting',
     pos: { x: 1, y: 2 },
     objectId: 77,
     player: player([100, -1, -1, -1, 200, -1]),
+    peekBulletId: () => bullet,
     nextBulletId: () => bullet++,
     weapon: () => ({ rateOfFire: 1, numProjectiles: 1, arcGap: 11.25 }),
     ability: () => ({ usable: true, mpCost: 0, cooldownMs: 550, activateEffects: [] }),
@@ -74,6 +76,7 @@ test('CommandSender sends real subattack metadata and advances DefaultAngleIncr 
     pos: { x: 1, y: 1 },
     objectId: 77,
     player: player([100]),
+    peekBulletId: () => bullet,
     nextBulletId: () => bullet++,
     weapon: () => ({
       rateOfFire: 1,
@@ -91,8 +94,8 @@ test('CommandSender sends real subattack metadata and advances DefaultAngleIncr 
           numProjectiles: 1,
           arcGap: 11.25,
           defaultAngle: 5,
-          posOffsetX: 0,
-          posOffsetY: 0,
+          posOffsetX: 0.25,
+          posOffsetY: 0.4,
         }],
       }],
     }),
@@ -100,12 +103,23 @@ test('CommandSender sends real subattack metadata and advances DefaultAngleIncr 
     trackShot: () => undefined,
   }));
 
+  const firstPreview = commands.previewWeaponAim();
+  assert.equal(firstPreview?.projectileId, 2);
+  assert.equal(firstPreview?.bulletId, 0);
+  assert.ok(Math.abs(firstPreview!.angleOffset - 5 * Math.PI / 180) < 1e-6);
+  assert.equal(firstPreview?.spawnDistance, 0.7);
+  assert.equal(firstPreview?.spawnOffsetX, 0.25);
   assert.equal(commands.shootAt({ x: 2, y: 1 }), true);
   time += 700;
+  const secondPreview = commands.previewWeaponAim();
+  assert.equal(secondPreview?.bulletId, 1);
+  assert.ok(Math.abs(secondPreview!.angleOffset - 15 * Math.PI / 180) < 1e-6);
   assert.equal(commands.shootAt({ x: 2, y: 1 }), true);
 
   assert.equal(sent[0]?.attackIndex, 0);
   assert.equal(sent[0]?.patternIndex, -1);
+  assert.ok(Math.abs(sent[0]!.startingPos.x - 1.7) < 1e-6);
+  assert.ok(Math.abs(sent[0]!.startingPos.y - 1.25) < 1e-6);
   assert.ok(Math.abs(sent[0]!.angle - 5 * Math.PI / 180) < 1e-6);
   assert.ok(Math.abs(sent[1]!.angle - 15 * Math.PI / 180) < 1e-6);
 });
@@ -120,6 +134,7 @@ test('CommandSender resets firing cadence on map changes', () => {
     pos: { x: 1, y: 1 },
     objectId: 77,
     player: player([100]),
+    peekBulletId: () => sent.length,
     nextBulletId: () => sent.length,
     weapon: () => ({ rateOfFire: 1, numProjectiles: 1, arcGap: 11.25 }),
     ability: () => ({ usable: true, mpCost: 0, cooldownMs: 550, activateEffects: [] }),
@@ -133,6 +148,34 @@ test('CommandSender resets firing cadence on map changes', () => {
   assert.equal(sent.length, 2);
 });
 
+test('CommandSender previews the center fan projectile without consuming its bullet id', () => {
+  const sent: PlayerShootPacket[] = [];
+  let bullet = 7;
+  const commands = new CommandSender(() => ({
+    io: { send: (packet: Packet) => {
+      if (packet instanceof PlayerShootPacket) sent.push(packet);
+    } },
+    time: 1_000,
+    pos: { x: 1, y: 1 },
+    objectId: 77,
+    player: player([100]),
+    peekBulletId: () => bullet,
+    nextBulletId: () => bullet++,
+    weapon: () => ({ rateOfFire: 1, numProjectiles: 3, arcGap: 10 }),
+    ability: () => ({ usable: true, mpCost: 0, cooldownMs: 550, activateEffects: [] }),
+    trackShot: () => undefined,
+  }));
+
+  const preview = commands.previewWeaponAim();
+  assert.equal(preview?.bulletId, 8);
+  assert.equal(preview?.angleOffset, 0);
+  assert.equal(bullet, 7);
+
+  assert.equal(commands.shootAt({ x: 2, y: 1 }), true);
+  assert.deepEqual(sent.map((shot) => shot.bulletId), [7, 8, 9]);
+  assert.equal(sent[1]?.angle, 0);
+});
+
 test('CommandSender does not shoot while petrified', () => {
   const sent: Packet[] = [];
   const petrified = player([100]);
@@ -143,6 +186,7 @@ test('CommandSender does not shoot while petrified', () => {
     pos: { x: 1, y: 1 },
     objectId: 77,
     player: petrified,
+    peekBulletId: () => 0,
     nextBulletId: () => 0,
     weapon: () => ({ rateOfFire: 1, numProjectiles: 1, arcGap: 11.25 }),
     ability: () => ({ usable: true, mpCost: 0, cooldownMs: 550, activateEffects: [] }),
@@ -162,6 +206,7 @@ test('CommandSender builds USEITEM for the equipped ability and respects cooldow
     pos: { x: 1, y: 2 },
     objectId: 77,
     player: player([100, 600]),
+    peekBulletId: () => 0,
     nextBulletId: () => 0,
     weapon: () => ({ rateOfFire: 1, numProjectiles: 1, arcGap: 11.25 }),
     ability: () => ({ usable: true, mpCost: 50, cooldownMs: 550, activateEffects: ['Shoot'] }),

@@ -72,6 +72,7 @@ export type {
 } from './predictive-auto-dodge';
 export { ExplorativePathfinder } from './explorative-pathfinder';
 export type {
+  CombatPathfindingRange,
   PathfindingDataProvider,
   PathfindingStep,
   PathPoint,
