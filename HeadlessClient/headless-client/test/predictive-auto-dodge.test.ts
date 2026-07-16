@@ -654,3 +654,75 @@ function routeTurnCount(
   }
   return turns;
 }
+
+test('predictive auto-dodge prefers the direction with the longer open lane', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  // Emergency AoE (landing < EMERGENCY_OVERRIDE_MS=100) with intent=(0,0) — in
+  // this control flow applyChoice keeps proposedCandidate as-is instead of
+  // re-selecting on intent-dot, so the ranking loop's openLane tiebreaker
+  // reaches the output.
+  //
+  // Environment: narrow horizontal corridor at y ~= 5. Off-axis directions
+  // y-drift into the wall inside HORIZON_MS and lose the impact tiebreaker;
+  // only pure east and pure west stay open through the horizon. East is walled
+  // at x=13 (openLane ~= 840ms); west is unbounded (openLane = LANE_HORIZON_MS
+  // = 1200ms). Impact and corridor tie for east and west; openLane breaks the
+  // tie toward west.
+  const state = controller.evaluate({
+    time: 0,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.0096,
+    intentVelocity: { x: 0, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [],
+    aoes: [{ x: 5, y: 5, radius: 0.3, landingTime: 50 }],
+    environment: {
+      canOccupy: (x, y) => Math.abs(y - 5) < 0.5 && x <= 13,
+      isProjectileSegmentOpen: () => true,
+    },
+  });
+  assert.equal(state.overrideActive, true);
+  assert.ok(state.velocity.x < 0,
+    `expected westward direction (longer lane), got velocity=(${state.velocity.x}, ${state.velocity.y})`);
+});
+
+test('does not veto the only short-lane escape when no alternative exists', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  const state = controller.evaluate({
+    time: 0,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.0096,
+    intentVelocity: { x: 0, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [],
+    aoes: [{ x: 5, y: 5, radius: 1.2, landingTime: 200 }],
+    environment: {
+      canOccupy: (x, y) => x >= 3 && x <= 5 && Math.abs(y - 5) < 1e-8,
+      isProjectileSegmentOpen: () => true,
+    },
+  });
+  assert.equal(state.overrideActive, true);
+  assert.ok(state.velocity.x < 0,
+    `expected west (only available), got velocity.x=${state.velocity.x}`);
+});
+
+test('long-lane preference does not perturb selection in open environments', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  const state = controller.evaluate({
+    time: 300,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.0096,
+    intentVelocity: { x: 0.0096, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [hostileProjectile()],
+    aoes: [],
+    environment: openEnvironment,
+  });
+  assert.equal(state.decision, 'preserve_safe_intent');
+});
