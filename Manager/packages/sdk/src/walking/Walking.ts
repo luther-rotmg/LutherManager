@@ -76,8 +76,14 @@ export interface CombatPathfindingOptions {
     weaponRange?: number;
     /** Preferred fraction of weapon range. Defaults to 0.75. */
     preferredRangeRatio?: number;
-    /** Hard enemy exclusion floor. Defaults to 1 tile. */
+    /** @deprecated Use `hardMinimumRange`. Retained for existing scripts. */
     minimumEnemyDistance?: number;
+    /** Hard selected-enemy exclusion floor. Clamped to the canonical 1.3 tiles. */
+    hardMinimumRange?: number;
+    /** Lower edge of the preferred firing band. */
+    preferredMinimumRange?: number;
+    /** Upper edge of the preferred firing band. Clamped inside effective weapon range. */
+    preferredMaximumRange?: number;
     /** Distance reserved inside the weapon's maximum range. Defaults to max(0.5, range * 0.1). */
     shotRangeMargin?: number;
     /** Half-width of the acceptable firing band around the preferred distance. */

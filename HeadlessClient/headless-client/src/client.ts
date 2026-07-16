@@ -635,8 +635,24 @@ export class Client extends EventEmitter {
   navigateToCombatTarget(
     target: { x: number; y: number },
     range: CombatPathfindingRange,
-    options: AutoDodgeOptions & { targetId?: number } = {},
+    options: AutoDodgeOptions & {
+      targetId?: number;
+      hardMinimumRange?: number;
+      preferredMinimumRange?: number;
+      preferredMaximumRange?: number;
+    } = {},
   ): boolean {
+    const hardMinimumRange = Math.max(
+      ENEMY_AVOID_RADIUS,
+      options.hardMinimumRange ?? ENEMY_AVOID_RADIUS,
+    );
+    const preferredMinimumRange = options.preferredMinimumRange ?? range.minimumDistance;
+    const preferredMaximumRange = options.preferredMaximumRange ?? range.maximumDistance;
+    if (!Number.isFinite(hardMinimumRange)
+      || !Number.isFinite(preferredMinimumRange)
+      || !Number.isFinite(preferredMaximumRange)
+      || hardMinimumRange > preferredMinimumRange
+      || preferredMinimumRange > preferredMaximumRange) return false;
     if (!this.autoDodge
       || !this.combatPathfindingWalkTo(target, range, options.targetId ?? 0)) return false;
     this.setDodgeMovementIntent({
@@ -644,9 +660,9 @@ export class Client extends EventEmitter {
       targetId: options.targetId ?? 0,
       targetX: target.x,
       targetY: target.y,
-      hardMinimumRange: ENEMY_AVOID_RADIUS,
-      preferredMinimumRange: range.minimumDistance,
-      preferredMaximumRange: range.maximumDistance,
+      hardMinimumRange,
+      preferredMinimumRange,
+      preferredMaximumRange,
     });
     this.autoDodge.setEnabled(true, { ...options, safeWalk: options.safeWalk ?? true });
     return true;
@@ -3238,6 +3254,14 @@ export class Client extends EventEmitter {
 
   /** Advances navigation intent, with predictive dodge optionally replacing only its velocity. */
   private updateTarget(dt: number, integrateFromLocal = false, now = this.time()): void {
+    const selectedCombatTargetId = this.dodgeMovementIntent?.mode === 'combat_range'
+      ? this.dodgeMovementIntent.targetId
+      : 0;
+    if (selectedCombatTargetId > 0 && !this.objects.has(selectedCombatTargetId)) {
+      this.pathfinder.clearTarget();
+      this.movement.clear();
+      this.dodgeMovementIntent = null;
+    }
     const usingPathfinding = this.pathfinder.hasTarget();
     if (usingPathfinding) {
       const authoritativePos = this.serverPos ?? this.pos;

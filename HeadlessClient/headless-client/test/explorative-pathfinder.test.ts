@@ -437,6 +437,48 @@ test('Client combined navigation enables dodge and never gives it a goal farther
   });
 });
 
+test('Client clears a selected combat intent when its target disappears', () => {
+  const client = new Client({
+    alias: 'missing-combat-target-test',
+    accessToken: '',
+    clientToken: '',
+    charId: 1,
+    needsNewChar: false,
+    host: 'localhost',
+    combatData: {
+      getObject: () => undefined,
+      getProjectile: () => undefined,
+    },
+  });
+  const state = client as unknown as {
+    pos: { x: number; y: number };
+    serverPos: { x: number; y: number };
+    player: { spd: number; spdBoost: number; condition: number; condition2: number };
+    pathfinder: ExplorativePathfinder;
+    updateTarget(dt: number, integrateFromLocal?: boolean, now?: number): void;
+  };
+  Object.assign(state, {
+    pos: { x: 0.5, y: 0.5 },
+    serverPos: { x: 0.5, y: 0.5 },
+    player: { spd: 75, spdBoost: 0, condition: 0, condition2: 0 },
+  });
+  state.pathfinder.setMapBounds(30, 3);
+
+  assert.equal(client.navigateToCombatTarget(
+    { x: 20.5, y: 0.5 },
+    { minimumDistance: 2.5, preferredDistance: 3, maximumDistance: 3.5 },
+    { targetId: 42 },
+  ), true);
+  state.updateTarget(16, false, 1000);
+
+  assert.equal(client.getDodgeMovementIntent(), null);
+  assert.equal(client.isMoving(), false);
+  const dodge = client.getAutoDodgeState();
+  assert.ok(Number.isFinite(dodge?.velocity.x));
+  assert.ok(Number.isFinite(dodge?.velocity.y));
+  assert.deepEqual(dodge?.velocity, { x: 0, y: 0 });
+});
+
 test('Client pathfinding refresh preserves the active waypoint stall state', () => {
   const client = new Client({
     alias: 'pathfinding-refresh-test',

@@ -528,6 +528,68 @@ test('frequent harmless projectile updates do not thrash the active timed trajec
   assert.equal(state.lastReplanAt, 0);
 });
 
+test('repeated combat target refreshes search without rotating the committed trajectory', () => {
+  const controller = new PredictiveAutoDodgeController({ maxStatesPerLayer: 64 });
+  controller.setEnabled(true);
+  let position = { x: 5, y: 5 };
+  let state = controller.evaluate({
+    time: 0,
+    playerId: 10,
+    position,
+    goal: { x: 9, y: 5 },
+    movementIntent: {
+      mode: 'combat_range',
+      targetId: 42,
+      targetX: 12,
+      targetY: 5,
+      hardMinimumRange: 1.3,
+      preferredMinimumRange: 2,
+      preferredMaximumRange: 3,
+    },
+    routeRevision: 0,
+    moveSpeed: 0.004,
+    intentVelocity: { x: 0.004, y: 0 },
+    movementLeadMs: 0,
+    projectiles: [],
+    aoes: [],
+    environment: openEnvironment,
+  });
+
+  for (let time = 50; time <= 500; time += 50) {
+    position = {
+      x: position.x + state.velocity.x * 50,
+      y: position.y + state.velocity.y * 50,
+    };
+    const refresh = Math.floor(time / 250);
+    state = controller.evaluate({
+      time,
+      playerId: 10,
+      position,
+      goal: { x: 9 + refresh * 0.4, y: 5 },
+      movementIntent: {
+        mode: 'combat_range',
+        targetId: 42,
+        targetX: 12 + refresh * 0.4,
+        targetY: 5,
+        hardMinimumRange: 1.3,
+        preferredMinimumRange: 2,
+        preferredMaximumRange: 3,
+      },
+      routeRevision: refresh,
+      moveSpeed: 0.004,
+      intentVelocity: { x: 0.004, y: 0 },
+      movementLeadMs: 0,
+      projectiles: [],
+      aoes: [],
+      environment: openEnvironment,
+    });
+    assert.equal(state.planRevision, 1, `target refresh committed at ${time} ms`);
+  }
+
+  assert.ok(state.plannerMetrics.totalPlans >= 6);
+  assert.equal(state.planReused, true);
+});
+
 test('goal-owned dodge stops instead of bypassing local collision when no route exists', () => {
   const controller = new PredictiveAutoDodgeController();
   controller.setEnabled(true);

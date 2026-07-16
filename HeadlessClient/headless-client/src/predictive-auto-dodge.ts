@@ -408,7 +408,6 @@ export class PredictiveAutoDodgeController {
       const forceReplace = !this.committed
         || currentUnsafe
         || intentChanged
-        || routeChanged
         || drifted
         || remainingMs <= MINIMUM_REMAINING_HORIZON_MS;
       const meaningfulGain = !!currentComparable
@@ -427,6 +426,9 @@ export class PredictiveAutoDodgeController {
         this.planRevision++;
         this.lastReplanAt = snapshot.time;
         planReused = false;
+      } else if (routeChanged && this.committed) {
+        // The updated route was searched and did not justify command churn.
+        this.committed.routeRevision = routeRevision;
       }
       if (replanReason === 'urgent') {
         this.urgentReplanPending = !proposed.reachesHorizon

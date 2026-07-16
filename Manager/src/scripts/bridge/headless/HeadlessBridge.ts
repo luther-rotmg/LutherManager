@@ -14,7 +14,12 @@ import {
   type DodgeMovementIntent,
   type Stats,
 } from '@hive/sdk';
-import { ClientEvent, type Client } from 'headless-client';
+import {
+  ClientEvent,
+  ENEMY_AVOID_RADIUS,
+  type Client,
+  type CombatPathfindingRange,
+} from 'headless-client';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { Logger } from '../../../util/Logger.js';
 import { installHeadlessChatBridge } from './HeadlessChatBridge.js';
@@ -46,7 +51,12 @@ const STORAGE_CONTAINERS = new Set<InventoryContainer>([
 
 const DEFAULT_WEAPON_RANGE = 8;
 const DEFAULT_COMBAT_RANGE_RATIO = 0.75;
-const DEFAULT_ENEMY_EXCLUSION = 1;
+
+interface ResolvedCombatRange extends CombatPathfindingRange {
+  hardMinimumRange: number;
+  preferredMinimumRange: number;
+  preferredMaximumRange: number;
+}
 
 function finitePositive(value: unknown): number | undefined {
   const number = Number(value);
@@ -57,18 +67,25 @@ function resolveCombatPathfindingRange(
   deps: BridgeDeps,
   client: Client,
   options: CombatPathfindingOptions,
-) {
+): ResolvedCombatRange | undefined {
   const weaponType = client.getInventory()?.[0] ?? -1;
   const weaponDefinition = weaponType >= 0 ? deps.gameData.getObject(weaponType) : undefined;
   const projectile = weaponType >= 0
     ? deps.gameData.getProjectile(weaponType, 0) ?? weaponDefinition?.projectiles.values().next().value
     : undefined;
+  const player = client.getPlayer();
+  const speedMultiplier = finitePositive(player?.projSpeedMult) ?? 1;
+  const lifetimeMultiplier = finitePositive(player?.projLifeMult) ?? 1;
   const derivedWeaponRange = projectile && projectile.speed > 0 && projectile.lifetimeMs > 0
-    ? projectile.speed * projectile.lifetimeMs / 10_000
+    ? projectile.speed * speedMultiplier * projectile.lifetimeMs * lifetimeMultiplier / 10_000
     : DEFAULT_WEAPON_RANGE;
   const weaponRange = finitePositive(options.weaponRange) ?? derivedWeaponRange;
-  const exclusion = Math.max(DEFAULT_ENEMY_EXCLUSION,
-    finitePositive(options.minimumEnemyDistance) ?? DEFAULT_ENEMY_EXCLUSION);
+  const exclusion = Math.max(
+    ENEMY_AVOID_RADIUS,
+    finitePositive(options.hardMinimumRange)
+      ?? finitePositive(options.minimumEnemyDistance)
+      ?? ENEMY_AVOID_RADIUS,
+  );
   if (weaponRange <= exclusion + 0.25) return undefined;
 
   const ratio = Math.max(0.1, Math.min(0.95,
@@ -81,10 +98,27 @@ function resolveCombatPathfindingRange(
   const bandWidth = Math.max(0.1, finitePositive(options.rangeBandWidth)
     ?? Math.max(0.25, Math.min(0.75, weaponRange * 0.08)));
   const preferredDistance = Math.max(exclusion, Math.min(maximumFiringDistance, weaponRange * ratio));
-  const minimumDistance = Math.max(exclusion, preferredDistance - bandWidth);
-  const maximumDistance = Math.max(minimumDistance,
-    Math.min(maximumFiringDistance, preferredDistance + bandWidth));
-  return { minimumDistance, preferredDistance, maximumDistance };
+  const minimumDistance = Math.max(
+    exclusion,
+    finitePositive(options.preferredMinimumRange) ?? preferredDistance - bandWidth,
+  );
+  const maximumDistance = Math.min(
+    maximumFiringDistance,
+    finitePositive(options.preferredMaximumRange) ?? preferredDistance + bandWidth,
+  );
+  if (maximumDistance < minimumDistance) return undefined;
+  const boundedPreferredDistance = Math.max(
+    minimumDistance,
+    Math.min(maximumDistance, preferredDistance),
+  );
+  return {
+    minimumDistance,
+    preferredDistance: boundedPreferredDistance,
+    maximumDistance,
+    hardMinimumRange: exclusion,
+    preferredMinimumRange: minimumDistance,
+    preferredMaximumRange: maximumDistance,
+  };
 }
 
 /** SDK storage slots use one flattened logical index across physical chests. */
@@ -440,7 +474,11 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
       Logger.warn('Walking', 'pathfindingWalkToCombatTarget: equipped weapon range is too short');
       return false;
     }
-    return client.combatPathfindingWalkTo({ x, y }, range, options.targetId);
+    return client.combatPathfindingWalkTo({ x, y }, {
+      minimumDistance: range.minimumDistance,
+      preferredDistance: range.preferredDistance,
+      maximumDistance: range.maximumDistance,
+    }, options.targetId);
   };
   Walking.navigateToCombatTarget = (x: number, y: number, options = {}) => {
     const client = active(deps);
@@ -450,11 +488,18 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
       Logger.warn('Walking', 'navigateToCombatTarget: equipped weapon range is too short');
       return false;
     }
-    return client.navigateToCombatTarget({ x, y }, range, {
+    return client.navigateToCombatTarget({ x, y }, {
+      minimumDistance: range.minimumDistance,
+      preferredDistance: range.preferredDistance,
+      maximumDistance: range.maximumDistance,
+    }, {
       safeWalk: options.safeWalk,
       projectileJump: options.projectileJump,
       maxJumpDistance: options.maxJumpDistance,
       targetId: options.targetId,
+      hardMinimumRange: range.hardMinimumRange,
+      preferredMinimumRange: range.preferredMinimumRange,
+      preferredMaximumRange: range.preferredMaximumRange,
     });
   };
   Walking.walkToPosition = (position: Position) => {
@@ -468,7 +513,7 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
     const enemy = client.visibleObjects()
       .filter((object) => deps.gameData.isCombatEnemy(object.type))
       .sort((a, b) => client.distanceTo(a) - client.distanceTo(b))[0];
-    return enemy ? client.moveToObject(enemy.objectId, DEFAULT_ENEMY_EXCLUSION) : false;
+    return enemy ? client.moveToObject(enemy.objectId, ENEMY_AVOID_RADIUS) : false;
   };
   Walking.pathfindingWalkToEnemy = () => {
     const client = active(deps);
@@ -477,7 +522,7 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
       .filter((object) => deps.gameData.isCombatEnemy(object.type))
       .sort((a, b) => client.distanceTo(a) - client.distanceTo(b))[0];
     return enemy
-      ? client.pathfindingWalkTo({ x: enemy.x, y: enemy.y }, DEFAULT_ENEMY_EXCLUSION)
+      ? client.pathfindingWalkTo({ x: enemy.x, y: enemy.y }, ENEMY_AVOID_RADIUS)
       : false;
   };
   Walking.walkToPortal = (name: string) => {
