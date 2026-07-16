@@ -585,7 +585,11 @@ test('18. an authoritative correction discards and rebases the trajectory', () =
   assert.equal(initial.trajectory?.createdAt, 0);
 
   controller.rebase({ x: 2, y: 2 }, 50);
-  assert.equal(controller.getState().trajectory, null);
+  const rebased = controller.getState();
+  assert.equal(rebased.trajectory, null);
+  assert.equal(rebased.replanCause, 'correction');
+  assert.equal(rebased.searchRevision, 1);
+  assert.equal(rebased.planCommitted, false);
   const corrected = controller.evaluate(controllerSnapshot({
     time: 50,
     position: { x: 2, y: 2 },
@@ -593,6 +597,7 @@ test('18. an authoritative correction discards and rebases the trajectory', () =
   }));
 
   assert.equal(corrected.trajectory?.createdAt, 50);
+  assert.equal(corrected.searchRevision, 2);
   assert.ok(corrected.trajectory!.waypoints[0]!.x < 3);
   assert.ok(corrected.plannerMetrics.trajectoryInvalidations > 0);
 });

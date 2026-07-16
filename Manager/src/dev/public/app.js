@@ -10565,6 +10565,20 @@
     var previousAoes = lastViewerData && Array.isArray(lastViewerData.aoes)
       ? lastViewerData.aoes
       : [];
+    var previousDodgeTelemetry = lastViewerData && lastViewerData.dodgeTelemetry;
+    if (msg.dodgeTelemetry) {
+      var nextDodgeTelemetry = Object.assign({}, msg.dodgeTelemetry);
+      nextDodgeTelemetry.planCommitted = !!nextDodgeTelemetry.planCommitted
+        || !!previousDodgeTelemetry
+          && Number(nextDodgeTelemetry.planRevision) !== Number(previousDodgeTelemetry.planRevision);
+      nextDodgeTelemetry.searchPerformed = !!nextDodgeTelemetry.searchPerformed
+        || !!previousDodgeTelemetry
+          && Number(nextDodgeTelemetry.searchRevision) !== Number(previousDodgeTelemetry.searchRevision);
+      nextDodgeTelemetry.lookaheadChanged = !!nextDodgeTelemetry.lookaheadChanged
+        || !!previousDodgeTelemetry
+          && Number(nextDodgeTelemetry.lookaheadRevision) !== Number(previousDodgeTelemetry.lookaheadRevision);
+      msg.dodgeTelemetry = nextDodgeTelemetry;
+    }
     lastViewerData = Object.assign({}, lastViewerData || {}, msg, {
       tiles: viewerSettings.loadTiles ? Array.from(viewerTileCache.values()) : [],
       objects: viewerSettings.loadObjects
@@ -11083,7 +11097,14 @@
         { color: '#4b9cff', width: 2.5, dash: [] }
       );
     }
+    var dodgeTelemetry = data.dodgeTelemetry || null;
     if (viewerSettings.dodgePath) {
+      var dodgeStyle = { color: '#f4b942', width: 2.5, dash: [7, 5] };
+      if (dodgeTelemetry && dodgeTelemetry.planCommitted) {
+        dodgeStyle = { color: '#48d597', width: 3, dash: [] };
+      } else if (dodgeTelemetry && dodgeTelemetry.searchPerformed) {
+        dodgeStyle = { color: '#ff8f5a', width: 2.5, dash: [3, 3] };
+      }
       drawViewerPathOverlay(
         ctx,
         player,
@@ -11093,7 +11114,7 @@
         screenCenterX,
         screenCenterY,
         tileSize,
-        { color: '#f4b942', width: 2.5, dash: [7, 5] }
+        dodgeStyle
       );
     }
 
@@ -11134,7 +11155,24 @@
     renderViewerHighlights();
 
     if (viewerStatus) {
-      viewerStatus.textContent = String(data.mapName || 'Unknown') + '  |  ' + Number(player.x).toFixed(2) + ', ' + Number(player.y).toFixed(2) + '  |  ' + viewerTileCache.size + ' tiles  |  ' + viewerObjects.length + ' objects  |  ' + visibleProjectileCount + ' projectiles  |  ' + visibleAoeCount + ' AOEs';
+      var dodgeSummary = '';
+      if (dodgeTelemetry) {
+        var dodgeEvent = dodgeTelemetry.planCommitted
+          ? 'commit'
+          : dodgeTelemetry.searchPerformed
+            ? 'search'
+            : dodgeTelemetry.lookaheadChanged
+              ? 'lookahead'
+              : dodgeTelemetry.planReused ? 'reuse' : 'idle';
+        dodgeSummary = '  |  dodge ' + dodgeEvent
+          + ' p' + Number(dodgeTelemetry.planRevision || 0)
+          + '/s' + Number(dodgeTelemetry.searchRevision || 0)
+          + ' ' + String(dodgeTelemetry.movementIntentMode || 'none')
+          + ' ' + String(dodgeTelemetry.safetyState || 'normal')
+          + ' v' + (Number(dodgeTelemetry.commandedSpeed) * 1000).toFixed(2)
+          + ' prog' + (Number(dodgeTelemetry.progressSpeed) * 1000).toFixed(2);
+      }
+      viewerStatus.textContent = String(data.mapName || 'Unknown') + '  |  ' + Number(player.x).toFixed(2) + ', ' + Number(player.y).toFixed(2) + '  |  ' + viewerTileCache.size + ' tiles  |  ' + viewerObjects.length + ' objects  |  ' + visibleProjectileCount + ' projectiles  |  ' + visibleAoeCount + ' AOEs' + dodgeSummary;
     }
   }
 

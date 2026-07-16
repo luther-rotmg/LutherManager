@@ -120,6 +120,8 @@ export type {
   DodgeMovementIntent,
   DodgeMovementIntentId,
   DodgeMovementIntentMode,
+  DodgeReplanCause,
+  DodgeSafetyState,
   GoalDodgeIntent,
   NavigationOptions,
   TeleportBeaconDestination,

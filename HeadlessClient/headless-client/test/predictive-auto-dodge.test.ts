@@ -338,6 +338,71 @@ test('rolling local goals reuse a plan when the global goal identity is stable',
   assert.equal(state.planRevision, 2, 'only the horizon refresh should replace the original plan');
 });
 
+test('telemetry separates commit, rolling lookahead, and search-only updates', () => {
+  const controller = new PredictiveAutoDodgeController({ maxStatesPerLayer: 64 });
+  controller.setEnabled(true);
+  const movementIntent = {
+    mode: 'goal' as const,
+    goalX: 20,
+    goalY: 5,
+    goalId: 'stable-goal',
+  };
+  const base = {
+    playerId: 10,
+    goal: { x: 10, y: 5 },
+    movementIntent,
+    routeRevision: 1,
+    moveSpeed: 0.004,
+    intentVelocity: { x: 0.004, y: 0 },
+    movementLeadMs: 0,
+    projectiles: [],
+    aoes: [],
+    environment: openEnvironment,
+  };
+  let position = { x: 5, y: 5 };
+  const committed = controller.evaluate({ ...base, time: 0, position });
+
+  assert.equal(committed.searchRevision, 1);
+  assert.equal(committed.planRevision, 1);
+  assert.equal(committed.searchPerformed, true);
+  assert.equal(committed.planCommitted, true);
+  assert.equal(committed.replanCause, 'initial');
+  assert.equal(committed.movementIntentMode, 'goal');
+  assert.ok(Math.abs(committed.commandedSpeed - 0.004) < 1e-9);
+  assert.ok(Math.abs(committed.progressSpeed - 0.004) < 1e-9);
+  assert.equal(committed.firstControlHeading, 0);
+  assert.equal(committed.headingChange, null);
+  assert.equal(committed.timeSinceLastMovementCommandMs, 0);
+
+  position = {
+    x: position.x + committed.velocity.x * 16,
+    y: position.y + committed.velocity.y * 16,
+  };
+  const lookahead = controller.evaluate({ ...base, time: 16, position });
+  assert.equal(lookahead.searchRevision, 1);
+  assert.equal(lookahead.planRevision, 1);
+  assert.equal(lookahead.searchPerformed, false);
+  assert.equal(lookahead.planCommitted, false);
+  assert.equal(lookahead.planReused, true);
+  assert.equal(lookahead.lookaheadChanged, true);
+  assert.ok(lookahead.lookaheadRevision > committed.lookaheadRevision);
+
+  position = {
+    x: position.x + lookahead.velocity.x * 84,
+    y: position.y + lookahead.velocity.y * 84,
+  };
+  const searched = controller.evaluate({ ...base, time: 100, position });
+  assert.equal(searched.searchRevision, 2);
+  assert.equal(searched.planRevision, 1);
+  assert.equal(searched.searchPerformed, true);
+  assert.equal(searched.planCommitted, false);
+  assert.equal(searched.planReused, true);
+  assert.equal(searched.replanCause, 'periodic_refresh');
+  assert.ok(Number.isFinite(searched.committedScore));
+  assert.ok(Number.isFinite(searched.proposedScore));
+  assert.equal(searched.comparisonHorizonMs, 350);
+});
+
 test('a logical goal id change immediately replaces the committed plan', () => {
   const controller = new PredictiveAutoDodgeController();
   controller.setEnabled(true);
@@ -412,6 +477,8 @@ test('switching between goal and combat-range modes takes effect immediately', (
   assert.equal(goal.planRevision, 1);
   assert.equal(combat.planRevision, 2);
   assert.deepEqual(combat.velocity, { x: 0, y: 0 });
+  assert.equal(combat.commandedSpeed, 0);
+  assert.equal(combat.progressSpeed, 0);
   assert.equal(resumedGoal.planRevision, 3);
   assert.ok(resumedGoal.velocity.x > 0);
 });
@@ -501,6 +568,7 @@ test('frequent harmless projectile updates do not thrash the active timed trajec
   };
   let position = { x: 5, y: 5 };
   let state = controller.evaluate({ ...base, time: 0, position, projectiles: [] });
+  const shots: CombatProjectileSnapshot[] = [];
 
   for (let frame = 1; frame <= 20; frame++) {
     position = {
@@ -508,24 +576,33 @@ test('frequent harmless projectile updates do not thrash the active timed trajec
       y: position.y + state.velocity.y * 16,
     };
     const time = frame * 16;
+    shots.push({
+      ...hostileProjectile(),
+      bulletId: 100 + frame,
+      ownerId: 1000 + frame,
+      startX: position.x - 1,
+      startY: 6.5,
+      startTime: time,
+    });
     state = controller.evaluate({
       ...base,
       time,
       position,
-      projectiles: [{
-        ...hostileProjectile(),
-        bulletId: 100 + frame,
-        startX: position.x - 1,
-        startY: 6.5,
-        startTime: time,
-      }],
+      projectiles: shots,
     });
     assert.equal(state.planRevision, 1, `unexpected replan on frame ${frame}`);
     assert.equal(state.planReused, true);
+    assert.ok(Math.abs(state.commandedSpeed - base.moveSpeed) < 1e-9);
+    assert.ok(Math.abs(state.progressSpeed - base.moveSpeed) < 1e-9);
+    assert.equal(state.firstControlHeading, 0);
+    assert.equal(state.headingChange, null);
+    assert.equal(state.timeSinceLastMovementCommandMs, 0);
   }
 
   assert.ok(state.dangerRevision >= 20);
   assert.equal(state.lastReplanAt, 0);
+  assert.ok(state.searchRevision >= 3);
+  assert.equal(state.planRevision, 1);
 });
 
 test('repeated combat target refreshes search without rotating the committed trajectory', () => {
@@ -633,6 +710,8 @@ test('goal-aware auto-dodge takes a lateral detour and resumes toward the waypoi
   assert.equal(state.overrideActive, true);
   assert.equal(state.decision, 'goal_path');
   assert.ok(state.velocity.x > 0, `expected forward progress, got ${state.velocity.x}`);
+  assert.ok(Math.abs(state.commandedSpeed - 0.004) < 1e-9);
+  assert.ok(state.progressSpeed > 0 && state.progressSpeed < state.commandedSpeed);
   assert.deepEqual(state.goal, { x: 10, y: 5 });
   assert.ok(state.path.length >= 2);
   assert.ok(state.path.some((point) => Math.abs(point.y - 5) > 0.2));

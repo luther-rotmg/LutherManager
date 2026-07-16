@@ -3,6 +3,18 @@ import { Enemy } from '../types/entities/Enemy';
 
 export type DodgeMovementIntentMode = 'goal' | 'combat_range';
 export type DodgeMovementIntentId = string | number;
+export type DodgeSafetyState = 'normal' | 'evasive' | 'recovering';
+export type DodgeReplanCause =
+    | 'initial'
+    | 'new_threat'
+    | 'unsafe'
+    | 'intent_changed'
+    | 'route_changed'
+    | 'drift'
+    | 'expired'
+    | 'better_plan'
+    | 'correction'
+    | 'periodic_refresh';
 
 export interface GoalDodgeIntent {
     mode: 'goal';
@@ -52,13 +64,32 @@ export interface AutoDodgeState {
     planRevision: number;
     /** True when the current frame kept the existing trajectory after validating it. */
     planReused: boolean;
+    searchRevision: number;
+    searchPerformed: boolean;
+    planCommitted: boolean;
+    replanCause: DodgeReplanCause | null;
+    movementIntentMode: DodgeMovementIntentMode | null;
+    safetyState: DodgeSafetyState;
+    retreatPenaltyScale: number;
     lastReplanAt: number | null;
+    replanReason: 'normal' | 'urgent' | null;
     /** Increments when projectile or AOE occupancy changes in the rolling danger field. */
     dangerRevision: number;
     threatCount: number;
     earliestImpactMs: number | null;
     selectedCandidate: number;
     speedScale: number;
+    commandedSpeed: number;
+    progressSpeed: number;
+    firstControlHeading: number | null;
+    headingChange: number | null;
+    committedScore: number | null;
+    proposedScore: number | null;
+    comparisonHorizonMs: number | null;
+    movementTargetDistance: number;
+    timeSinceLastMovementCommandMs: number | null;
+    lookaheadRevision: number;
+    lookaheadChanged: boolean;
     decision: string;
 }
 

@@ -2,6 +2,7 @@ import type { CombatProjectileSnapshot } from './combat-tracker';
 import {
   cloneDodgeMovementIntent,
   type DodgeMovementIntent,
+  type DodgeMovementIntentMode,
 } from './dodge-movement-intent';
 import {
   SpaceTimeDodgePlanner,
@@ -44,6 +45,18 @@ export interface AutoDodgeEnvironment extends DodgePlanningEnvironment {}
 /** Internal trajectory-controller state; scripts select movement intent, not this state. */
 export type DodgeSafetyState = 'normal' | 'evasive' | 'recovering';
 
+export type DodgeReplanCause =
+  | 'initial'
+  | 'new_threat'
+  | 'unsafe'
+  | 'intent_changed'
+  | 'route_changed'
+  | 'drift'
+  | 'expired'
+  | 'better_plan'
+  | 'correction'
+  | 'periodic_refresh';
+
 export interface AutoDodgeSnapshot {
   time: number;
   playerId: number;
@@ -82,6 +95,12 @@ export interface AutoDodgeState {
   jumpStatus: DodgeJumpStatus | 'disabled';
   planRevision: number;
   planReused: boolean;
+  /** Increments for every planner search, including searches that reuse a plan. */
+  searchRevision: number;
+  searchPerformed: boolean;
+  planCommitted: boolean;
+  replanCause: DodgeReplanCause | null;
+  movementIntentMode: DodgeMovementIntentMode | null;
   safetyState: DodgeSafetyState;
   /** Scales only combat's soft too-far cost; hard safety remains fully enforced. */
   retreatPenaltyScale: number;
@@ -92,6 +111,21 @@ export interface AutoDodgeState {
   earliestImpactMs: number | null;
   selectedCandidate: number;
   speedScale: number;
+  /** Magnitude of the commanded velocity in tiles per millisecond. */
+  commandedSpeed: number;
+  /** Signed velocity projected onto the selected intent direction, in tiles per millisecond. */
+  progressSpeed: number;
+  /** Heading of the first control in the committed plan, in radians. */
+  firstControlHeading: number | null;
+  /** Absolute heading change from the previously committed first control, in radians. */
+  headingChange: number | null;
+  committedScore: number | null;
+  proposedScore: number | null;
+  comparisonHorizonMs: number | null;
+  movementTargetDistance: number;
+  timeSinceLastMovementCommandMs: number | null;
+  lookaheadRevision: number;
+  lookaheadChanged: boolean;
   decision: string;
   plannerMetrics: DodgePlannerMetrics;
 }
@@ -150,6 +184,18 @@ export class PredictiveAutoDodgeController {
   private retreatPenaltyScale = 1;
   private dangerPressure = 0;
   private lastSafetyUpdateAt: number | null = null;
+  private searchRevision = 0;
+  private searchPerformed = false;
+  private planCommitted = false;
+  private replanCause: DodgeReplanCause | null = null;
+  private committedScore: number | null = null;
+  private proposedScore: number | null = null;
+  private comparisonHorizonMs: number | null = null;
+  private firstControlHeading: number | null = null;
+  private headingChange: number | null = null;
+  private lastLookaheadTarget: { x: number; y: number } | null = null;
+  private lookaheadRevision = 0;
+  private lastMovementCommandAt: number | null = null;
   private state: AutoDodgeState;
 
   constructor(plannerOptions: DodgePlannerOptions = {}) {
@@ -195,6 +241,18 @@ export class PredictiveAutoDodgeController {
     this.retreatPenaltyScale = 1;
     this.dangerPressure = 0;
     this.lastSafetyUpdateAt = null;
+    this.searchRevision = 0;
+    this.searchPerformed = false;
+    this.planCommitted = false;
+    this.replanCause = null;
+    this.committedScore = null;
+    this.proposedScore = null;
+    this.comparisonHorizonMs = null;
+    this.firstControlHeading = null;
+    this.headingChange = null;
+    this.lastLookaheadTarget = null;
+    this.lookaheadRevision = 0;
+    this.lastMovementCommandAt = null;
     this.state = emptyState(this.enabled, this.planner.getMetrics());
   }
 
@@ -224,11 +282,17 @@ export class PredictiveAutoDodgeController {
     this.lastUrgentPlanAt = Math.min(this.lastUrgentPlanAt, time - URGENT_REPLAN_INTERVAL_MS);
     this.urgentReplanPending = false;
     this.lastCommandVelocity = { x: 0, y: 0 };
+    this.firstControlHeading = null;
+    this.headingChange = null;
+    this.lastLookaheadTarget = null;
+    this.replanCause = 'correction';
     this.state = {
       ...emptyState(this.enabled, this.planner.getMetrics()),
       planRevision: this.planRevision,
+      searchRevision: this.searchRevision,
       lastReplanAt: this.lastReplanAt,
       dangerRevision: this.dangerRevision,
+      replanCause: 'correction',
       decision: 'authoritative_rebase',
     };
   }
@@ -247,6 +311,7 @@ export class PredictiveAutoDodgeController {
   }
 
   evaluate(snapshot: AutoDodgeSnapshot): AutoDodgeState {
+    this.beginEvaluation();
     if (!this.enabled) {
       this.state = emptyState(false, this.planner.getMetrics(), snapshot.intentVelocity);
       return this.state;
@@ -359,23 +424,38 @@ export class PredictiveAutoDodgeController {
     }
 
     let replanReason: DodgeReplanReason | null = null;
+    let replanCause: DodgeReplanCause | null = null;
     const urgentDue = snapshot.time - this.lastUrgentPlanAt >= URGENT_REPLAN_INTERVAL_MS;
     const normalDue = snapshot.time - this.lastPlanAt >= NORMAL_REPLAN_INTERVAL_MS;
     if (!this.committed) {
       replanReason = projectiles.length > 0 || snapshot.aoes.length > 0 ? 'urgent' : 'normal';
+      replanCause = 'initial';
     } else if (currentUnsafe) {
       replanReason = urgentDue ? 'urgent' : null;
+      if (replanReason) replanCause = dangerChanged ? 'new_threat' : 'unsafe';
     } else if (drifted) {
       replanReason = 'normal';
-    } else if (intentChanged || routeChanged) {
+      replanCause = 'drift';
+    } else if (intentChanged) {
       replanReason = 'normal';
-    } else if (remainingMs <= MINIMUM_REMAINING_HORIZON_MS || normalDue) {
+      replanCause = 'intent_changed';
+    } else if (routeChanged) {
       replanReason = 'normal';
+      replanCause = 'route_changed';
+    } else if (remainingMs <= MINIMUM_REMAINING_HORIZON_MS) {
+      replanReason = 'normal';
+      replanCause = 'expired';
+    } else if (normalDue) {
+      replanReason = 'normal';
+      replanCause = 'periodic_refresh';
     }
 
     let planReused = !!this.committed;
     let jumpPlan: EmergencyJumpPlan | undefined;
     if (replanReason) {
+      this.searchRevision++;
+      this.searchPerformed = true;
+      this.replanCause = replanCause;
       const proposed = this.planner.plan(input, replanReason);
       this.setDangerPressure(
         Math.max(
@@ -404,6 +484,9 @@ export class PredictiveAutoDodgeController {
         proposed.trajectory,
         comparisonHorizonMs,
       );
+      this.committedScore = finiteComparisonScore(currentComparable?.score);
+      this.proposedScore = finiteComparisonScore(proposedComparable.score);
+      this.comparisonHorizonMs = proposedComparable.comparisonHorizonMs;
       if (currentComparable && !currentComparable.safe) currentUnsafe = true;
       const forceReplace = !this.committed
         || currentUnsafe
@@ -416,6 +499,9 @@ export class PredictiveAutoDodgeController {
           < currentComparable.score * (1 - PLAN_SCORE_RELATIVE_GAIN);
       const safeReplacement = !this.committed || proposedComparable.safe || currentUnsafe;
       if (safeReplacement && (forceReplace || meaningfulGain)) {
+        const nextHeading = trajectoryFirstHeading(snapshot.position, proposed.trajectory);
+        this.headingChange = headingDifference(this.firstControlHeading, nextHeading);
+        this.firstControlHeading = nextHeading;
         this.committed = {
           result: proposed,
           start: { ...snapshot.position },
@@ -425,6 +511,8 @@ export class PredictiveAutoDodgeController {
         };
         this.planRevision++;
         this.lastReplanAt = snapshot.time;
+        this.planCommitted = true;
+        if (meaningfulGain && !forceReplace) this.replanCause = 'better_plan';
         planReused = false;
       } else if (routeChanged && this.committed) {
         // The updated route was searched and did not justify command churn.
@@ -563,6 +651,15 @@ export class PredictiveAutoDodgeController {
     return changed;
   }
 
+  private beginEvaluation(): void {
+    this.searchPerformed = false;
+    this.planCommitted = false;
+    this.replanCause = null;
+    this.committedScore = null;
+    this.proposedScore = null;
+    this.comparisonHorizonMs = null;
+  }
+
   private finish(
     snapshot: AutoDodgeSnapshot,
     goal: CommittedPlan['goal'],
@@ -585,6 +682,19 @@ export class PredictiveAutoDodgeController {
       this.maxJumpDistance,
       Math.max(0, snapshot.jumpAllowance ?? 0),
     );
+    const lookaheadChanged = !sameOptionalPoint(this.lastLookaheadTarget, result.target);
+    if (lookaheadChanged) {
+      this.lookaheadRevision++;
+      this.lastLookaheadTarget = result.target ? { ...result.target } : null;
+    }
+    if (result.target) this.lastMovementCommandAt = snapshot.time;
+    const movementIntent = normalizedMovementIntent(snapshot, goal);
+    const intentDirection = telemetryIntentDirection(
+      movementIntent,
+      snapshot.position,
+      snapshot.intentVelocity,
+    );
+    const commandedSpeed = Math.hypot(result.velocity.x, result.velocity.y);
     this.state = {
       enabled: this.enabled,
       overrideActive: result.overrideActive,
@@ -599,6 +709,11 @@ export class PredictiveAutoDodgeController {
       jumpStatus: this.projectileJump ? snapshot.jumpStatus ?? 'ready' : 'disabled',
       planRevision: this.planRevision,
       planReused: result.planReused,
+      searchRevision: this.searchRevision,
+      searchPerformed: this.searchPerformed,
+      planCommitted: this.planCommitted,
+      replanCause: this.replanCause,
+      movementIntentMode: movementIntent?.mode ?? null,
       safetyState: this.safetyState,
       retreatPenaltyScale: this.retreatPenaltyScale,
       lastReplanAt: this.lastReplanAt,
@@ -608,8 +723,25 @@ export class PredictiveAutoDodgeController {
       earliestImpactMs: result.earliestImpactMs,
       selectedCandidate: result.selectedCandidate,
       speedScale: snapshot.moveSpeed > 0
-        ? Math.hypot(result.velocity.x, result.velocity.y) / snapshot.moveSpeed
+        ? commandedSpeed / snapshot.moveSpeed
         : 0,
+      commandedSpeed,
+      progressSpeed: intentDirection
+        ? result.velocity.x * intentDirection.x + result.velocity.y * intentDirection.y
+        : 0,
+      firstControlHeading: this.firstControlHeading,
+      headingChange: this.headingChange,
+      committedScore: this.committedScore,
+      proposedScore: this.proposedScore,
+      comparisonHorizonMs: this.comparisonHorizonMs,
+      movementTargetDistance: result.target
+        ? Math.hypot(result.target.x - snapshot.position.x, result.target.y - snapshot.position.y)
+        : 0,
+      timeSinceLastMovementCommandMs: this.lastMovementCommandAt === null
+        ? null
+        : Math.max(0, snapshot.time - this.lastMovementCommandAt),
+      lookaheadRevision: this.lookaheadRevision,
+      lookaheadChanged,
       decision: result.decision,
       plannerMetrics: this.planner.getMetrics(),
     };
@@ -759,6 +891,11 @@ function emptyState(
     jumpStatus: 'disabled',
     planRevision: 0,
     planReused: false,
+    searchRevision: 0,
+    searchPerformed: false,
+    planCommitted: false,
+    replanCause: null,
+    movementIntentMode: null,
     safetyState: 'normal',
     retreatPenaltyScale: 1,
     lastReplanAt: null,
@@ -768,6 +905,17 @@ function emptyState(
     earliestImpactMs: null,
     selectedCandidate: 0,
     speedScale: 1,
+    commandedSpeed: Math.hypot(velocity.x, velocity.y),
+    progressSpeed: 0,
+    firstControlHeading: null,
+    headingChange: null,
+    committedScore: null,
+    proposedScore: null,
+    comparisonHorizonMs: null,
+    movementTargetDistance: 0,
+    timeSinceLastMovementCommandMs: null,
+    lookaheadRevision: 0,
+    lookaheadChanged: false,
     decision: 'none',
     plannerMetrics: cloneMetrics(metrics),
   };
@@ -795,6 +943,30 @@ function cloneTrajectory(trajectory: DodgeTrajectory): DodgeTrajectory {
     createdAt: trajectory.createdAt,
     waypoints: trajectory.waypoints.map((waypoint) => ({ ...waypoint })),
   };
+}
+
+function trajectoryFirstHeading(
+  start: { x: number; y: number },
+  trajectory: DodgeTrajectory,
+): number | null {
+  let previous = start;
+  for (const waypoint of trajectory.waypoints) {
+    const dx = waypoint.x - previous.x;
+    const dy = waypoint.y - previous.y;
+    if (Math.hypot(dx, dy) > 1e-9) return Math.atan2(dy, dx);
+    previous = waypoint;
+  }
+  return null;
+}
+
+function headingDifference(previous: number | null, next: number | null): number | null {
+  if (previous === null || next === null) return null;
+  const wrapped = Math.atan2(Math.sin(next - previous), Math.cos(next - previous));
+  return Math.abs(wrapped);
+}
+
+function finiteComparisonScore(score: number | undefined): number | null {
+  return Number.isFinite(score) ? Number(score) : null;
 }
 
 function planningDangerPressure(result: DodgePlanningResult, activeAoes: number): number {
@@ -977,6 +1149,34 @@ function normalizedDirection(
 ): { x: number; y: number } | undefined {
   const speed = Math.hypot(velocity.x, velocity.y);
   return speed > 1e-9 ? { x: velocity.x / speed, y: velocity.y / speed } : undefined;
+}
+
+function telemetryIntentDirection(
+  intent: DodgeMovementIntent | null,
+  position: { x: number; y: number },
+  fallbackVelocity: { x: number; y: number },
+): { x: number; y: number } | undefined {
+  if (intent?.mode === 'combat_range') {
+    const target = { x: intent.targetX, y: intent.targetY };
+    const targetDistance = Math.hypot(target.x - position.x, target.y - position.y);
+    if (targetDistance < intent.preferredMinimumRange) return unitDirection(target, position);
+    if (targetDistance > intent.preferredMaximumRange) return unitDirection(position, target);
+    return undefined;
+  }
+  const fallback = normalizedDirection(fallbackVelocity);
+  if (fallback) return fallback;
+  if (intent?.mode === 'goal') {
+    return unitDirection(position, { x: intent.goalX, y: intent.goalY });
+  }
+  return undefined;
+}
+
+function sameOptionalPoint(
+  a: { x: number; y: number } | null,
+  b: { x: number; y: number } | null,
+): boolean {
+  if (!a || !b) return a === b;
+  return Math.hypot(a.x - b.x, a.y - b.y) <= 1e-6;
 }
 
 function projectileKey(projectile: CombatProjectileSnapshot): string {

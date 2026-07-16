@@ -113,6 +113,7 @@ export type {
   AutoDodgeOptions,
   AutoDodgeSnapshot,
   AutoDodgeState,
+  DodgeReplanCause,
   DodgeSafetyState,
 } from './predictive-auto-dodge';
 export { ExplorativePathfinder } from './explorative-pathfinder';

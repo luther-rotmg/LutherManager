@@ -15,6 +15,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { XMLParser } from 'fast-xml-parser';
 import { PacketInspector, type CapturedPacket } from './PacketInspector.js';
 import { PacketLab } from './PacketLab.js';
+import { buildDodgeViewerTelemetry } from './dodgeViewerTelemetry.js';
 import type { PluginManager } from '../../plugins/PluginManager.js';
 import type { Proxy } from '../../proxy/Proxy.js';
 import type { GameWorldState } from '../../state/GameWorldState.js';
@@ -3132,6 +3133,9 @@ export class DevServer {
             }]
         : []
       : undefined;
+    const dodgeTelemetry = options.includeDodgePath
+      ? buildDodgeViewerTelemetry(dodgeState)
+      : undefined;
     const aoes = options.includeAoes ? client.getViewerAoes() : undefined;
     return {
       mapName: client.getMapName(),
@@ -3143,6 +3147,7 @@ export class DevServer {
       aoes,
       pathfindingPath,
       dodgePath,
+      dodgeTelemetry,
       tickId: tick.tickId,
       tickTimeMs: tick.tickTimeMs,
       msSinceTick: tick.msSinceTick,
@@ -3196,6 +3201,7 @@ export class DevServer {
         aoes: subscription.includeAoes ? [] : undefined,
         pathfindingPath: subscription.includePathfindingPath ? [] : undefined,
         dodgePath: subscription.includeDodgePath ? [] : undefined,
+        dodgeTelemetry: subscription.includeDodgePath ? null : undefined,
         player: null,
         tickId: -1,
         tickTimeMs: 200,
