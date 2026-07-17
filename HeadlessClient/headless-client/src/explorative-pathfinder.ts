@@ -374,6 +374,20 @@ export class ExplorativePathfinder {
     return this.finishTarget();
   }
 
+  /**
+   * Test-only incremental driver: resolves goals like buildPlan and runs PathSearch
+   * with step(budgetPerStep) until found/no_path.
+   */
+  runPathSearchToCompletion(
+    position: PathPoint,
+    budgetPerStep = Number.POSITIVE_INFINITY,
+  ): GridPoint[] | undefined {
+    const target = this.target;
+    if (!target || this.width <= 0 || this.height <= 0) return undefined;
+    const start = { x: Math.floor(position.x), y: Math.floor(position.y) };
+    return this.searchRawTiles(start, target, budgetPerStep);
+  }
+
   /** Learns the first unentered route cell as blocked after an authoritative movement stall. */
   reportStall(position: PathPoint): PathPoint | undefined {
     const plan = this.plan;
@@ -398,28 +412,11 @@ export class ExplorativePathfinder {
     const start = { x: Math.floor(position.x), y: Math.floor(position.y) };
     const combat = !!this.combatRange;
     let targetBlocked = false;
-    let rawTiles: GridPoint[] | undefined;
-    if (this.combatRange) {
-      const goals = this.combatGoals(target, start, this.combatRange);
-      if (goals.length > 0) rawTiles = this.aStar(start, goals);
-    } else {
+    if (!this.combatRange) {
       const goal = { x: Math.floor(target.x), y: Math.floor(target.y) };
       targetBlocked = this.isBlocked(goal.x, goal.y, start);
-      if (targetBlocked) {
-        for (let radius = 1; radius <= BLOCKED_TARGET_SEARCH_RADIUS && !rawTiles; radius++) {
-          const goals = this.nearbyGoals(goal, start, radius);
-          if (goals.some((candidate) => candidate.x === start.x && candidate.y === start.y)) {
-            rawTiles = [];
-            break;
-          }
-          if (goals.length > 0) rawTiles = this.aStar(start, goals);
-        }
-      } else if (goal.x === start.x && goal.y === start.y) {
-        rawTiles = [];
-      } else {
-        rawTiles = this.aStar(start, [goal]);
-      }
     }
+    const rawTiles = this.searchRawTiles(start, target, Number.POSITIVE_INFINITY);
     if (!rawTiles) return undefined;
     let waypoints: PathPoint[];
     if (rawTiles.length === 0) {
@@ -619,46 +616,50 @@ export class ExplorativePathfinder {
     return goals;
   }
 
-  private aStar(start: GridPoint, goals: GridPoint[]): GridPoint[] | undefined {
-    const goalKeys = new Set(goals.map((goal) => tileKey(goal.x, goal.y)));
-    const startKey = tileKey(start.x, start.y);
-    const open = new MinHeap();
-    const bestG = new Map<string, number>([[startKey, 0]]);
-    const parent = new Map<string, string>();
-    const points = new Map<string, GridPoint>([[startKey, start]]);
-    let order = 0;
-    const startH = heuristic(start, goals);
-    open.push({ ...start, g: 0, h: startH, f: startH, order: order++ });
-
-    while (open.size > 0) {
-      const current = open.pop()!;
-      const currentKey = tileKey(current.x, current.y);
-      if (current.g !== bestG.get(currentKey)) continue;
-      if (goalKeys.has(currentKey)) {
-        return reconstruct(currentKey, startKey, parent, points);
-      }
-
-      for (const [dx, dy, moveCost] of DIRECTIONS) {
-        const x = current.x + dx;
-        const y = current.y + dy;
-        if (this.isPathBlocked(x, y, start)) continue;
-        if (dx !== 0 && dy !== 0
-          && (this.isPathBlocked(current.x + dx, current.y, start)
-            || this.isPathBlocked(current.x, current.y + dy, start))) {
-          continue;
-        }
-        const key = tileKey(x, y);
-        const g = current.g + moveCost;
-        if (g >= (bestG.get(key) ?? Infinity)) continue;
-        const point = { x, y };
-        const h = heuristic(point, goals);
-        bestG.set(key, g);
-        parent.set(key, currentKey);
-        points.set(key, point);
-        open.push({ ...point, g, h, f: g + h, order: order++ });
-      }
+  private searchRawTiles(
+    start: GridPoint,
+    target: PathTarget,
+    budgetPerStep: number,
+  ): GridPoint[] | undefined {
+    if (this.combatRange) {
+      const goals = this.combatGoals(target, start, this.combatRange);
+      if (goals.length > 0) return this.runPathSearch(start, goals, budgetPerStep);
+      return undefined;
     }
-    return undefined;
+
+    const goal = { x: Math.floor(target.x), y: Math.floor(target.y) };
+    if (this.isBlocked(goal.x, goal.y, start)) {
+      for (let radius = 1; radius <= BLOCKED_TARGET_SEARCH_RADIUS; radius++) {
+        const goals = this.nearbyGoals(goal, start, radius);
+        if (goals.some((candidate) => candidate.x === start.x && candidate.y === start.y)) {
+          return [];
+        }
+        if (goals.length > 0) {
+          const result = this.runPathSearch(start, goals, budgetPerStep);
+          if (result) return result;
+        }
+      }
+      return undefined;
+    }
+    if (goal.x === start.x && goal.y === start.y) {
+      return [];
+    }
+    return this.runPathSearch(start, [goal], budgetPerStep);
+  }
+
+  private runPathSearch(
+    start: GridPoint,
+    goals: GridPoint[],
+    budgetPerStep: number,
+  ): GridPoint[] | undefined {
+    const search = new PathSearch({
+      start,
+      goals,
+      isPathBlocked: (x, y, s) => this.isPathBlocked(x, y, s),
+      mapVersion: this.revision,
+    });
+    while (search.step(budgetPerStep) === 'searching') {}
+    return search.getPath();
   }
 
   private isBlocked(x: number, y: number, start?: GridPoint): boolean {
@@ -714,6 +715,95 @@ export class ExplorativePathfinder {
     this.waypointIndex = 0;
     this.failedRevision = -1;
     this.failedStartKey = '';
+  }
+}
+
+type PathSearchStatus = 'searching' | 'found' | 'no_path';
+
+interface PathSearchParams {
+  start: GridPoint;
+  goals: ReadonlyArray<GridPoint>;
+  isPathBlocked: (x: number, y: number, start: GridPoint) => boolean;
+  mapVersion: number;
+}
+
+class PathSearch {
+  private readonly start: GridPoint;
+  private readonly startKey: string;
+  private readonly goals: ReadonlyArray<GridPoint>;
+  private readonly goalKeys: Set<string>;
+  private readonly isPathBlocked: (x: number, y: number, start: GridPoint) => boolean;
+  private readonly mapVersion: number;
+  private readonly open = new MinHeap();
+  private readonly bestG = new Map<string, number>();
+  private readonly cameFrom = new Map<string, string>();
+  private readonly points = new Map<string, GridPoint>();
+  private order = 0;
+  private expansions = 0;
+  private status: PathSearchStatus = 'searching';
+  private resultPath: GridPoint[] | undefined;
+
+  constructor(params: PathSearchParams) {
+    this.start = params.start;
+    this.startKey = tileKey(this.start.x, this.start.y);
+    this.goals = params.goals;
+    this.goalKeys = new Set(params.goals.map((goal) => tileKey(goal.x, goal.y)));
+    this.isPathBlocked = params.isPathBlocked;
+    this.mapVersion = params.mapVersion;
+
+    this.bestG.set(this.startKey, 0);
+    this.points.set(this.startKey, this.start);
+    const startH = heuristic(this.start, this.goals);
+    this.open.push({ ...this.start, g: 0, h: startH, f: startH, order: this.order++ });
+  }
+
+  step(budget: number): PathSearchStatus {
+    void budget;
+    if (this.status !== 'searching') {
+      return this.status;
+    }
+
+    while (this.open.size > 0) {
+      const current = this.open.pop()!;
+      const currentKey = tileKey(current.x, current.y);
+      if (current.g !== this.bestG.get(currentKey)) continue;
+      this.expansions++;
+      if (this.goalKeys.has(currentKey)) {
+        this.resultPath = reconstruct(currentKey, this.startKey, this.cameFrom, this.points);
+        this.status = 'found';
+        return 'found';
+      }
+
+      for (const [dx, dy, moveCost] of DIRECTIONS) {
+        const x = current.x + dx;
+        const y = current.y + dy;
+        if (this.isPathBlocked(x, y, this.start)) continue;
+        if (dx !== 0 && dy !== 0
+          && (this.isPathBlocked(current.x + dx, current.y, this.start)
+            || this.isPathBlocked(current.x, current.y + dy, this.start))) {
+          continue;
+        }
+        const key = tileKey(x, y);
+        const g = current.g + moveCost;
+        if (g >= (this.bestG.get(key) ?? Infinity)) continue;
+        const point = { x, y };
+        const h = heuristic(point, this.goals);
+        this.bestG.set(key, g);
+        this.cameFrom.set(key, currentKey);
+        this.points.set(key, point);
+        this.open.push({ ...point, g, h, f: g + h, order: this.order++ });
+      }
+    }
+    this.status = 'no_path';
+    return 'no_path';
+  }
+
+  getStatus(): PathSearchStatus {
+    return this.status;
+  }
+
+  getPath(): GridPoint[] | undefined {
+    return this.status === 'found' ? this.resultPath : undefined;
   }
 }
 
@@ -775,7 +865,7 @@ function less(a: OpenNode, b: OpenNode): boolean {
   return a.f < b.f || (a.f === b.f && (a.h < b.h || (a.h === b.h && a.order < b.order)));
 }
 
-function heuristic(point: GridPoint, goals: GridPoint[]): number {
+function heuristic(point: GridPoint, goals: ReadonlyArray<GridPoint>): number {
   let best = Infinity;
   for (const goal of goals) {
     const dx = Math.abs(goal.x - point.x);

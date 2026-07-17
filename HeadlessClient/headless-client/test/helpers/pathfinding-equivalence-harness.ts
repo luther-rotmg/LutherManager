@@ -5,6 +5,7 @@ import {
   runGoldenPathfindingCase,
   type GoldenPathResult,
 } from './golden-pathfinding-runner';
+import { createPathfinderFromFixture } from './pathfinding-map-generator';
 
 /** Comparable output from sync baseline or incremental runToCompletion(). */
 export type PathfindingEquivalenceResult = GoldenPathResult;
@@ -14,27 +15,37 @@ export interface IncrementalPathfinderRunOptions {
   budgetPerStep?: number;
 }
 
-export class IncrementalPathfinderNotImplementedError extends Error {
-  constructor() {
-    super('Incremental pathfinder runToCompletion is not implemented until Commit 2/3');
-    this.name = 'IncrementalPathfinderNotImplementedError';
-  }
-}
-
 /** Sync one-shot baseline: current aStar() via next() + getPlannedTiles(). */
 export function runSyncBaseline(testCase: GoldenPathfindingCase): PathfindingEquivalenceResult {
   return runGoldenPathfindingCase(testCase);
 }
 
-/**
- * Stub for future incremental PathSearch.runToCompletion() driver.
- * Commit 2/3 will loop step(budget) until found/no_path and return the same shape as runSyncBaseline().
- */
+/** Incremental PathSearch driver: loop step(budget) until found/no_path. */
 export function runIncrementalToCompletion(
-  _testCase: GoldenPathfindingCase,
-  _options?: IncrementalPathfinderRunOptions,
+  testCase: GoldenPathfindingCase,
+  options?: IncrementalPathfinderRunOptions,
 ): PathfindingEquivalenceResult {
-  throw new IncrementalPathfinderNotImplementedError();
+  const pathfinder = createPathfinderFromFixture(testCase.fixture);
+
+  if (testCase.mode === 'combat') {
+    const combat = testCase.combat!;
+    pathfinder.setCombatTarget(combat.target, combat.range, combat.primaryEnemyId);
+  } else {
+    pathfinder.setTarget(testCase.fixture.goal, 0.2);
+  }
+
+  if (testCase.setup === 'learned-blocked-at-start') {
+    pathfinder.next(testCase.fixture.start);
+    pathfinder.reportStall(testCase.fixture.start);
+  }
+
+  const budgetPerStep = options?.budgetPerStep ?? Number.POSITIVE_INFINITY;
+  const rawTiles = pathfinder.runPathSearchToCompletion(testCase.fixture.start, budgetPerStep);
+  return {
+    rawPath: rawTiles ?? [],
+    noPath: rawTiles === undefined,
+    replanned: false,
+  };
 }
 
 export function assertPathfindingResultsEqual(
@@ -72,8 +83,8 @@ export interface PathfindingEquivalenceHarnessOptions {
 }
 
 /**
- * Given a golden fixture: run sync baseline, optionally run incremental stub, assert equal.
- * Default mode skips incremental until Commit 2/3 wires runIncrementalToCompletion().
+ * Given a golden fixture: run sync baseline, optionally run incremental driver, assert equal.
+ * Default mode skips incremental for baseline-only harness callers.
  */
 export function runPathfindingEquivalenceCase(
   testCase: GoldenPathfindingCase,
@@ -87,7 +98,7 @@ export function runPathfindingEquivalenceCase(
       caseId: testCase.id,
       baseline,
       incrementalSkipped: true,
-      skipReason: 'Incremental pathfinder not implemented until Commit 2/3',
+      skipReason: 'Incremental comparison skipped by caller',
     };
   }
 
