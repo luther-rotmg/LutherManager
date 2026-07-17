@@ -4,7 +4,7 @@ import net from 'net';
 import { copyFileSync, readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join, extname, dirname, basename, resolve } from 'path';
 import sharp from 'sharp';
-import { execFileSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 // NOTE: DevServer runs in a forked Node child process (electron/main.cjs
 // → fork(distApp, ...)), NOT in the Electron main process. So
 // `require('electron')` is unavailable here — opening folders must go
@@ -81,86 +81,6 @@ import { getVaultStore } from '../../scripts/bridge/inventory/VaultStore.js';
 import packetDefinitions from '../../packets/packetDefinitions.generated.js';
 import packetLabNameOnly from '../../packets/packetLabNameOnly.generated.js';
 import packetStatus from '../../packets/packetStatus.generated.js';
-import {
-  activatePowerPlan,
-  applyClientRoleRuleToSeedPid,
-  applyResolvedRolesMultiboxClusters,
-  bringRealmPidMainWindowForeground,
-  emptyWorkingSetForPids,
-  getForegroundPid,
-  getRelatedRealmProcessIds,
-  listExaltProcesses,
-  listPowerPlans,
-  sampleWindowsThermalSignals,
-  resizeRestoreRealmPidCluster,
-  setAllExaltPriority,
-  spreadAffinityEven,
-  tuningSupported,
-  moveRotmgLaunchedWindowAfterSpawn,
-  SUGGESTED_REALM_POWER_HINTS,
-} from '../process/rotmgWindowsClientTune.js';
-import { registerCredentialLaunch } from '../process/credentialLaunchRegistry.js';
-import type { PriorityPreset } from '../process/rotmgWindowsClientTune.js';
-import type { ExaltProcessRow } from '../process/rotmgWindowsClientTune.js';
-import { loadExaltTuneSettings, saveExaltTuneSettings, tuneSettingsPath } from '../process/exaltTuneSettings.js';
-import type { ExaltTuneSettings } from '../process/exaltTuneSettings.js';
-import {
-  stopExaltTuneWatchdog,
-  syncExaltTuneWatchdogFromDisk,
-} from '../process/exaltTuneWatchdog.js';
-import {
-  applyTuningPresetToDisk,
-  getEffectiveMultiboxRoleRules,
-  type TuningPresetName,
-} from '../process/tuningPresets.js';
-import {
-  applyEffectiveMultiboxPolicyFromDisk,
-  applyMultiboxPresetAndLivePolicy,
-  applyRolePrioritiesFromDisk,
-  restoreAllClientTuning,
-} from '../process/exaltRoleGovernor.js';
-import {
-  captureProcessBaselineOverwrite,
-  restoreProcessBaseline,
-} from '../process/exaltProcessBaseline.js';
-import {
-  clientRolesPath,
-  loadExaltClientRoles,
-  resolveClusterRole,
-  saveExaltClientRoles,
-  type ClientRole,
-} from '../process/exaltClientRoles.js';
-import { isThermalBackgroundDemotionActive } from '../process/thermalStressLayer.js';
-
-/** `taskkill /IM msedge.exe /F /T` — frees RAM from stray Edge renderer processes (Windows only). */
-function killMicrosoftEdgeProcessesBestEffort(): {
-  ok: boolean;
-  /** True if taskkill succeeded and at least terminated the matching image (exit 0). */
-  ran: boolean;
-  error?: string;
-} {
-  if (process.platform !== 'win32') {
-    return { ok: false, ran: false, error: 'Windows only.' };
-  }
-  try {
-    execFileSync('taskkill', ['/IM', 'msedge.exe', '/F', '/T'], {
-      encoding: 'utf8',
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return { ok: true, ran: true };
-  } catch (err) {
-    const message = String((err as Error).message || '');
-    const stderr = (err as { stderr?: Buffer })?.stderr ? String((err as { stderr?: Buffer }).stderr) : '';
-    const combined = `${message} ${stderr}`;
-    if (/not found|no running instance|not running/i.test(combined)) {
-      return { ok: true, ran: false };
-    }
-    Logger.warn('DevServer', `kill-msedge: ${combined.trim()}`);
-    return { ok: false, ran: false, error: combined.trim() || message };
-  }
-}
-
 const BOT_API_URL = '';
 const DEFAULT_PLUGIN_CONFIG_ID = 'default';
 const DEFAULT_PLUGIN_CONFIG_NAME = 'default';
@@ -218,68 +138,6 @@ class DisabledBotApiClient {
     throw new Error('Marketplace scripts have been removed.');
   }
 
-}
-
-function unparkRealmPidCluster(rel: readonly number[]): void {
-  const s = loadExaltClientRoles();
-  const rm = new Set(rel);
-  const next = s.parkedPids.filter((p) => !rm.has(p));
-  if (next.length !== s.parkedPids.length) saveExaltClientRoles({ parkedPids: next });
-}
-
-/** Multibox: foreground PID + persisted parked set → per-row/cluster role hints. */
-async function enrichWindowTuningExaltPayload(): Promise<{
-  processes: ExaltProcessRow[];
-  logicalProcessors: number;
-  foregroundPid: number | null;
-  clientRolesPath: string;
-}> {
-  const raw = await listExaltProcesses();
-  const fg = await getForegroundPid();
-  const running = new Set(raw.processes.map((p) => p.pid));
-
-  let rolesSt = loadExaltClientRoles();
-  const parkedPruned = rolesSt.parkedPids.filter((p) => running.has(p));
-  if (parkedPruned.length !== rolesSt.parkedPids.length) {
-    rolesSt = saveExaltClientRoles({ parkedPids: parkedPruned });
-  }
-
-  const parkedSet = new Set(rolesSt.parkedPids);
-  const uniq = [...new Set(raw.processes.map((p) => p.pid))].sort((a, b) => a - b);
-
-  const pidCluster = new Map<number, number[]>();
-  const pidRole = new Map<number, ClientRole>();
-  let accounted = new Set<number>();
-  const roleTable = getEffectiveMultiboxRoleRules();
-
-  for (const seed of uniq) {
-    if (accounted.has(seed)) continue;
-    const rel = await getRelatedRealmProcessIds(seed);
-    for (const id of rel) {
-      accounted.add(id);
-      pidCluster.set(id, rel);
-    }
-    const role = resolveClusterRole(rel, fg, parkedSet);
-    for (const id of rel) pidRole.set(id, role);
-  }
-
-  const processes: ExaltProcessRow[] = raw.processes.map((row) => {
-    const rol = pidRole.get(row.pid) ?? 'background';
-    const cluster = pidCluster.get(row.pid) ?? [row.pid];
-    return {
-      ...row,
-      role: rol,
-      clusterPids: cluster,
-      trimEligible: roleTable[rol].trimEligible,
-    };
-  });
-
-  return {
-    processes,
-    logicalProcessors: raw.logicalProcessors,
-    foregroundPid: fg,
-    clientRolesPath: clientRolesPath(),
-  };
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -2301,87 +2159,8 @@ export class DevServer {
     return this.config.singleClientOnly !== false;
   }
 
-  private getRunningProcessCount(imageName: string): number {
-    try {
-      const output = execFileSync('tasklist', ['/FI', `IMAGENAME eq ${imageName}`, '/FO', 'CSV', '/NH'], {
-        encoding: 'utf8',
-        windowsHide: true,
-      });
-      const lines = String(output || '')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      return lines.filter((line) => !line.startsWith('INFO:')).length;
-    } catch (err) {
-      Logger.warn('DevServer', `Failed to inspect ${imageName} processes: ${(err as Error).message}`);
-      return 0;
-    }
-  }
-
-  private getRunningRotmgExaltProcessCount(): number {
-    return this.getRunningProcessCount('RotMG Exalt.exe');
-  }
-
-  private terminateProcessByImageName(imageName: string): boolean {
-    try {
-      execFileSync('taskkill', ['/IM', imageName, '/F'], {
-        encoding: 'utf8',
-        windowsHide: true,
-      });
-      return true;
-    } catch (err) {
-      const message = String((err as Error).message || '');
-      if (message.toLowerCase().includes('not found') || message.toLowerCase().includes('no running instance')) {
-        return false;
-      }
-      Logger.warn('DevServer', `Failed to terminate ${imageName}: ${message}`);
-      return false;
-    }
-  }
-
-
-  private getSingleClientLaunchBlockError(): string | null {
-    if (!this.isSingleClientOnlyEnabled()) return null;
-    if (this.getRunningRotmgExaltProcessCount() < 1) return null;
-    return 'Close the existing RotMG Exalt process and launch again. We only support 1 account at a time right now, but later multiple accounts with proxies will be supported.';
-  }
-
   /**
-   * Launch the RotMG Exalt executable.
-   */
-  private launchGame(): { ok: boolean; error?: string } {
-    const launchBlockError = this.getSingleClientLaunchBlockError();
-    if (launchBlockError) {
-      return { ok: false, error: launchBlockError };
-    }
-    const gamePath = this.getRotmgPath();
-    if (!gamePath) {
-      return { ok: false, error: 'RotMG path not configured and auto-detection failed.' };
-    }
-
-    const exePath = join(gamePath, 'RotMG Exalt.exe');
-    if (!existsSync(exePath)) {
-      return { ok: false, error: `RotMG Exalt.exe not found at: ${exePath}` };
-    }
-
-    try {
-      const child = spawn(exePath, [], {
-        cwd: gamePath,
-        detached: true,
-        stdio: 'ignore',
-      });
-      child.unref();
-      Logger.log('DevServer', `Launched RotMG from: ${exePath}`);
-      return { ok: true };
-    } catch (err) {
-      const msg = (err as Error).message;
-      Logger.error('DevServer', `Failed to launch RotMG: ${msg}`);
-      return { ok: false, error: msg };
-    }
-  }
-
-  /**
-   * Call Deca account/verify to get session tokens for launch.
+   * Call Deca account/verify to get session tokens (account overview / char list).
    */
   private async verifyDecaAccount(
     email: string,
@@ -2464,57 +2243,15 @@ export class DevServer {
     return 'Login failed.';
   }
 
-  private clampLaunchWindowSize(n: number, min: number, max: number): number {
-    if (!Number.isFinite(n)) return min;
-    return Math.min(max, Math.max(min, Math.round(n)));
-  }
-
   /**
-   * Windowed launch extras for Unity player (width/height always honored; x/y best-effort — not all builds respect them).
-   */
-  private buildCredentialLaunchWindowExtras(opts?: {
-    compactWindow?: boolean;
-    windowRect?: { x: number; y: number; width: number; height: number };
-  }): string[] {
-    const rect = opts?.windowRect;
-    if (rect && Number.isFinite(rect.width) && Number.isFinite(rect.height)) {
-      const w = this.clampLaunchWindowSize(rect.width, 320, 7680);
-      const h = this.clampLaunchWindowSize(rect.height, 240, 4320);
-      const x = this.clampLaunchWindowSize(rect.x, -32000, 32000);
-      const y = this.clampLaunchWindowSize(rect.y, -32000, 32000);
-      return [
-        '-screen-fullscreen',
-        '0',
-        '-screen-width',
-        String(w),
-        '-screen-height',
-        String(h),
-        '-screen-x',
-        String(x),
-        '-screen-y',
-        String(y),
-        '-popupwindow',
-        '-nolog',
-      ];
-    }
-    if (opts?.compactWindow) {
-      return ['-screen-fullscreen', '0', '-screen-width', '640', '-screen-height', '360', '-popupwindow', '-nolog'];
-    }
-    return [];
-  }
-
-  /**
-   * Verify with Deca then launch RotMG Exalt with token-based args (LoginGUI-style: verify only, no bind).
-   * @param compactWindow Unity window size below in-game minimum (MAC multibox launch sidebar).
-   * @param windowRect Optional pixel placement + size (virtual desktop coords from dashboard layout editor).
+   * Connect a headless client for the given dashboard credentials.
+   * (WebSocket message type remains `launchGameWithCredentials` for UI compatibility.)
    */
   private async launchGameWithCredentials(
     email: string,
     password: string,
     serverName: string,
     opts?: {
-      compactWindow?: boolean;
-      windowRect?: { x: number; y: number; width: number; height: number };
       /** Dashboard saved-account id when the client sends it */
       accountId?: string | null;
       /** Dashboard display label when the client sends it */
@@ -2523,119 +2260,36 @@ export class DevServer {
       accountProxy?: DashboardAccountProxySelection | null;
     },
   ): Promise<{ ok: boolean; error?: string }> {
-    if (this.headlessFleet) {
-      const accountId = String(opts?.accountId || email).trim();
-      try {
-        const savedAccount = opts?.accountId
-          ? this.readDashboardAccounts().find((account) => account.id === opts.accountId)
-          : undefined;
-        const proxyAccount = opts?.accountProxy
-          ? this.normalizeDashboardAccountRecord({
-              ...(savedAccount || {}),
-              ...opts.accountProxy,
-              id: accountId,
-              email,
-              password,
-              serverName,
-            })
-          : savedAccount;
-        const proxy = proxyAccount ? this.resolveDashboardAccountProxy(proxyAccount) : undefined;
-        await this.headlessFleet.connect({
-          id: accountId,
-          email,
-          password,
-          label: String(opts?.accountLabel || email).trim(),
-          serverName,
-          proxy,
-        });
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, error: (err as Error).message };
-      }
+    if (!this.headlessFleet) {
+      return { ok: false, error: 'Headless fleet is not available.' };
     }
-    const launchBlockError = this.getSingleClientLaunchBlockError();
-    if (launchBlockError) {
-      return { ok: false, error: launchBlockError };
-    }
-    const gamePath = this.getRotmgPath();
-    if (!gamePath) {
-      return { ok: false, error: 'RotMG path not configured and auto-detection failed.' };
-    }
-
-    const exePath = join(gamePath, 'RotMG Exalt.exe');
-    if (!existsSync(exePath)) {
-      return { ok: false, error: `RotMG Exalt.exe not found at: ${exePath}` };
-    }
-
-    const clientToken = getClientToken();
-    if (!clientToken) {
-      return { ok: false, error: 'Client token unavailable.' };
-    }
-
-    const verifyResult = await this.verifyDecaAccount(email, password, clientToken);
-    if ('error' in verifyResult) {
-      return { ok: false, error: verifyResult.error };
-    }
-
-    const { token, tokenTimestamp, tokenExpiration } = verifyResult;
-
-    const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
-    const args = `data:{platform:Deca,guid:${b64(email)},token:${b64(token)},tokenTimestamp:${b64(tokenTimestamp)},tokenExpiration:${b64(tokenExpiration)},env:4,serverName:${serverName}}`;
-    const windowExtras = this.buildCredentialLaunchWindowExtras(opts);
-    const launchedAtIso = new Date().toISOString();
-
+    const accountId = String(opts?.accountId || email).trim();
     try {
-      const child = spawn(exePath, [args, ...windowExtras], {
-        cwd: gamePath,
-        detached: true,
-        stdio: 'ignore',
+      const savedAccount = opts?.accountId
+        ? this.readDashboardAccounts().find((account) => account.id === opts.accountId)
+        : undefined;
+      const proxyAccount = opts?.accountProxy
+        ? this.normalizeDashboardAccountRecord({
+            ...(savedAccount || {}),
+            ...opts.accountProxy,
+            id: accountId,
+            email,
+            password,
+            serverName,
+          })
+        : savedAccount;
+      const proxy = proxyAccount ? this.resolveDashboardAccountProxy(proxyAccount) : undefined;
+      await this.headlessFleet.connect({
+        id: accountId,
+        email,
+        password,
+        label: String(opts?.accountLabel || email).trim(),
+        serverName,
+        proxy,
       });
-      child.unref();
-      const wr = opts?.windowRect;
-      const launcherPid = typeof child.pid === 'number' ? child.pid : -1;
-      if (launcherPid > 0) {
-        registerCredentialLaunch({
-          launcherPid,
-          accountId: opts?.accountId ?? null,
-          accountLabel: opts?.accountLabel ?? null,
-          email,
-        });
-      }
-      // Conversion-funnel signal: how often saved accounts actually launch.
-      // Includes server but no email/IGN.
-      this.eventTracker?.track('account_launch', {
-        server: serverName,
-        compact_window: !!opts?.compactWindow,
-        has_window_rect: !!opts?.windowRect,
-      });
-      if (wr && process.platform === 'win32' && launcherPid > 0) {
-        window.setTimeout(() => {
-          void moveRotmgLaunchedWindowAfterSpawn(launcherPid, wr, { email, launchedAtIso }).then((pos) => {
-            if (pos.ok) {
-              Logger.log(
-                'DevServer',
-                `Positioned credential launch window via Win32 (launcher PID ${launcherPid}, ${wr.width}×${wr.height} @ ${wr.x},${wr.y})`,
-              );
-            } else {
-              Logger.warn(
-                'DevServer',
-                `Post-launch window move failed (launcher PID ${launcherPid}). ${pos.debug ?? ''}`.slice(0, 2000),
-              );
-            }
-          });
-        }, 500);
-      }
-      const logSuffix = wr
-        ? ` (${wr.width}×${wr.height} @ ${wr.x},${wr.y})`
-        : opts?.compactWindow
-          ? ' (640×360 compact)'
-          : '';
-      Logger.log('DevServer', `Launched RotMG with credentials${logSuffix} from: ${exePath}`);
       return { ok: true };
     } catch (err) {
-      const msg = (err as Error).message;
-      Logger.error('DevServer', `Failed to launch RotMG: ${msg}`);
-      return { ok: false, error: msg };
+      return { ok: false, error: (err as Error).message };
     }
   }
 
@@ -3336,40 +2990,14 @@ export class DevServer {
   start(port = 3000): void {
     this.httpServer.listen(port, () => {
       Logger.log('DevServer', `Dashboard available at http://localhost:${port}`);
-      void this.applyExaltTuneOnProxyStartMaybe().finally(() => {
-        syncExaltTuneWatchdogFromDisk();
-      });
     });
-  }
-
-  /** Optional: apply saved idle priority + startup power scheme when dashboard/proxy listens. */
-  private async applyExaltTuneOnProxyStartMaybe(): Promise<void> {
-    try {
-      const s = loadExaltTuneSettings();
-      if (!s.autoApplyOnProxyStart) return;
-      const check = await tuningSupported();
-      if (!check.ok) return;
-      await applyRolePrioritiesFromDisk();
-      const g = String(s.startupPowerGuid ?? '').trim();
-      if (g) await activatePowerPlan(g);
-    } catch (e) {
-      Logger.warn('DevServer', `exaltTune autoApply: ${(e as Error).message}`);
-    }
   }
 
   stop(): void {
     this.headlessFleet?.disconnectAll('manager shutdown');
-    stopExaltTuneWatchdog();
     this.playerDataIntervalStop?.();
     this.playerDataIntervalStop = null;
     this.runtimeScheduler.stop();
-    try {
-      if (loadExaltTuneSettings().restoreProcessBaselineOnExit) {
-        void restoreProcessBaseline().catch(() => {});
-      }
-    } catch {
-      /* ignore */
-    }
     this.wss.close();
     this.httpServer.close();
   }
@@ -3729,468 +3357,6 @@ export class DevServer {
           arrayBuffers: (mu as { arrayBuffers?: number }).arrayBuffers,
         }),
       );
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/settings' && req.method === 'GET') {
-      try {
-        const settings = loadExaltTuneSettings();
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(
-          JSON.stringify({
-            ok: true,
-            settings,
-            settingsPath: tuneSettingsPath(),
-          }),
-        );
-      } catch (err) {
-        Logger.warn('DevServer', `window-tuning settings GET: ${(err as Error).message}`);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: false, error: String((err as Error).message || err) }));
-      }
-      return;
-    }
-
-    if (req.url?.startsWith('/api/admin/window-tuning/tune-status') && req.method === 'GET') {
-      void (async () => {
-        try {
-          const settings = loadExaltTuneSettings();
-          const sup = await tuningSupported();
-          const reqUrl = new URL(req.url || '/api/admin/window-tuning/tune-status', 'http://127.0.0.1');
-          const wantsThermalSample =
-            reqUrl.searchParams.get('thermalSample') === '1' ||
-            reqUrl.searchParams.get('thermalSample') === 'true';
-          const thermalSample = wantsThermalSample ? await sampleWindowsThermalSignals() : undefined;
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({
-              ok: true,
-              supported: !!sup.ok,
-              reason: sup.ok ? undefined : sup.reason,
-              tuningPreset: settings.tuningPreset ?? null,
-              watchdogEnabled: !!settings.watchdog.enabled,
-              thermalEnabled: !!settings.thermal.enabled,
-              thermalBackgroundDemotionActive: isThermalBackgroundDemotionActive(),
-              thermalSample,
-            }),
-          );
-        } catch (e) {
-          Logger.warn('DevServer', `window-tuning tune-status GET: ${(e as Error).message}`);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-        }
-      })();
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/settings' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => {
-        body += c;
-      });
-      req.on('end', () => {
-        try {
-          const parsed = JSON.parse(body || '{}') as Partial<ExaltTuneSettings>;
-          const next = saveExaltTuneSettings(parsed);
-          syncExaltTuneWatchdogFromDisk();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, settings: next }));
-        } catch (e) {
-          Logger.warn('DevServer', `window-tuning settings POST: ${(e as Error).message}`);
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: (e as Error).message }));
-        }
-      });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/supported' && req.method === 'GET') {
-      tuningSupported()
-        .then((payload) => {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(payload));
-        })
-        .catch((err) => {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, reason: String((err as Error).message || err) }));
-        });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/power-hints' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ hints: SUGGESTED_REALM_POWER_HINTS }));
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/exalt-processes' && req.method === 'GET') {
-      enrichWindowTuningExaltPayload()
-        .then((data) => {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, ...data }));
-        })
-        .catch((err) => {
-          Logger.warn('DevServer', `exalt-processes: ${(err as Error).message}`);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: String((err as Error).message || err) }));
-        });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/power-plans' && req.method === 'GET') {
-      listPowerPlans()
-        .then((plans) => {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, plans }));
-        })
-        .catch((err) => {
-          Logger.warn('DevServer', `power-plans: ${(err as Error).message}`);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: String((err as Error).message || err) }));
-        });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/power-plan' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => {
-        body += c;
-      });
-      req.on('end', () => {
-        try {
-          const parsed = JSON.parse(body || '{}') as { guid?: string };
-          const guid = String(parsed.guid ?? '').trim();
-          if (!guid) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: 'guid required' }));
-            return;
-          }
-          activatePowerPlan(guid)
-            .then((result) => {
-              res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify(result));
-            })
-            .catch((err) => {
-              Logger.warn('DevServer', `power-plan POST: ${(err as Error).message}`);
-              res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: false, error: String((err as Error).message || err) }));
-            });
-        } catch (e) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: (e as Error).message }));
-        }
-      });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/exalt-priority' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => {
-        body += c;
-      });
-      req.on('end', () => {
-        try {
-          const parsed = JSON.parse(body || '{}') as { preset?: string };
-          const p = String(parsed.preset || '') as PriorityPreset;
-          const allowed = new Set<PriorityPreset>([
-            'Idle',
-            'BelowNormal',
-            'Normal',
-            'AboveNormal',
-            'High',
-          ]);
-          if (!allowed.has(p)) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(
-              JSON.stringify({
-                ok: false,
-                error: 'preset must be Idle|BelowNormal|Normal|AboveNormal|High',
-              }),
-            );
-            return;
-          }
-          setAllExaltPriority(p)
-            .then((result) => {
-              res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify(result));
-            })
-            .catch((err) => {
-              Logger.warn('DevServer', `exalt-priority POST: ${(err as Error).message}`);
-              res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: false, error: String((err as Error).message || err) }));
-            });
-        } catch (e) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: (e as Error).message }));
-        }
-      });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/spread-cores' && req.method === 'POST') {
-      spreadAffinityEven()
-        .then((result) => {
-          res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        })
-        .catch((err) => {
-          Logger.warn('DevServer', `spread-cores POST: ${(err as Error).message}`);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: String((err as Error).message || err) }));
-        });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/client-roles/apply' && req.method === 'POST') {
-      (async () => {
-        try {
-          const enriched = await enrichWindowTuningExaltPayload();
-          const fg = enriched.foregroundPid;
-          const parkedSet = new Set(loadExaltClientRoles().parkedPids);
-          const out = await applyResolvedRolesMultiboxClusters(fg, parkedSet);
-          res.writeHead(out.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(out));
-        } catch (e) {
-          Logger.warn(
-            'DevServer',
-            `window-tuning client-roles apply: ${(e as Error).message}`,
-          );
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-        }
-      })();
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/multibox-action' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => {
-        body += c;
-      });
-      req.on('end', () => {
-        void (async () => {
-          try {
-            const parsed = JSON.parse(body || '{}') as { pid?: number; action?: string };
-            const pid = Math.floor(Number(parsed.pid));
-            const action = String(parsed.action || '').trim().toLowerCase();
-            if (!Number.isFinite(pid) || pid <= 0) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: false, error: 'pid required' }));
-              return;
-            }
-            const rel = await getRelatedRealmProcessIds(pid);
-            const seed = Math.min(...rel);
-
-            if (action === 'park') {
-              const cur = loadExaltClientRoles();
-              const next = [...new Set([...cur.parkedPids, ...rel])];
-              saveExaltClientRoles({ parkedPids: next });
-              const r = await applyClientRoleRuleToSeedPid(seed, 'parked', 0);
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: r.ok, error: r.error, pids: r.pids, action: 'park' }));
-              return;
-            }
-
-            if (action === 'activate' || action === 'active') {
-              unparkRealmPidCluster(rel);
-              for (const tryPid of [...rel].sort((a, b) => b - a)) {
-                await bringRealmPidMainWindowForeground(tryPid);
-              }
-              const r = await applyClientRoleRuleToSeedPid(seed, 'active', 0);
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: r.ok, error: r.error, pids: r.pids, action: 'activate' }));
-              return;
-            }
-
-            if (action === 'background') {
-              unparkRealmPidCluster(rel);
-              const r = await applyClientRoleRuleToSeedPid(seed, 'background', 0);
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: r.ok, error: r.error, pids: r.pids, action: 'background' }));
-              return;
-            }
-
-            if (action === 'trim') {
-              const r = await emptyWorkingSetForPids(rel);
-              res.writeHead(r.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ...r, action: 'trim' }));
-              return;
-            }
-
-            if (action === 'resize' || action === 'restore') {
-              const r = await resizeRestoreRealmPidCluster(pid);
-              res.writeHead(r.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ...r, action: 'resize' }));
-              return;
-            }
-
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(
-              JSON.stringify({
-                ok: false,
-                error: 'action must be park|activate|background|trim|resize',
-              }),
-            );
-          } catch (e) {
-            Logger.warn('DevServer', `multibox-action: ${(e as Error).message}`);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-          }
-        })();
-      });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/tuning-preset' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => {
-        body += c;
-      });
-      req.on('end', () => {
-        void (async () => {
-          try {
-            const parsed = JSON.parse(body || '{}') as { preset?: string };
-            /** Do not blindly `toLowerCase()` — `lowHeat` would become `lowheat` and fail the Set. */
-            const raw = String(parsed.preset || '').trim();
-            const low = raw.toLowerCase();
-            const PRESET_KEYS: Record<string, TuningPresetName> = {
-              safe: 'safe',
-              balanced: 'balanced',
-              multibox: 'multibox',
-              aggressive: 'aggressive',
-              lowheat: 'lowHeat',
-              lowHeat: 'lowHeat',
-            };
-            const presetName = PRESET_KEYS[raw] ?? PRESET_KEYS[low];
-            if (!presetName) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(
-                JSON.stringify({
-                  ok: false,
-                  error: 'preset must be safe|balanced|multibox|aggressive|lowHeat',
-                }),
-              );
-              return;
-            }
-            applyTuningPresetToDisk(presetName);
-            syncExaltTuneWatchdogFromDisk();
-            const sup = await tuningSupported();
-            if (!sup.ok) {
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ ok: true, appliedLive: false, reason: sup.reason, slots: [] }));
-              return;
-            }
-            const out = await applyEffectiveMultiboxPolicyFromDisk();
-            res.writeHead(out.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-            res.end(
-              JSON.stringify({
-                ok: !!out.ok,
-                appliedLive: !!out.ok,
-                error: out.error,
-                slots: out.slots || [],
-              }),
-            );
-          } catch (e) {
-            Logger.warn('DevServer', `tuning-preset: ${(e as Error).message}`);
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-          }
-        })();
-      });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/run-multibox-policy' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => {
-        body += c;
-      });
-      req.on('end', () => {
-        void (async () => {
-          try {
-            let parsed: { preset?: string } = {};
-            if ((body || '').trim()) parsed = JSON.parse(body) as { preset?: string };
-            const out = await applyMultiboxPresetAndLivePolicy(parsed);
-            res.writeHead(out.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(out));
-          } catch (e) {
-            Logger.warn('DevServer', `run-multibox-policy: ${(e as Error).message}`);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-          }
-        })();
-      });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/restore-all' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => {
-        body += c;
-      });
-      req.on('end', () => {
-        void (async () => {
-          try {
-            let bp = false;
-            if ((body || '').trim()) {
-              const p = JSON.parse(body) as { balancedPowerPlan?: boolean };
-              bp = !!p.balancedPowerPlan;
-            }
-            const result = await restoreAllClientTuning({ activateBalancedPowerPlan: bp });
-            res.writeHead(result.ok ? 200 : 500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(result));
-          } catch (e) {
-            Logger.warn('DevServer', `restore-all: ${(e as Error).message}`);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-          }
-        })();
-      });
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/restore-process-baseline' && req.method === 'POST') {
-      void (async () => {
-        try {
-          const result = await restoreProcessBaseline();
-          res.writeHead(result.ok ? 200 : 500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (e) {
-          Logger.warn('DevServer', `restore-process-baseline: ${(e as Error).message}`);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-        }
-      })();
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/recapture-process-baseline' && req.method === 'POST') {
-      void (async () => {
-        try {
-          const result = await captureProcessBaselineOverwrite();
-          res.writeHead(result.ok ? 200 : 500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (e) {
-          Logger.warn('DevServer', `recapture-process-baseline: ${(e as Error).message}`);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
-        }
-      })();
-      return;
-    }
-
-    if (req.url === '/api/admin/window-tuning/kill-msedge' && req.method === 'POST') {
-      void (async () => {
-        try {
-          const result = killMicrosoftEdgeProcessesBestEffort();
-          res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (e) {
-          Logger.warn('DevServer', `kill-msedge: ${(e as Error).message}`);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, ran: false, error: String((e as Error).message || e) }));
-        }
-      })();
       return;
     }
 
@@ -5132,26 +4298,10 @@ export class DevServer {
           this.scheduleAutosave();
         } else if (msg.type === 'trackEvent') {
           // Product analytics removed — ignore dashboard emits.
-        } else if (msg.type === 'launchGame') {
-          const result = this.launchGame();
-          ws.send(JSON.stringify({ type: 'launchGameResult', ...result }));
         } else if (msg.type === 'launchGameWithCredentials') {
           const email = String(msg.email ?? '').trim();
           const password = String(msg.password ?? '');
           const serverName = String(msg.serverName ?? 'USWest').trim() || 'USWest';
-          const rawRect = (msg as { windowRect?: unknown }).windowRect;
-          let windowRect: { x: number; y: number; width: number; height: number } | undefined;
-          if (rawRect && typeof rawRect === 'object') {
-            const r = rawRect as Record<string, unknown>;
-            const x = Number(r.x);
-            const y = Number(r.y);
-            const width = Number(r.width);
-            const height = Number(r.height);
-            if ([x, y, width, height].every((n) => Number.isFinite(n))) {
-              windowRect = { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
-            }
-          }
-          const compactWindow = !!(msg as { compactWindow?: boolean }).compactWindow && !windowRect;
           const rawAccountId = (msg as { accountId?: unknown }).accountId;
           const accountId =
             typeof rawAccountId === 'string' && rawAccountId.trim() !== '' ? rawAccountId.trim() : null;
@@ -5171,8 +4321,6 @@ export class DevServer {
             };
           }
           this.launchGameWithCredentials(email, password, serverName, {
-            compactWindow,
-            windowRect,
             accountId,
             accountLabel,
             accountProxy,
