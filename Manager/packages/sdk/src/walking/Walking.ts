@@ -100,7 +100,14 @@ export interface NavigationOptions extends AutoDodgeOptions {
     goalId?: DodgeMovementIntentId;
 }
 
-export type NavigationStatus = 'idle' | 'planning' | 'moving' | 'no_path' | 'dodge_blocked';
+export type NavigationStatus =
+    | 'idle'
+    | 'planning'
+    | 'moving'
+    | 'arrived'
+    | 'no_path'
+    | 'dodge_blocked'
+    | 'cancelled';
 
 export interface NavigationState {
     status: NavigationStatus;

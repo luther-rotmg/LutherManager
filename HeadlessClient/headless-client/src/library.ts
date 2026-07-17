@@ -7,7 +7,6 @@ export type {
   ContainerSlotRef,
   ItemContainer,
   NavigationState,
-  NavigationStatus,
   PacketContext,
   PacketTraffic,
   ViewerAoeSnapshot,
@@ -124,12 +123,22 @@ export {
   NAVIGATION_PATH_SEARCH_BUDGET,
   SYNC_PATH_SEARCH_BUDGET,
 } from './explorative-pathfinder';
+export { runIncrementalPathSearch, runSyncPathSearch } from './path-search-adapters';
+export {
+  pathSearchStatusToNavigationStatus,
+} from './navigation-status';
+export type {
+  NavigationStatus,
+  PathSearchDerivedNavigationStatus,
+} from './navigation-status';
 export type {
   CombatPathfindingRange,
   PathfindingDataProvider,
   PathfindingStep,
   PathfindingIntentRevisions,
   PathPoint,
+  PathSearchHandle,
+  PathSearchStatus,
   PathSearchStepBudget,
   PathTarget,
 } from './explorative-pathfinder';

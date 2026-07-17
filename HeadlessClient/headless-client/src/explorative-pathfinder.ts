@@ -280,6 +280,27 @@ export class ExplorativePathfinder {
     return this.revision;
   }
 
+  /** Status of the in-flight raw-tile search, if any. */
+  getActivePathSearchStatus(): PathSearchStatus | undefined {
+    return this.activePathSearch?.search.getStatus();
+  }
+
+  /**
+   * True when an in-flight search already targets the same start, goals, and
+   * {@link getMapVersion}. Used to no-op repeated navigation submissions while planning.
+   */
+  matchesInFlightPathSearch(
+    start: GridPoint,
+    goals: ReadonlyArray<GridPoint>,
+  ): boolean {
+    const active = this.activePathSearch;
+    if (!active || active.search.getStatus() !== 'searching') return false;
+    return active.start.x === start.x
+      && active.start.y === start.y
+      && active.goalKey === goalsKey(goals)
+      && active.mapVersion === this.revision;
+  }
+
   getRemainingPath(): PathPoint[] {
     return this.plan?.waypoints.slice(this.waypointIndex).map((point) => ({ ...point })) ?? [];
   }
@@ -539,19 +560,17 @@ export class ExplorativePathfinder {
         return 'found';
       }
 
-      const search = this.acquirePathSearch(start, goals);
-      const status = search.step(budget);
+      const handle = this.beginPathSearch(start, goals);
+      const status = handle.step(budget);
       if (status === 'searching') {
         return 'searching';
       }
       if (status === 'found') {
-        this.pendingRawTiles = search.getPath() ?? [];
-        this.releaseActivePathSearch(search);
+        this.pendingRawTiles = handle.getPath() ? [...handle.getPath()!] : [];
         return 'found';
       }
 
-      this.lastSearchOpenSetExhausted = search.isOpenSetEmpty();
-      this.releaseActivePathSearch(search);
+      this.lastSearchOpenSetExhausted = handle.wasOpenSetExhausted();
       this.goalSearchAttemptIndex++;
       if (this.goalSearchAttemptIndex >= attempts.length) {
         this.clearGoalSearchSession();
@@ -965,11 +984,19 @@ export interface PathSearchStepBudget {
   maxMs: number;
 }
 
+/**
+ * Handle for an incremental path search started via {@link ExplorativePathfinder.beginPathSearch}.
+ *
+ * Plan minimum (step 6.1): `status()` and `cancel()`. This interface also exposes
+ * `step()` and `getPath()` from the step 3.5 incremental driver.
+ */
 export interface PathSearchHandle {
   status(): PathSearchStatus;
-  step(budget: PathSearchStepBudget): PathSearchStatus;
   cancel(): void;
+  step(budget: PathSearchStepBudget): PathSearchStatus;
   getPath(): ReadonlyArray<{ x: number; y: number }> | undefined;
+  /** True when a terminal `no_path` came from open-set exhaustion, not budget yield. */
+  wasOpenSetExhausted(): boolean;
 }
 
 interface ActivePathSearchState {
@@ -980,6 +1007,8 @@ interface ActivePathSearchState {
 }
 
 class ActivePathSearchHandle implements PathSearchHandle {
+  private openSetExhaustedOnNoPath = false;
+
   constructor(
     private readonly pathfinder: ExplorativePathfinder,
     private readonly search: PathSearch,
@@ -991,6 +1020,9 @@ class ActivePathSearchHandle implements PathSearchHandle {
 
   step(budget: PathSearchStepBudget): PathSearchStatus {
     const status = this.search.step(budget);
+    if (status === 'no_path') {
+      this.openSetExhaustedOnNoPath = this.search.isOpenSetEmpty();
+    }
     if (status !== 'searching') {
       this.pathfinder.releaseActivePathSearch(this.search);
     }
@@ -1005,6 +1037,10 @@ class ActivePathSearchHandle implements PathSearchHandle {
 
   getPath(): GridPoint[] | undefined {
     return this.search.getPath();
+  }
+
+  wasOpenSetExhausted(): boolean {
+    return this.openSetExhaustedOnNoPath;
   }
 }
 

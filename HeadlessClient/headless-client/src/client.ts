@@ -153,7 +153,8 @@ export interface ViewerAoeSnapshot {
   landingTime?: number;
 }
 
-export type NavigationStatus = 'idle' | 'planning' | 'moving' | 'no_path' | 'dodge_blocked';
+import type { NavigationStatus } from './navigation-status';
+import { pathSearchStatusToNavigationStatus } from './navigation-status';
 
 export interface NavigationState {
   status: NavigationStatus;
@@ -311,6 +312,7 @@ export class Client extends EventEmitter {
   private suspendedDodgeMovementIntent: DodgeMovementIntent | null = null;
   private navigationStatus: NavigationStatus = 'idle';
   private navigationRequestKey = '';
+  private navigationMapVersion = 0;
   private navigationDodgeDecision: string | null = null;
   private readonly dodgeJumpLimiter = new DodgeJumpLimiter();
   private readonly thrownAoes: ThrownAoeTracker | undefined;
@@ -616,11 +618,17 @@ export class Client extends EventEmitter {
   ): boolean {
     const wasPathfinding = this.pathfinder.hasTarget();
     const requestKey = `goal:${target.x}:${target.y}:${arriveThreshold}:${String(goalId ?? '')}`;
-    const sameRequest = wasPathfinding && this.navigationRequestKey === requestKey;
+    const mapVersion = this.pathfinder.getMapVersion();
+    if (this.shouldNoOpPathfindingResubmission(requestKey, mapVersion, wasPathfinding)) {
+      return this.navigationStatus !== 'no_path';
+    }
+    const sameRequest = wasPathfinding && this.navigationRequestKey === requestKey
+      && this.navigationMapVersion === mapVersion;
     if (!this.pathfinder.setTarget(target, arriveThreshold, goalId)) {
       return false;
     }
     this.navigationRequestKey = requestKey;
+    this.navigationMapVersion = mapVersion;
     if (!sameRequest || this.navigationStatus === 'idle') {
       this.navigationStatus = 'planning';
       this.navigationDodgeDecision = null;
@@ -659,9 +667,15 @@ export class Client extends EventEmitter {
     const wasPathfinding = this.pathfinder.hasTarget();
     const requestKey = `combat:${target.x}:${target.y}:${range.minimumDistance}:` +
       `${range.preferredDistance}:${range.maximumDistance}:${targetId}`;
-    const sameRequest = wasPathfinding && this.navigationRequestKey === requestKey;
+    const mapVersion = this.pathfinder.getMapVersion();
+    if (this.shouldNoOpPathfindingResubmission(requestKey, mapVersion, wasPathfinding)) {
+      return this.navigationStatus !== 'no_path';
+    }
+    const sameRequest = wasPathfinding && this.navigationRequestKey === requestKey
+      && this.navigationMapVersion === mapVersion;
     if (!this.pathfinder.setCombatTarget(target, range, targetId)) return false;
     this.navigationRequestKey = requestKey;
+    this.navigationMapVersion = mapVersion;
     if (!sameRequest || this.navigationStatus === 'idle') {
       this.navigationStatus = 'planning';
       this.navigationDodgeDecision = null;
@@ -713,8 +727,9 @@ export class Client extends EventEmitter {
     this.movement.clear();
     this.dodgeMovementIntent = null;
     this.suspendedDodgeMovementIntent = null;
-    this.navigationStatus = 'idle';
+    this.navigationStatus = 'cancelled';
     this.navigationRequestKey = '';
+    this.navigationMapVersion = 0;
     this.navigationDodgeDecision = null;
   }
 
@@ -2571,6 +2586,7 @@ export class Client extends EventEmitter {
     this.suspendedDodgeMovementIntent = null;
     this.navigationStatus = 'idle';
     this.navigationRequestKey = '';
+    this.navigationMapVersion = 0;
     this.navigationDodgeDecision = null;
     this.dodgeWorld?.reset();
     this.autoDodge?.reset();
@@ -3330,6 +3346,7 @@ export class Client extends EventEmitter {
       this.suspendedDodgeMovementIntent = null;
       this.navigationStatus = 'idle';
       this.navigationRequestKey = '';
+      this.navigationMapVersion = 0;
       this.navigationDodgeDecision = null;
     }
     const usingPathfinding = this.pathfinder.hasTarget();
@@ -3340,8 +3357,9 @@ export class Client extends EventEmitter {
         this.movement.clear();
         this.dodgeMovementIntent = null;
         this.suspendedDodgeMovementIntent = null;
-        this.navigationStatus = 'idle';
+        this.navigationStatus = 'arrived';
         this.navigationRequestKey = '';
+        this.navigationMapVersion = 0;
         this.navigationDodgeDecision = null;
         console.log(`${this.tag} reached move target`);
         this.emit(ClientEvent.ReachedTarget, navigation.reached);
@@ -3355,7 +3373,11 @@ export class Client extends EventEmitter {
             this.dodgeMovementIntent = null;
           }
         } else if (this.navigationStatus !== 'no_path') {
-          this.navigationStatus = 'planning';
+          const searchStatus = this.pathfinder.getActivePathSearchStatus();
+          const derived = searchStatus
+            ? pathSearchStatusToNavigationStatus(searchStatus)
+            : undefined;
+          this.navigationStatus = derived ?? 'planning';
         }
         if (navigation.noPath && navigation.replanned) {
           const target = this.pathfinder.getTarget();
@@ -3474,12 +3496,35 @@ export class Client extends EventEmitter {
       }
     }
     if (update.reached && !usingPathfinding) {
-      this.navigationStatus = 'idle';
+      this.navigationStatus = 'arrived';
       this.navigationRequestKey = '';
+      this.navigationMapVersion = 0;
       this.navigationDodgeDecision = null;
       console.log(`${this.tag} reached move target`);
       this.emit(ClientEvent.ReachedTarget, update.reached);
     }
+  }
+
+  /**
+   * While an incremental search is still `searching`, repeated submissions with
+   * the same request key and map version resume the in-flight handle instead of
+   * restarting planning.
+   */
+  private shouldNoOpPathfindingResubmission(
+    requestKey: string,
+    mapVersion: number,
+    wasPathfinding: boolean,
+  ): boolean {
+    if (!wasPathfinding
+      || this.navigationRequestKey !== requestKey
+      || this.navigationMapVersion !== mapVersion) {
+      return false;
+    }
+    if (this.navigationStatus !== 'planning'
+      && this.pathfinder.getActivePathSearchStatus() !== 'searching') {
+      return false;
+    }
+    return true;
   }
 
   private movementSnapshot(): MovementSnapshot {
