@@ -15,26 +15,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * in Unity PlayerPrefs (registry). Resolves to
      *   { guid, secret, token, tokenTimestamp, tokenExpiration, preferredServer }
      * or { error } if nothing is there.
+     * Used by the dashboard "Import Launcher Credentials" flow to populate
+     * headless account entries — not for launching the real Exalt client.
      */
     readLauncherCreds: () => ipcRenderer.invoke('rotmg:readLauncherCreds'),
-  },
-  instanceHost: {
-    isSupported: () => ipcRenderer.invoke('instanceHost:isSupported'),
-    listInstances: () => ipcRenderer.invoke('instanceHost:listInstances'),
-    listWindows: () => ipcRenderer.invoke('instanceHost:listWindows'),
-    listAttachments: () => ipcRenderer.invoke('instanceHost:listAttachments'),
-    launch: (payload) => ipcRenderer.invoke('instanceHost:launch', payload),
-    trackByPid: (payload) => ipcRenderer.invoke('instanceHost:trackByPid', payload),
-    stop: (payload) => ipcRenderer.invoke('instanceHost:stop', payload),
-    discoverWindow: (payload) => ipcRenderer.invoke('instanceHost:discoverWindow', payload),
-    focus: (payload) => ipcRenderer.invoke('instanceHost:focus', payload),
-    attach: (payload) => ipcRenderer.invoke('instanceHost:attach', payload),
-    detach: (payload) => ipcRenderer.invoke('instanceHost:detach', payload),
-    resizeSlot: (payload) => ipcRenderer.invoke('instanceHost:resizeSlot', payload),
-    onUpdate: (callback) => {
-      const handler = (_event, state) => callback(state);
-      ipcRenderer.on('instanceHost:update', handler);
-      return () => ipcRenderer.removeListener('instanceHost:update', handler);
-    },
   },
 });

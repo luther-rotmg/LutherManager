@@ -3,8 +3,6 @@ const { spawn, fork, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { runEarlyChecks, hardenWindow } = require('./security.cjs');
-const { WindowHostBridge } = require('./services/window-host-bridge.cjs');
-const { InstanceManager } = require('./services/instance-manager.cjs');
 
 const APP_NAME = 'Hive';
 const APP_USER_MODEL_ID = 'world.hive.app';
@@ -33,19 +31,6 @@ let mainWindow = null;
 let proxyProcess = null;
 let proxyExitReason = null;
 let proxyStderrTail = '';
-const windowHostBridge = new WindowHostBridge();
-const instanceManager = new InstanceManager(windowHostBridge);
-
-function getMainWindowHwndDecimal() {
-  if (!mainWindow || mainWindow.isDestroyed()) return '0';
-  const buf = mainWindow.getNativeWindowHandle();
-  if (!buf || buf.length === 0) return '0';
-  try {
-    if (buf.length >= 8) return buf.readBigUInt64LE(0).toString();
-    if (buf.length >= 4) return String(buf.readUInt32LE(0));
-  } catch {}
-  return '0';
-}
 
 function resolveAppIcon() {
   if (app.isPackaged) {
@@ -236,13 +221,6 @@ function createWindow() {
 
   // Show window as soon as first paint is ready
   mainWindow.once('ready-to-show', () => mainWindow.show());
-  instanceManager.on('update', (state) => {
-    try {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('instanceHost:update', state);
-      }
-    } catch {}
-  });
 
   // Load the loading screen (inline data URL — no file deps), then act
   const loadingUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(buildLoadingHtml());
@@ -387,27 +365,6 @@ ipcMain.on('window:maximize', () => {
 });
 ipcMain.on('window:close', () => mainWindow?.close());
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
-ipcMain.handle('instanceHost:isSupported', () => windowHostBridge.isSupported());
-ipcMain.handle('instanceHost:listInstances', () => instanceManager.list());
-ipcMain.handle('instanceHost:listWindows', async () => windowHostBridge.listTopLevelWindows());
-ipcMain.handle('instanceHost:listAttachments', () => windowHostBridge.listAttachments());
-ipcMain.handle('instanceHost:launch', async (_event, payload) => instanceManager.launch(payload || {}));
-ipcMain.handle('instanceHost:trackByPid', async (_event, payload) => instanceManager.trackByPid(payload || {}));
-ipcMain.handle('instanceHost:stop', async (_event, payload) => instanceManager.stop(payload?.instanceId));
-ipcMain.handle('instanceHost:discoverWindow', async (_event, payload) => instanceManager.discoverWindow(payload?.instanceId));
-ipcMain.handle('instanceHost:focus', async (_event, payload) => instanceManager.focus(payload?.instanceId));
-ipcMain.handle('instanceHost:attach', async (_event, payload) => {
-  const hostHwnd = payload?.hostHwnd || getMainWindowHwndDecimal();
-  return instanceManager.attach({
-    instanceId: payload?.instanceId,
-    slotId: payload?.slotId,
-    hostHwnd,
-  });
-});
-ipcMain.handle('instanceHost:detach', async (_event, payload) => instanceManager.detach(payload?.slotId));
-ipcMain.handle('instanceHost:resizeSlot', async (_event, payload) => {
-  return instanceManager.resizeSlot(payload?.slotId, payload?.bounds || {});
-});
 
 // ── RotMG Exalt Launcher credential reader ────────────────────────────────────
 // Reads Unity PlayerPrefs from HKCU\Software\DECA Live Operations GmbH\RotMG
