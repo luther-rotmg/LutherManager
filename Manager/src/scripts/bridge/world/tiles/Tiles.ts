@@ -1,5 +1,5 @@
-import { Tiles, Position } from '@hive/sdk';
-import type { MapTile } from '@hive/sdk';
+import { Tiles, Position } from '@luthermanager/sdk';
+import type { MapTile } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../../BridgeDeps.js';
 import type { GameDataLoader } from '../../../../game-data/GameDataLoader.js';
 import { warnUnimplemented } from '../../stubWarn.js';

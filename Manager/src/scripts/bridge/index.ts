@@ -30,7 +30,7 @@ import {
   Self, Walking, Combat, Players, Enemies, World, Tiles, Objects, Projectiles,
   Log, Settings, Timing, AutoNexus, Hive, Position, StatusEffect, Panel, uiPanel,
   TreeScript, Root, Branch, Leaf, leaf, branch, when, not, always, cooldown, once, sequence, parallel,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 
 export type { BridgeDeps, ScriptLogLevel } from './BridgeDeps.js';
 export type { ScriptPanelRegistry } from './scriptUi/ScriptPanels.js';
@@ -63,7 +63,7 @@ export class SDKBridge {
     installHeadlessBridge(deps);
 
     // Expose all patched SDK exports via globalThis so user scripts importing
-    // @hive/sdk from the deployed Documents stub get the live patched objects.
+    // @luthermanager/sdk from the deployed Documents stub get the live patched objects.
     (globalThis as any).__hiveSDK = {
       chat, party, trade, events, inventory, connection, character,
       INVENTORY_MAIN_SLOT_COUNT, INVENTORY_BACKPACK_SLOT_COUNT, INVENTORY_TOTAL_SLOT_COUNT,

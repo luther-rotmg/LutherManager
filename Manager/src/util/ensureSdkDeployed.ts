@@ -14,7 +14,7 @@ import { Logger } from './Logger.js';
  *   - sdk/package.json       - version info
  *
  * Scripts can accidentally shadow the managed SDK with
- * Documents/Hive/Scripts/node_modules/@hive/sdk. Since Node
+ * Documents/Hive/Scripts/node_modules/@luthermanager/sdk. Since Node
  * resolves that before Documents/Hive/node_modules, keep known shadow
  * installs synchronized too.
  */

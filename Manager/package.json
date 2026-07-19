@@ -1,7 +1,7 @@
 {
-  "name": "hive",
+  "name": "luthermanager",
   "version": "1.0.0",
-  "description": "Hive - RotMG headless fleet and automation manager",
+  "description": "LutherManager - RotMG headless fleet and automation manager (fork of HiveManager)",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -22,7 +22,7 @@
     "installer:desktop:portable": "bash scripts/installer-to-desktop.sh portable"
   },
   "dependencies": {
-    "@hive/sdk": "file:packages/sdk",
+    "@luthermanager/sdk": "file:packages/sdk",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "chokidar": "^3.6.0",
     "fast-xml-parser": "^4.3.0",

@@ -3,7 +3,7 @@ import type {
   LootItem,
   LootItemEnchantments,
   LootRarity,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import { parseEnchantments, type SlotEnchantments } from 'headless-client';
 import { StatType } from '../../../constants/StatType.js';
 import type { BridgeDeps } from '../BridgeDeps.js';

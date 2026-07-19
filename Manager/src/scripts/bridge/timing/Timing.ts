@@ -1,4 +1,4 @@
-import { Timing } from '@hive/sdk';
+import { Timing } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 
 export class BridgeTiming {

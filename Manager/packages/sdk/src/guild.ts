@@ -2,7 +2,7 @@ import type { GuildInviteEvent, GuildResultEvent, GuildHandler, Unsubscribe } fr
 export { GuildRank } from './types/guild';
 
 /**
- * Guild management through the named `guild` export from `@hive/sdk`.
+ * Guild management through the named `guild` export from `@luthermanager/sdk`.
  *
  * Outgoing actions (invite, remove, leave, join, setRank) send the corresponding
  * server packets. Incoming hooks (onInvited, onResult) fire when the server notifies you.

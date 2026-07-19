@@ -1,4 +1,4 @@
-import { AutoNexus } from '@hive/sdk';
+import { AutoNexus } from '@luthermanager/sdk';
 import type { Client } from 'headless-client';
 import type { BridgeDeps } from '../BridgeDeps.js';
 

@@ -3,14 +3,14 @@ import {
   INVENTORY_BACKPACK_SLOT_COUNT,
   INVENTORY_MAIN_SLOT_COUNT,
   INVENTORY_TOTAL_SLOT_COUNT,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import type {
   InventoryItem,
   InventoryBackpackTier,
   InventoryContainer,
   InventoryStorageSide,
   ContainerSlot,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import type { PlayerData } from '../../../state/PlayerData.js';
 import { depositToVault, sendInventorySwap, withdrawFromVault } from './vaultTransfer.js';

@@ -6,7 +6,7 @@ import {
   type PartyMember,
   type PlayerNameMatchMode,
   type TradeItem,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import {
   AcceptTradePacket,
   CancelTradePacket,

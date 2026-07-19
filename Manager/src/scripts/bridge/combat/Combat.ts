@@ -1,5 +1,5 @@
-import { Combat } from '@hive/sdk';
-import type { Enemy } from '@hive/sdk';
+import { Combat } from '@luthermanager/sdk';
+import type { Enemy } from '@luthermanager/sdk';
 import type { ClientConnection } from '../../../proxy/ClientConnection.js';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { warnUnimplemented } from '../stubWarn.js';

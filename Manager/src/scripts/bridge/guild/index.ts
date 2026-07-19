@@ -1,5 +1,5 @@
-import { guild } from '@hive/sdk';
-import type { GuildInviteEvent, GuildResultEvent, GuildHandler } from '@hive/sdk';
+import { guild } from '@luthermanager/sdk';
+import type { GuildInviteEvent, GuildResultEvent, GuildHandler } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { Logger } from '../../../util/Logger.js';
 

@@ -1,4 +1,4 @@
-import { Log } from '@hive/sdk';
+import { Log } from '@luthermanager/sdk';
 import type { BridgeDeps, ScriptLogLevel } from '../BridgeDeps.js';
 
 function emit(deps: BridgeDeps, level: ScriptLogLevel, message: string): void {

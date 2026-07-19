@@ -13,7 +13,7 @@ import {
   type CombatPathfindingOptions,
   type DodgeMovementIntent,
   type Stats,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import {
   ClientEvent,
   ENEMY_AVOID_RADIUS,

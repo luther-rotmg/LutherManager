@@ -4,7 +4,7 @@ import {
   type InventoryStorageContainer,
   type InventoryStorageRange,
   type StorageItem,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 
 const VAULT_CHEST_SLOT_COUNT = 8;

@@ -134,7 +134,7 @@ export class ScriptHost {
     return undefined;
   }
 
-  /** Patch @hive/sdk stubs with host implementations (`chat`, `party`, `events`, ...). Call once at startup. */
+  /** Patch @luthermanager/sdk stubs with host implementations (`chat`, `party`, `events`, ...). Call once at startup. */
   installBridge(deps: BridgeDeps): void {
     if (this.bridgeInstalled) return;
     deps.scriptPanelConfigDir ??= join(dirname(this.scriptsDir), 'ScriptConfigs');

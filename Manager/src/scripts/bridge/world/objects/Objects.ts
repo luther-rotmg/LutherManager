@@ -1,4 +1,4 @@
-import { Objects, Position } from '@hive/sdk';
+import { Objects, Position } from '@luthermanager/sdk';
 import type {
   GameObject,
   Enemy,
@@ -6,7 +6,7 @@ import type {
   Portal,
   Container,
   ObjectCategory,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import type { BridgeDeps } from '../../BridgeDeps.js';
 import { warnUnimplemented } from '../../stubWarn.js';
 

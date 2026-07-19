@@ -5,7 +5,7 @@ import {
   type AutoAimOptions,
   type CombatAimTarget,
   type Enemy,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import type { Client } from 'headless-client';
 import type { BridgeDeps } from '../BridgeDeps.js';
 

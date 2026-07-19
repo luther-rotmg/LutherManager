@@ -1,4 +1,4 @@
-import { chat, type ChatChannel, type ChatEvent, type ChatHandler, type ChatOutgoingBlockMode } from '@hive/sdk';
+import { chat, type ChatChannel, type ChatEvent, type ChatHandler, type ChatOutgoingBlockMode } from '@luthermanager/sdk';
 import { PacketType, type Client, type TextPacket } from 'headless-client';
 import type { BridgeDeps } from '../BridgeDeps.js';
 

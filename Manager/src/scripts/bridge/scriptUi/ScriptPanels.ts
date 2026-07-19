@@ -12,7 +12,7 @@ import type {
   PanelPersistenceOptions,
   SearchOption,
   PanelWidget,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import { ScriptPanelConfigStore } from './ScriptPanelConfigStore.js';
 
 interface WidgetHandlers {

@@ -4,7 +4,7 @@
  * the Hive client; this module only exists so plugin authors can get
  * IntelliSense via a JSDoc annotation:
  *
- *   /\*\* @param {import('@hive/sdk').UserPluginContext} ctx *\/
+ *   /\*\* @param {import('@luthermanager/sdk').UserPluginContext} ctx *\/
  *   export function register(ctx) { ... }
  *
  * Plugins reach the game world exclusively through the rest of the SDK
@@ -59,7 +59,7 @@ export type PluginCleanup = () => void;
  * Note: full packet-level access, dashboard log routing and structured
  * dashboard broadcasts are reserved for bundled first-party plugins shipped
  * with the Hive client. User plugins compose behaviour out of the
- * rest of `@hive/sdk` (`chat`, `events`, `Hive.*`, ...).
+ * rest of `@luthermanager/sdk` (`chat`, `events`, `Hive.*`, ...).
  */
 export interface UserPluginContext {
   /** The plugin id — derived from the file name, without `.mjs`. Read-only. */
@@ -92,7 +92,7 @@ export interface UserPluginContext {
   /**
    * Register a chat command (e.g. `'greet'` → `/greet`).
    * The handler receives the parsed argument list. To reply, call
-   * `chat.notify(...)` or `chat.say(...)` from `@hive/sdk`.
+   * `chat.notify(...)` or `chat.say(...)` from `@luthermanager/sdk`.
    */
   registerCommand(command: string, handler: PluginCommandHandler): void;
 }

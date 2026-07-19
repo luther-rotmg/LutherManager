@@ -1,5 +1,5 @@
-import { loot } from '@hive/sdk';
-import type { LootBag, LootItem, PickupOptions } from '@hive/sdk';
+import { loot } from '@luthermanager/sdk';
+import type { LootBag, LootItem, PickupOptions } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import type { ClientConnection } from '../../../proxy/ClientConnection.js';
 import type { Packet } from '../../../packets/Packet.js';

@@ -4,7 +4,7 @@ import {
   inventory,
   type ContainerSlot,
   type InventoryContainer,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import type { BridgeDeps } from '../src/scripts/bridge/BridgeDeps.js';
 import { installStorageApi } from '../src/scripts/bridge/inventory/storage.js';
 

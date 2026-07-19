@@ -7,7 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod/v4';
-import { Hive } from '@hive/sdk';
+import { Hive } from '@luthermanager/sdk';
 import type { Client } from 'headless-client';
 import type { GameDataLoader } from '../game-data/GameDataLoader.js';
 import type { HeadlessFleet, HeadlessSessionSummary } from '../headless/HeadlessFleet.js';

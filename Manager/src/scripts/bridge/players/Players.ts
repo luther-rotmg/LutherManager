@@ -1,6 +1,6 @@
-import { Players, Position } from '@hive/sdk';
-import type { PlayerNameMatchMode } from '@hive/sdk';
-import type { PlayerEntity, Stats } from '@hive/sdk';
+import { Players, Position } from '@luthermanager/sdk';
+import type { PlayerNameMatchMode } from '@luthermanager/sdk';
+import type { PlayerEntity, Stats } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import type { PlayerRawStatsRowForDashboard } from '../../../state/GameWorldState.js';
 import { StatType } from '../../../constants/StatType.js';

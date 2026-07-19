@@ -1,6 +1,6 @@
-import { Enemies } from '@hive/sdk';
-import type { Enemy } from '@hive/sdk';
-import type { Position } from '@hive/sdk';
+import { Enemies } from '@luthermanager/sdk';
+import type { Enemy } from '@luthermanager/sdk';
+import type { Position } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { warnUnimplemented } from '../stubWarn.js';
 

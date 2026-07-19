@@ -7,4 +7,4 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Self: any = require('@hive/sdk/dist/self/Self.js').Self;
+export const Self: any = require('@luthermanager/sdk/dist/self/Self.js').Self;

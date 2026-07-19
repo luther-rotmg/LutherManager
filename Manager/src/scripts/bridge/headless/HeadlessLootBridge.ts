@@ -4,7 +4,7 @@ import {
   type LootDropEvent,
   type LootItemEvent,
   type LootRarity,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import { ClientEvent, type Client, type TrackedObject } from 'headless-client';
 import { StatType } from '../../../constants/StatType.js';
 import type { BridgeDeps } from '../BridgeDeps.js';

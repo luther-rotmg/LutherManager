@@ -3,7 +3,7 @@ import { GameId } from '../../../constants/GameId.js';
 import type { PlayerData } from '../../../state/PlayerData.js';
 import { Logger } from '../../../util/Logger.js';
 import type { BridgeDeps } from '../BridgeDeps.js';
-import { INVENTORY_MAIN_SLOT_COUNT, INVENTORY_TOTAL_SLOT_COUNT } from '@hive/sdk';
+import { INVENTORY_MAIN_SLOT_COUNT, INVENTORY_TOTAL_SLOT_COUNT } from '@luthermanager/sdk';
 import { getVaultStore, resolveChestSlot } from './VaultStore.js';
 
 /** RotMG vault map id. */

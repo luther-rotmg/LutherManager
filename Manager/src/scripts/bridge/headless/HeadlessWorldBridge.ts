@@ -13,7 +13,7 @@ import {
   type PlayerNameMatchMode,
   type Portal,
   type Stats,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import {
   PacketType,
   type Client,

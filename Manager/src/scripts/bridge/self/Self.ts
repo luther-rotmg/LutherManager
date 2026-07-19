@@ -1,6 +1,6 @@
-import type { ExaltedBonuses, GearBonuses, Stats } from '@hive/sdk';
-import { Position, StatusEffect } from '@hive/sdk';
-import type { Item } from '@hive/sdk';
+import type { ExaltedBonuses, GearBonuses, Stats } from '@luthermanager/sdk';
+import { Position, StatusEffect } from '@luthermanager/sdk';
+import type { Item } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { Self } from '../sdkInternal.js';
 import type { PlayerData } from '../../../state/PlayerData.js';
@@ -43,7 +43,7 @@ function playerData(deps: BridgeDeps): PlayerData | null {
   return deps.clientRef.current?.playerData ?? null;
 }
 
-/** Map @hive/sdk StatusEffect string values → RotMG bitmask names on PlayerData */
+/** Map @luthermanager/sdk StatusEffect string values → RotMG bitmask names on PlayerData */
 const SDK_EFFECT_TO_CONDITION: Partial<Record<StatusEffect, ConditionEffectName>> = {
   [StatusEffect.CURSED]: 'Curse',
   [StatusEffect.SLOWED]: 'Slowed',

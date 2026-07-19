@@ -18,7 +18,7 @@ import {
   type PlayerNearbyOptions,
   type PortalOpenedEvent,
   type ShotFiredEvent,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import { ClientEvent, type Client, type TrackedObject } from 'headless-client';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { subscribeHeadlessChat } from './HeadlessChatBridge.js';

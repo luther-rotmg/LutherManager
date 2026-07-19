@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loot, type LootBag } from '@hive/sdk';
+import { loot, type LootBag } from '@luthermanager/sdk';
 import type { Client, TrackedObject } from 'headless-client';
 import type { BridgeDeps } from '../src/scripts/bridge/BridgeDeps.js';
 import { installHeadlessLootBridge } from '../src/scripts/bridge/headless/HeadlessLootBridge.js';

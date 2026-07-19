@@ -1,4 +1,4 @@
-import { DiscordWebhook, Log, Hive } from '@hive/sdk';
+import { DiscordWebhook, Log, Hive } from '@luthermanager/sdk';
 import type {
   DiscordAllowedMentions,
   DiscordEmbed,
@@ -6,8 +6,8 @@ import type {
   DiscordEmbedField,
   DiscordEmbedOptions,
   DiscordMessageOptions,
-} from '@hive/sdk';
-import type { LootDropEvent, LootItemEvent, PlayerDiedEvent } from '@hive/sdk';
+} from '@luthermanager/sdk';
+import type { LootDropEvent, LootItemEvent, PlayerDiedEvent } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 
 type QueueEntry = { promise: Promise<void>; inFlight: number };

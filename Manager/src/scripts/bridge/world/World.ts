@@ -1,4 +1,4 @@
-import { World } from '@hive/sdk';
+import { World } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { GameId } from '../../../constants/GameId.js';
 import { warnUnimplemented } from '../stubWarn.js';

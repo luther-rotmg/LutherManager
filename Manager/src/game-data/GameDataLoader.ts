@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { XMLParser } from 'fast-xml-parser';
-import type { Item } from '@hive/sdk';
+import type { Item } from '@luthermanager/sdk';
 import { Logger } from '../util/Logger.js';
 
 export interface ProjectileDef {

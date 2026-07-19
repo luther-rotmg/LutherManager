@@ -75,7 +75,7 @@ export const Hive = {
         /**
          * Declarative popout panel for this script. Define widgets once; the
          * dashboard renders them in a centered modal and forwards events back.
-         * See `@hive/sdk` `Panel` for widget factories.
+         * See `@luthermanager/sdk` `Panel` for widget factories.
          */
         panel,
     },

@@ -10,7 +10,7 @@ import {
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { PanelConfigInfo, PanelConfigScope } from '@hive/sdk';
+import type { PanelConfigInfo, PanelConfigScope } from '@luthermanager/sdk';
 
 interface StoredPanelConfig extends PanelConfigInfo {
   version: 1;

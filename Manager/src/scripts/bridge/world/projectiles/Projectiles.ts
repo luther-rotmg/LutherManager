@@ -1,5 +1,5 @@
-import { Projectiles } from '@hive/sdk';
-import type { Projectile } from '@hive/sdk';
+import { Projectiles } from '@luthermanager/sdk';
+import type { Projectile } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../../BridgeDeps.js';
 import { warnUnimplemented } from '../../stubWarn.js';
 

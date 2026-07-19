@@ -1,4 +1,4 @@
-import { Settings } from '@hive/sdk';
+import { Settings } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import { warnUnimplemented } from '../stubWarn.js';
 

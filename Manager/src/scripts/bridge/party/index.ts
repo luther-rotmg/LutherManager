@@ -1,5 +1,5 @@
-import { party } from '@hive/sdk';
-import type { CreatePartyParams, PartyFinderParty, PartyMember, PlayerNameMatchMode } from '@hive/sdk';
+import { party } from '@luthermanager/sdk';
+import type { CreatePartyParams, PartyFinderParty, PartyMember, PlayerNameMatchMode } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import type { ClientConnection } from '../../../proxy/ClientConnection.js';
 import type { Packet } from '../../../packets/Packet.js';

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { Panel } from '@hive/sdk';
+import { Panel } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../src/scripts/bridge/BridgeDeps.js';
 import { ScriptPanelRegistry } from '../src/scripts/bridge/scriptUi/ScriptPanels.js';
 

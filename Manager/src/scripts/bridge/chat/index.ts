@@ -1,5 +1,5 @@
-import { chat } from '@hive/sdk';
-import type { ChatChannel, ChatEvent, ChatHandler, ChatOutgoingBlockMode } from '@hive/sdk';
+import { chat } from '@luthermanager/sdk';
+import type { ChatChannel, ChatEvent, ChatHandler, ChatOutgoingBlockMode } from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import type { ClientConnection } from '../../../proxy/ClientConnection.js';
 import type { Packet } from '../../../packets/Packet.js';

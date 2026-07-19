@@ -198,7 +198,7 @@ onStop()</div>
 
               <h3 id="first-sdk" data-i18n="docs.firstScript.h3.sdk">Doing Useful Work: The SDK</h3>
               <p data-i18n="docs.firstScript.sdk.p1">Inside your methods you have access to <code>Hive</code> — the SDK object that exposes the game: chat, inventory, world state, players, and so on. Here's a slightly more useful script that logs every chat message:</p>
-              <pre><code class="language-javascript">import { Hive } from '@hive/sdk';
+              <pre><code class="language-javascript">import { Hive } from '@luthermanager/sdk';
 
 export default class EchoScript {
   onStart() {
@@ -225,8 +225,8 @@ export default class EchoScript {
 
               <h3 id="first-cleanup" data-i18n="docs.firstScript.h3.cleanup">Clean Up in <code>onStop</code></h3>
               <p data-i18n="docs.firstScript.cleanup.p1">Every listener, timer, or resource you create in <code>onStart</code> should be torn down in <code>onStop</code>. If your script registers several of them, it's usually cleanest to keep the unsubscribe functions in an array:</p>
-              <pre><code class="language-typescript">import { Hive } from '@hive/sdk';
-import type { Script, Unsubscribe } from '@hive/sdk';
+              <pre><code class="language-typescript">import { Hive } from '@luthermanager/sdk';
+import type { Script, Unsubscribe } from '@luthermanager/sdk';
 
 export default class MyScript implements Script {
   private unsubs: Unsubscribe[] = [];
@@ -286,7 +286,7 @@ export default class MyScript implements Script {
     "watch": "tsup --watch"
   },
   "dependencies": {
-    "@hive/sdk": "*"
+    "@luthermanager/sdk": "*"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
@@ -319,7 +319,7 @@ export default defineConfig({
   clean: true,
   dts: false,
   outDir: 'dist',
-  external: ['@hive/sdk'],
+  external: ['@luthermanager/sdk'],
   outExtension() {
     return { js: '.mjs' };
   },
@@ -329,7 +329,7 @@ export default defineConfig({
                 <li data-i18n="docs.tsup.config.li1"><code>entry</code> — the one file TSUP starts reading from. Every <code>import</code> it encounters gets pulled into the output.</li>
                 <li data-i18n="docs.tsup.config.li2"><code>format: ['esm']</code> — emit ES modules. Hive loads scripts via dynamic <code>import()</code>, which only understands ESM.</li>
                 <li data-i18n="docs.tsup.config.li3"><code>platform: 'node'</code> + <code>target: 'node20'</code> — modern Node syntax (optional chaining, top-level <code>await</code>, etc.) is left alone rather than polyfilled.</li>
-                <li data-i18n="docs.tsup.config.li4"><code>external: ['@hive/sdk']</code> — <strong>don't copy the SDK into your bundle.</strong> Hive injects the live SDK at runtime; bundling a copy would just duplicate it and break types like <code>Script</code>.</li>
+                <li data-i18n="docs.tsup.config.li4"><code>external: ['@luthermanager/sdk']</code> — <strong>don't copy the SDK into your bundle.</strong> Hive injects the live SDK at runtime; bundling a copy would just duplicate it and break types like <code>Script</code>.</li>
                 <li data-i18n="docs.tsup.config.li5"><code>outDir: 'dist'</code> + <code>outExtension</code> — write the result to <code>dist/index.mjs</code>. This path must match the <code>entry</code> field in your <code>hive.script.json</code> manifest.</li>
                 <li data-i18n="docs.tsup.config.li6"><code>sourcemap: true</code> — also emit <code>dist/index.mjs.map</code> so runtime stack traces point at your original <code>.ts</code> lines instead of bundled output.</li>
                 <li data-i18n="docs.tsup.config.li7"><code>clean: true</code> — wipe <code>dist/</code> before each build so stale files can't linger.</li>
@@ -341,15 +341,15 @@ export default defineConfig({
               <p data-i18n="docs.tsup.writeCode.p1">Put every TypeScript file you author under <code>src/</code>. Start with <code>src/index.ts</code> — this is the file listed in <code>entry</code>, and it's where TSUP begins bundling.</p>
               <pre><code class="language-typescript">import { createCombatBranch } from './branches/combat';
 import { createVaultBranch } from './branches/vault';
-import { Hive } from '@hive/sdk';
-import type { Script } from '@hive/sdk';
+import { Hive } from '@luthermanager/sdk';
+import type { Script } from '@luthermanager/sdk';
 
 export default class MyScript implements Script {
   onStart() { /* … */ }
   onLoop() { return 1000; }
   onStop()  { /* … */ }
 }</code></pre>
-              <p data-i18n="docs.tsup.writeCode.p2">The local imports (<code>./branches/combat</code>, <code>./branches/vault</code>) are bundled <em>into</em> <code>dist/index.mjs</code>. The <code>@hive/sdk</code> import is left alone — it resolves to the live SDK Hive provides when the script runs.</p>
+              <p data-i18n="docs.tsup.writeCode.p2">The local imports (<code>./branches/combat</code>, <code>./branches/vault</code>) are bundled <em>into</em> <code>dist/index.mjs</code>. The <code>@luthermanager/sdk</code> import is left alone — it resolves to the live SDK Hive provides when the script runs.</p>
 
               <h3 id="tsup-build" data-i18n="docs.tsup.h3.build">Step 5: Build</h3>
               <pre><code class="language-bash">npm run build</code></pre>
@@ -369,7 +369,7 @@ export default class MyScript implements Script {
               <ul>
                 <li data-i18n="docs.tsup.trouble.li1"><strong>"Cannot find module 'tsup'"</strong> — you skipped <code>npm install</code>. Run it from the script folder.</li>
                 <li data-i18n="docs.tsup.trouble.li2"><strong>Script doesn't show up in the Scripts tab</strong> — your manifest's <code>entry</code> field doesn't match where TSUP actually wrote the file. Both should be <code>dist/index.mjs</code>.</li>
-                <li data-i18n="docs.tsup.trouble.li3"><strong>Type errors about <code>@hive/sdk</code></strong> — make sure it's listed as <code>external</code> in <code>tsup.config.ts</code>. Never bundle the SDK.</li>
+                <li data-i18n="docs.tsup.trouble.li3"><strong>Type errors about <code>@luthermanager/sdk</code></strong> — make sure it's listed as <code>external</code> in <code>tsup.config.ts</code>. Never bundle the SDK.</li>
                 <li data-i18n="docs.tsup.trouble.li4"><strong>Edits aren't applying</strong> — stop and restart the script in Hive after each rebuild, even in watch mode.</li>
                 <li data-i18n="docs.tsup.trouble.li5"><strong>Runtime errors point at mangled line numbers</strong> — check that <code>dist/index.mjs.map</code> exists next to <code>dist/index.mjs</code>. That's what maps errors back to your TypeScript.</li>
               </ul>
@@ -422,7 +422,7 @@ export default class MyScript implements Script {
             <article id="guide-treescript" class="api-guide" aria-labelledby="guide-treescript-title">
               <h2 id="guide-treescript-title" data-i18n="docs.gs.nav.treescript">Structuring With TreeScript</h2>
               <p data-i18n="docs.treescript.p1">Once your script is doing more than one thing — combat <em>and</em> looting <em>and</em> nexusing <em>and</em> vaulting — a single <code>onLoop()</code> gets messy fast. <strong>TreeScript</strong> is a tiny framework that lets you organise a script as a decision tree of <strong>branches</strong> (conditions) and <strong>leaves</strong> (actions), so each piece of behavior stays small, named, and independent.</p>
-              <p data-i18n="docs.treescript.p2">It's modelled on <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot's TreeScript</a>, so if you're coming from there the shape will look familiar. Everything ships in <code>@hive/sdk</code> — there's nothing new to install.</p>
+              <p data-i18n="docs.treescript.p2">It's modelled on <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot's TreeScript</a>, so if you're coming from there the shape will look familiar. Everything ships in <code>@luthermanager/sdk</code> — there's nothing new to install.</p>
 
               <h3 id="ts-when" data-i18n="docs.treescript.h3.when">When to Reach for It</h3>
               <p data-i18n="docs.treescript.when.p1">You don't <em>have</em> to use TreeScript. A plain <code>Script</code> class with a handwritten <code>onLoop()</code> is fine for small scripts. Reach for TreeScript when one or more of these start to hurt:</p>
@@ -467,7 +467,7 @@ export default class MyScript implements Script {
 
               <h3 id="ts-scaffold" data-i18n="docs.treescript.h3.scaffold">Step 1: Scaffold the Script</h3>
               <p data-i18n="docs.treescript.scaffold.p1">Start from the script skeleton in <strong>Creating Your First Script</strong> and <strong>Packaging With TSUP</strong>. TreeScript is just another class you extend inside your entry file:</p>
-              <pre><code class="language-typescript">import { TreeScript, Hive } from '@hive/sdk';
+              <pre><code class="language-typescript">import { TreeScript, Hive } from '@luthermanager/sdk';
 
 export default class MyScript extends TreeScript {
   onStart(): void {
@@ -483,7 +483,7 @@ export default class MyScript extends TreeScript {
 
               <h3 id="ts-first-leaf" data-i18n="docs.treescript.h3.firstLeaf">Step 2: Add Your First Leaf</h3>
               <p data-i18n="docs.treescript.firstLeaf.p1">A leaf is any class that extends <code>Leaf</code> and answers two questions — should I run, and what do I do?</p>
-              <pre><code class="language-typescript">import { TreeScript, Leaf, Hive } from '@hive/sdk';
+              <pre><code class="language-typescript">import { TreeScript, Leaf, Hive } from '@luthermanager/sdk';
 
 class HeartbeatLeaf extends Leaf {
   isValid(): boolean {
@@ -505,7 +505,7 @@ export default class MyScript extends TreeScript {
 
               <h3 id="ts-first-branch" data-i18n="docs.treescript.h3.firstBranch">Step 3: Add a Branch</h3>
               <p data-i18n="docs.treescript.firstBranch.p1">Branches gate whole subtrees behind a condition. This one runs combat logic only when enemies are nearby:</p>
-              <pre><code class="language-typescript">import { TreeScript, Branch, Leaf, Hive } from '@hive/sdk';
+              <pre><code class="language-typescript">import { TreeScript, Branch, Leaf, Hive } from '@luthermanager/sdk';
 
 class NexusLowHp extends Leaf {
   isValid(): boolean { return Hive.self.getHPPercent() &lt; 0.3; }
@@ -584,13 +584,13 @@ export default class MyScript extends TreeScript {
               <h3 id="ts-split-example" data-i18n="docs.treescript.h3.splitExample">Step 4: Split the Example</h3>
               <p data-i18n="docs.treescript.splitExample.p1">Taking the combat script from Step 3 and applying the layout above:</p>
               <pre><code class="language-typescript">// src/branches/combat/CombatBranch.ts
-import { Branch, Hive } from '@hive/sdk';
+import { Branch, Hive } from '@luthermanager/sdk';
 
 export class CombatBranch extends Branch {
   isValid(): boolean { return Hive.enemies.count() &gt; 0; }
 }</code></pre>
               <pre><code class="language-typescript">// src/branches/combat/leaves/NexusLowHp.ts
-import { Leaf, Hive } from '@hive/sdk';
+import { Leaf, Hive } from '@luthermanager/sdk';
 
 export class NexusLowHp extends Leaf {
   isValid(): boolean { return Hive.self.getHPPercent() &lt; 0.3; }
@@ -600,7 +600,7 @@ export class NexusLowHp extends Leaf {
   }
 }</code></pre>
               <pre><code class="language-typescript">// src/branches/combat/leaves/AttackNearest.ts
-import { Leaf, Hive } from '@hive/sdk';
+import { Leaf, Hive } from '@luthermanager/sdk';
 
 export class AttackNearest extends Leaf {
   isValid(): boolean { return Hive.enemies.count() &gt; 0; }
@@ -611,14 +611,14 @@ export class AttackNearest extends Leaf {
   }
 }</code></pre>
               <pre><code class="language-typescript">// src/IdleLeaf.ts  (no branch, lives at the src/ root)
-import { Leaf } from '@hive/sdk';
+import { Leaf } from '@luthermanager/sdk';
 
 export class IdleLeaf extends Leaf {
   isValid(): boolean { return true; }
   onLoop(): number { return 500; }
 }</code></pre>
               <pre><code class="language-typescript">// src/index.ts
-import { TreeScript } from '@hive/sdk';
+import { TreeScript } from '@luthermanager/sdk';
 import { CombatBranch } from './branches/combat/CombatBranch';
 import { NexusLowHp } from './branches/combat/leaves/NexusLowHp';
 import { AttackNearest } from './branches/combat/leaves/AttackNearest';
@@ -643,7 +643,7 @@ export default class MyScript extends TreeScript {
 
               <h3 id="ts-custom-branch" data-i18n="docs.treescript.h3.customBranch">Customising Branch Behavior</h3>
               <p data-i18n="docs.treescript.customBranch.p1">By default, a <code>Branch</code> runs the <strong>first valid</strong> child. That's what you want most of the time, but when you don't, override <code>onLoop()</code>. A branch that runs <em>every</em> valid child each tick:</p>
-              <pre><code class="language-typescript">import { Branch } from '@hive/sdk';
+              <pre><code class="language-typescript">import { Branch } from '@luthermanager/sdk';
 
 export class RunAllBranch extends Branch {
   isValid(): boolean { return true; }
@@ -697,7 +697,7 @@ export class RunAllBranch extends Branch {
 
               <h3 id="plugin-minimal" data-i18n="docs.firstPlugin.h3.minimal">Step 1: Your First Plugin</h3>
               <p data-i18n="docs.firstPlugin.minimal.p1">Create <code>Documents/Hive/Plugins/hello.mjs</code> and paste:</p>
-              <pre><code class="language-javascript">import { chat } from '@hive/sdk';
+              <pre><code class="language-javascript">import { chat } from '@luthermanager/sdk';
 
 export function register(ctx) {
   ctx.name = 'Hello';
@@ -710,19 +710,19 @@ export function register(ctx) {
               <p data-i18n="docs.firstPlugin.minimal.p2">Two separate tools are at play here, and the split matters:</p>
               <ul>
                 <li data-i18n="docs.firstPlugin.minimal.li1"><code>ctx</code> is the <strong>plugin runtime</strong>. Tiny. Handles things that only make sense for a single plugin: identity (<code>name</code>, <code>category</code>), dashboard-driven state (<code>enabled</code>), per-plugin settings, per-plugin chat commands. That's the whole surface.</li>
-                <li data-i18n="docs.firstPlugin.minimal.li2"><code>@hive/sdk</code> is the <strong>game API</strong>. Everything about the game world — chat, events, enemies, players, self, world, inventory, combat, loot — lives here. Scripts and plugins share the exact same SDK.</li>
+                <li data-i18n="docs.firstPlugin.minimal.li2"><code>@luthermanager/sdk</code> is the <strong>game API</strong>. Everything about the game world — chat, events, enemies, players, self, world, inventory, combat, loot — lives here. Scripts and plugins share the exact same SDK.</li>
               </ul>
               <p data-i18n="docs.firstPlugin.minimal.p3">So <code>ctx.registerCommand('hello', …)</code> wires the <code>/hello</code> command, and <code>chat.notify('Hi …', 'Hello')</code> (from the SDK) shows the popup. Plugins reach the game <strong>exclusively</strong> through SDK imports — there is no <code>ctx.chat</code>, <code>ctx.events</code>, or <code>ctx.world</code>.</p>
               <p data-i18n="docs.firstPlugin.minimal.p4">You can import the SDK in two equivalent styles — pick whichever reads nicer to you:</p>
               <pre><code class="language-javascript">// Style A — named imports (concise, tree-shakeable).
-import { chat, events, Hive } from '@hive/sdk';
+import { chat, events, Hive } from '@luthermanager/sdk';
 
 chat.say('hello');
 events.onEnemySpawned(e =&gt; {});
 const hp = Hive.self.getHP();
 
 // Style B — one big namespace import.
-import { Hive } from '@hive/sdk';
+import { Hive } from '@luthermanager/sdk';
 
 Hive.chat.say('hello');
 Hive.events.onEnemySpawned(e =&gt; {});
@@ -756,7 +756,7 @@ const hp2 = Hive.self.getHP();</code></pre>
 
               <h3 id="plugin-settings" data-i18n="docs.firstPlugin.h3.settings">Step 2: Adding Settings</h3>
               <p data-i18n="docs.firstPlugin.settings.p1">Settings appear in the dashboard under the plugin's toggle and let users tweak behavior without editing your file:</p>
-              <pre><code class="language-javascript">import { chat } from '@hive/sdk';
+              <pre><code class="language-javascript">import { chat } from '@luthermanager/sdk';
 
 export function register(ctx) {
   ctx.name = 'Auto Greet';
@@ -803,9 +803,9 @@ export function register(ctx) {
                 <li data-i18n="docs.firstPlugin.hooks.li5"><code>ctx.getSetting(key)</code> — read a setting's current value.</li>
                 <li data-i18n="docs.firstPlugin.hooks.li6"><code>ctx.registerCommand(name, handler)</code> — fires when the user types <code>/name …</code> in chat. Your handler receives the parsed argument list as a <code>string[]</code>; the chat line never reaches the server. Auto-gated by <code>ctx.enabled</code>.</li>
               </ul>
-              <p data-i18n="docs.firstPlugin.hooks.p2">No <code>ctx.log</code>, no <code>ctx.hookPacket</code>, no <code>ctx.world</code>. For debug output use <code>console.log</code>. For cleanup, return a function from <code>register</code>. For <em>anything</em> game-related — chat, events, enemies, world, self, inventory — import it from <code>@hive/sdk</code>. You can reach each namespace two equivalent ways:</p>
+              <p data-i18n="docs.firstPlugin.hooks.p2">No <code>ctx.log</code>, no <code>ctx.hookPacket</code>, no <code>ctx.world</code>. For debug output use <code>console.log</code>. For cleanup, return a function from <code>register</code>. For <em>anything</em> game-related — chat, events, enemies, world, self, inventory — import it from <code>@luthermanager/sdk</code>. You can reach each namespace two equivalent ways:</p>
               <pre><code class="language-javascript">// Named imports — one line per namespace you use.
-import { chat, events, Hive } from '@hive/sdk';
+import { chat, events, Hive } from '@luthermanager/sdk';
 
 chat.notify('example');                    // same as…
 Hive.chat.notify('example');        // …this.
@@ -823,7 +823,7 @@ Hive.events.onEnemySpawned(e =&gt; {}); // …this.</code></pre>
 
               <h3 id="plugin-enemy-alert" data-i18n="docs.firstPlugin.h3.enemyAlert">Step 4: A Real Example — Spawn Alert</h3>
               <p data-i18n="docs.firstPlugin.enemyAlert.p1">Putting the pieces together. This plugin notifies the player when a specific enemy shows up, with a configurable object ID:</p>
-              <pre><code class="language-javascript">import { chat, events } from '@hive/sdk';
+              <pre><code class="language-javascript">import { chat, events } from '@luthermanager/sdk';
 
 export function register(ctx) {
   ctx.name = 'Spawn Alert';
@@ -863,7 +863,7 @@ export function register(ctx) {
 
               <h3 id="plugin-types" data-i18n="docs.firstPlugin.h3.types">Adding Types (Optional)</h3>
               <p data-i18n="docs.firstPlugin.types.p1">If you use VS Code or another TypeScript-aware editor, you can get autocomplete on <code>ctx</code> and the SDK without adopting TypeScript. Add one JSDoc comment above <code>register</code>:</p>
-              <pre><code class="language-javascript">/** @param {import('@hive/sdk').UserPluginContext} ctx */
+              <pre><code class="language-javascript">/** @param {import('@luthermanager/sdk').UserPluginContext} ctx */
 export function register(ctx) {
   ctx.name = 'Typed Plugin';
   // ctx methods now autocomplete; SDK imports are typed automatically.
@@ -881,7 +881,7 @@ export function register(ctx) {
                 <li data-i18n="docs.runPlugins.twoSources.li1"><strong>Bundled plugins</strong> — first-party plugins that ship with the app (auto-nexus, anti-debuffs, etc.). Always available, always up to date with the client.</li>
                 <li data-i18n="docs.runPlugins.twoSources.li2"><strong>User plugins</strong> — <code>.mjs</code> files you or the community dropped into <code>Documents/Hive/Plugins/</code>.</li>
               </ul>
-              <p data-i18n="docs.runPlugins.twoSources.p2">Bundled plugins run with full packet-level access because we ship and trust that code. Community plugins run with a restricted context — they interact with the game exclusively through <code>@hive/sdk</code>, the same high-level surface scripts use. Both types register the same way (export a <code>register</code> function, appear as a card in the dashboard), so the authoring experience is nearly identical.</p>
+              <p data-i18n="docs.runPlugins.twoSources.p2">Bundled plugins run with full packet-level access because we ship and trust that code. Community plugins run with a restricted context — they interact with the game exclusively through <code>@luthermanager/sdk</code>, the same high-level surface scripts use. Both types register the same way (export a <code>register</code> function, appear as a card in the dashboard), so the authoring experience is nearly identical.</p>
 
               <h3 id="run-plugins-folder" data-i18n="docs.runPlugins.h3.folder">The Plugins Folder</h3>
               <pre class="api-docs-folder-tree"><span class="ft-dir">Documents/</span>
@@ -1005,9 +1005,9 @@ export function register(ctx) {
               <p data-i18n="docs.troubleshooting.entryNotFound.fix"><strong>Fix:</strong> run <code>npm run build</code> from your script folder, confirm <code>dist/index.mjs</code> now exists, then press Refresh in the Scripts tab.</p>
 
               <h3 id="trouble-sdk" data-i18n="docs.troubleshooting.h3.sdkFail">SDK Import Fails at Runtime</h3>
-              <p data-i18n="docs.troubleshooting.sdkFail.see"><strong>What you'll see:</strong> the script starts, then immediately errors with something like <code>Cannot find module '@hive/sdk'</code>.</p>
+              <p data-i18n="docs.troubleshooting.sdkFail.see"><strong>What you'll see:</strong> the script starts, then immediately errors with something like <code>Cannot find module '@luthermanager/sdk'</code>.</p>
               <p data-i18n="docs.troubleshooting.sdkFail.means"><strong>What it means:</strong> TSUP bundled a private copy of the SDK into your output instead of leaving the import alone. The live SDK is provided by Hive at runtime; your bundle should never contain it.</p>
-              <p data-i18n="docs.troubleshooting.sdkFail.fix"><strong>Fix:</strong> open <code>tsup.config.ts</code> and make sure the <code>external</code> array contains <code>'@hive/sdk'</code>. Rebuild, then run the script again.</p>
+              <p data-i18n="docs.troubleshooting.sdkFail.fix"><strong>Fix:</strong> open <code>tsup.config.ts</code> and make sure the <code>external</code> array contains <code>'@luthermanager/sdk'</code>. Rebuild, then run the script again.</p>
 
               <h3 id="trouble-stale-code" data-i18n="docs.troubleshooting.h3.staleCode">Changes Not Running</h3>
               <p data-i18n="docs.troubleshooting.staleCode.see"><strong>What you'll see:</strong> you rebuilt, but the script still behaves like it did before.</p>
@@ -1096,7 +1096,7 @@ export function register(ctx) {
               </ul>
               <h3 id="sdk-concepts-overview-queries">Queries and Events</h3>
               <p>Query methods return a snapshot of what the client currently knows. Event handlers notify the script when state changes. Re-query inside an event handler when the next action depends on current world state.</p>
-              <pre><code class="language-typescript">import { Hive } from '@hive/sdk';
+              <pre><code class="language-typescript">import { Hive } from '@luthermanager/sdk';
 
 const nearest = Hive.enemies.getNearest();
 if (nearest) {
@@ -1129,7 +1129,7 @@ if (enemy) {
 }</code></pre>
               <h3 id="sdk-concepts-identifiers-position">Position</h3>
               <p>World coordinates use the <code>Position</code> class, not a tuple. It has <code>x</code>, <code>y</code>, <code>distanceTo()</code>, <code>isWithin()</code>, and <code>offset()</code>.</p>
-              <pre><code class="language-typescript">import { Position } from '@hive/sdk';
+              <pre><code class="language-typescript">import { Position } from '@luthermanager/sdk';
 
 const destination = new Position(108, 140);
 Hive.walking.walkToPosition(destination);
@@ -1620,7 +1620,7 @@ const configs = this.gui.listConfigs();</code></pre>
             </div>
 
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">Widgets</h3>
-            <p class="api-doc-desc">Build the <code>widgets</code> tree from the <code>Panel</code> factory helpers (also re-exported from <code>@hive/sdk</code>). Every widget that emits events or is targeted by handle methods needs a unique <code>id</code>. All widgets accept <code>visible</code>, <code>enabled</code>, <code>tooltip</code>, <code>width</code> (pixels, <code>'auto'</code>, or <code>'full'</code>), <code>minWidth</code>, <code>grow</code>, and <code>style</code>. Fixed widths collapse to full width on small screens.</p>
+            <p class="api-doc-desc">Build the <code>widgets</code> tree from the <code>Panel</code> factory helpers (also re-exported from <code>@luthermanager/sdk</code>). Every widget that emits events or is targeted by handle methods needs a unique <code>id</code>. All widgets accept <code>visible</code>, <code>enabled</code>, <code>tooltip</code>, <code>width</code> (pixels, <code>'auto'</code>, or <code>'full'</code>), <code>minWidth</code>, <code>grow</code>, and <code>style</code>. Fixed widths collapse to full width on small screens.</p>
             <div class="api-doc-table-wrap">
               <table class="api-doc-table">
                 <thead><tr><th>Widget</th><th>Notes</th></tr></thead>
@@ -1654,7 +1654,7 @@ const configs = this.gui.listConfigs();</code></pre>
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">Lifecycle &amp; the "Open GUI" button</h3>
             <p class="api-doc-desc">The dashboard's <strong>Scripts</strong> tab auto-enables an <strong>Open GUI</strong> button next to <em>Run / Stop</em> as soon as your script calls <code>panel.define</code>. With <code>autoOpen: true</code> the popout opens the moment the script starts. The popout is torn down automatically when the script stops; the user can also close it themselves with the × button, Esc, or by clicking the backdrop. Closing does <strong>not</strong> stop the script — it only hides the panel. Handler callbacks run in the same script context as <code>onLoop</code>, so all <code>Hive.*</code> APIs are available inside them.</p>
 
-            <pre><code class="language-typescript">import { Hive, Panel } from '@hive/sdk';
+            <pre><code class="language-typescript">import { Hive, Panel } from '@luthermanager/sdk';
 
 export default class MyBot {
   onStart() {
@@ -2732,7 +2732,7 @@ class Position {
 
           <article class="api-doc-block" id="api-type-position">
             <h2>Position</h2>
-            <p class="api-doc-desc">Immutable float-precision world coordinates exported directly from <code>@hive/sdk</code>. Entity positions and spatial SDK methods use this class.</p>
+            <p class="api-doc-desc">Immutable float-precision world coordinates exported directly from <code>@luthermanager/sdk</code>. Entity positions and spatial SDK methods use this class.</p>
             <div class="api-doc-table-wrap">
               <table class="api-doc-table">
                 <thead><tr><th>Member</th><th>Returns</th><th>Description</th></tr></thead>
@@ -2745,7 +2745,7 @@ class Position {
                 </tbody>
               </table>
             </div>
-            <pre><code class="language-typescript">import { Position } from '@hive/sdk';
+            <pre><code class="language-typescript">import { Position } from '@luthermanager/sdk';
 
 const target = new Position(108, 140);
 const here = Hive.self.getPosition();
@@ -2883,7 +2883,7 @@ Hive.log.error('Something went wrong');</code></pre>
 
           <article class="api-doc-block" id="api-ns-guild">
             <h2>guild (named export)</h2>
-            <p class="api-doc-desc">Import <code>guild</code> directly from <code>@hive/sdk</code> to manage guild membership and rank. It is not a property of <code>Hive</code>.</p>
+            <p class="api-doc-desc">Import <code>guild</code> directly from <code>@luthermanager/sdk</code> to manage guild membership and rank. It is not a property of <code>Hive</code>.</p>
             <div class="api-doc-table-wrap">
               <table class="api-doc-table">
                 <thead><tr><th data-i18n="docs.apiref.table.method">Method</th><th data-i18n="docs.apiref.table.returns">Returns</th><th data-i18n="docs.apiref.table.description">Description</th></tr></thead>
@@ -2912,7 +2912,7 @@ Hive.log.error('Something went wrong');</code></pre>
               </table>
             </div>
             <p class="api-doc-desc"><strong>GuildInviteEvent</strong>: <code>inviterName: string</code>, <code>guildName: string</code>. &nbsp;<strong>GuildResultEvent</strong>: <code>success: boolean</code>, <code>message: string</code>.</p>
-            <pre><code class="language-typescript">import { guild, GuildRank } from '@hive/sdk';
+            <pre><code class="language-typescript">import { guild, GuildRank } from '@luthermanager/sdk';
 
 // Auto-accept invites from a trusted player
 const unsub = guild.onInvited((e) => {
@@ -2937,7 +2937,7 @@ onStop(): void {
 
           <article class="api-doc-block" id="api-plugin-context">
             <h2>Script and UserPluginContext</h2>
-            <p class="api-doc-desc">Type-only lifecycle contracts exported from <code>@hive/sdk</code>. Scripts implement <code>Script</code>; community plugin modules export <code>register(ctx)</code> and receive a restricted <code>UserPluginContext</code>.</p>
+            <p class="api-doc-desc">Type-only lifecycle contracts exported from <code>@luthermanager/sdk</code>. Scripts implement <code>Script</code>; community plugin modules export <code>register(ctx)</code> and receive a restricted <code>UserPluginContext</code>.</p>
 
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">Script lifecycle</h3>
             <div class="api-doc-table-wrap">
@@ -2972,7 +2972,7 @@ onStop(): void {
 
           <article class="api-doc-block" id="api-frameworks-treescript">
             <h2>TreeScript framework</h2>
-            <p class="api-doc-desc">A <strong>Tree Branch Leaf</strong> scaffold for organising scripts as decision trees instead of one giant <code>onLoop</code>. Inspired by <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot&rsquo;s TreeScript</a>. Imported from <code>@hive/sdk</code> &mdash; no namespace on <code>Hive</code>.</p>
+            <p class="api-doc-desc">A <strong>Tree Branch Leaf</strong> scaffold for organising scripts as decision trees instead of one giant <code>onLoop</code>. Inspired by <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot&rsquo;s TreeScript</a>. Imported from <code>@luthermanager/sdk</code> &mdash; no namespace on <code>Hive</code>.</p>
 
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">The model</h3>
             <p class="api-doc-desc">Every node in the tree is a <code>Leaf</code>. A <code>Branch</code> is a <code>Leaf</code> that also holds child leaves. <code>Root</code> is a built-in <code>Branch</code> that is always valid. A <code>TreeScript</code> is a full Hive script whose <code>onLoop</code> walks the tree each tick.</p>
@@ -3044,7 +3044,7 @@ onStop(): void {
             </div>
 
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">Factory and composition helpers</h3>
-            <p class="api-doc-desc">These are named exports from <code>@hive/sdk</code>. They build normal <code>Leaf</code> and <code>Branch</code> objects and can be mixed with subclasses.</p>
+            <p class="api-doc-desc">These are named exports from <code>@luthermanager/sdk</code>. They build normal <code>Leaf</code> and <code>Branch</code> objects and can be mixed with subclasses.</p>
             <div class="api-doc-table-wrap">
               <table class="api-doc-table">
                 <thead><tr><th>Function</th><th>Returns</th><th>Description</th></tr></thead>
@@ -3078,7 +3078,7 @@ onStop(): void {
             </div>
 
             <h3 style="font-size:13px;color:var(--text-dim);margin:16px 0 8px;">Example: combat + vault bot</h3>
-            <pre><code class="language-typescript">import { TreeScript, Branch, Leaf, Hive } from '@hive/sdk';
+            <pre><code class="language-typescript">import { TreeScript, Branch, Leaf, Hive } from '@luthermanager/sdk';
 
 class NexusLowHp extends Leaf {
   isValid(): boolean {
@@ -3296,7 +3296,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li1': '<code>entry</code> — el archivo desde el que TSUP empieza a leer. Cada <code>import</code> que encuentra se incluye en la salida.',
         'docs.tsup.config.li2': '<code>format: [\'esm\']</code> — emite módulos ES. Hive carga scripts mediante <code>import()</code> dinámico, que solo entiende ESM.',
         'docs.tsup.config.li3': '<code>platform: \'node\'</code> + <code>target: \'node20\'</code> — la sintaxis moderna de Node (optional chaining, top-level <code>await</code>, etc.) se deja tal cual en lugar de rellenarla con polyfills.',
-        'docs.tsup.config.li4': '<code>external: [\'@hive/sdk\']</code> — <strong>no copies el SDK dentro de tu bundle.</strong> Hive inyecta el SDK real en tiempo de ejecución; empaquetar una copia solo lo duplicaría y rompería tipos como <code>Script</code>.',
+        'docs.tsup.config.li4': '<code>external: [\'@luthermanager/sdk\']</code> — <strong>no copies el SDK dentro de tu bundle.</strong> Hive inyecta el SDK real en tiempo de ejecución; empaquetar una copia solo lo duplicaría y rompería tipos como <code>Script</code>.',
         'docs.tsup.config.li5': '<code>outDir: \'dist\'</code> + <code>outExtension</code> — escribe el resultado en <code>dist/index.mjs</code>. Esta ruta debe coincidir con el campo <code>entry</code> de tu manifiesto <code>hive.script.json</code>.',
         'docs.tsup.config.li6': '<code>sourcemap: true</code> — también genera <code>dist/index.mjs.map</code> para que los stack traces en runtime apunten a tus líneas originales de <code>.ts</code> y no a la salida empaquetada.',
         'docs.tsup.config.li7': '<code>clean: true</code> — limpia <code>dist/</code> antes de cada build para que no queden archivos obsoletos.',
@@ -3304,7 +3304,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li9': '<code>dts: false</code> — omite la generación de archivos de declaración <code>.d.ts</code>. Los scripts no los necesitan.',
         'docs.tsup.h3.writeCode': 'Paso 4: escribir tu código fuente',
         'docs.tsup.writeCode.p1': 'Pon todos los archivos TypeScript que escribas dentro de <code>src/</code>. Empieza con <code>src/index.ts</code>; ese es el archivo listado en <code>entry</code> y donde TSUP empieza a empaquetar.',
-        'docs.tsup.writeCode.p2': 'Los imports locales (<code>./branches/combat</code>, <code>./branches/vault</code>) se empaquetan <em>dentro de</em> <code>dist/index.mjs</code>. El import de <code>@hive/sdk</code> se deja intacto; se resuelve al SDK real que Hive proporciona cuando el script se ejecuta.',
+        'docs.tsup.writeCode.p2': 'Los imports locales (<code>./branches/combat</code>, <code>./branches/vault</code>) se empaquetan <em>dentro de</em> <code>dist/index.mjs</code>. El import de <code>@luthermanager/sdk</code> se deja intacto; se resuelve al SDK real que Hive proporciona cuando el script se ejecuta.',
         'docs.tsup.h3.build': 'Paso 5: build',
         'docs.tsup.build.p1': 'TSUP lee tu configuración, compila cada archivo <code>.ts</code> al que llega desde el entry point y escribe el bundle:',
         'docs.tsup.build.p2': 'Abre Hive, ve a la pestaña <strong>Guiones</strong>, y tu script debería aparecer listo para ejecutarse. Si ya estaba ejecutándose con un build antiguo, deténlo e inícialo otra vez para que cargue el nuevo bundle.',
@@ -3314,7 +3314,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.h3.troubleshooting': 'Si algo sale mal',
         'docs.tsup.trouble.li1': '<strong>"Cannot find module \'tsup\'"</strong> — te saltaste <code>npm install</code>. Ejecútalo desde la carpeta del script.',
         'docs.tsup.trouble.li2': '<strong>El script no aparece en la pestaña Guiones</strong> — el campo <code>entry</code> de tu manifest no coincide con donde TSUP escribió realmente el archivo. Ambos deberían ser <code>dist/index.mjs</code>.',
-        'docs.tsup.trouble.li3': '<strong>Errores de tipos sobre <code>@hive/sdk</code></strong> — asegúrate de que esté listado como <code>external</code> en <code>tsup.config.ts</code>. Nunca empaquetes el SDK.',
+        'docs.tsup.trouble.li3': '<strong>Errores de tipos sobre <code>@luthermanager/sdk</code></strong> — asegúrate de que esté listado como <code>external</code> en <code>tsup.config.ts</code>. Nunca empaquetes el SDK.',
         'docs.tsup.trouble.li4': '<strong>Los cambios no se aplican</strong> — detén e inicia de nuevo el script en Hive después de cada rebuild, incluso en watch mode.',
         'docs.tsup.trouble.li5': '<strong>Los errores de runtime apuntan a números de línea extraños</strong> — comprueba que <code>dist/index.mjs.map</code> existe junto a <code>dist/index.mjs</code>. Eso es lo que mapea los errores de vuelta a tu TypeScript.',
         'docs.runScripts.p1': 'Una vez que hayas construido un script, ya sea a mano o con TSUP, aquí tienes exactamente cómo Hive lo encuentra, lo muestra en el dashboard y lo ejecuta. Esta guía también cubre qué hacer cuando no aparece.',
@@ -3339,7 +3339,7 @@ export default class MyScript extends TreeScript {
         'docs.runScripts.reloading.p1': 'Cuando editas el código fuente de tu script y vuelves a construirlo, Hive no recoge el cambio automáticamente. Pulsa <strong>Stop</strong> y luego <strong>Run</strong> otra vez en la fila; cada ejecución invalida la caché del import para que siempre se cargue el <code>dist/index.mjs</code> más reciente.',
         'docs.runScripts.reloading.p2': 'Si añadiste un script completamente nuevo mientras Hive estaba abierto, pulsa primero <strong>Refresh</strong> para que la nueva carpeta aparezca en la lista.',
         'docs.treescript.p1': 'Cuando tu script hace más de una cosa, combate <em>y</em> loot <em>y</em> nexus <em>y</em> vault, un único <code>onLoop()</code> se vuelve un caos muy rápido. <strong>TreeScript</strong> es un pequeño framework que te permite organizar un script como un árbol de decisión con <strong>branches</strong> (condiciones) y <strong>leaves</strong> (acciones), para que cada parte del comportamiento siga siendo pequeña, tenga nombre y sea independiente.',
-        'docs.treescript.p2': 'Está inspirado en el <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">TreeScript de DreamBot</a>. Si vienes de ahí, la forma te resultará familiar. Todo ya viene incluido en <code>@hive/sdk</code>; no hace falta instalar nada nuevo.',
+        'docs.treescript.p2': 'Está inspirado en el <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">TreeScript de DreamBot</a>. Si vienes de ahí, la forma te resultará familiar. Todo ya viene incluido en <code>@luthermanager/sdk</code>; no hace falta instalar nada nuevo.',
         'docs.treescript.h3.when': 'Cuándo usarlo',
         'docs.treescript.when.p1': 'No <em>tienes</em> que usar TreeScript. Una clase <code>Script</code> normal con un <code>onLoop()</code> escrito a mano está perfectamente bien para scripts pequeños. Empieza a merecer la pena cuando aparece uno o más de estos síntomas:',
         'docs.treescript.when.li1': 'Tu <code>onLoop()</code> se ha convertido en una torre de <code>if</code>/<code>else if</code>.',
@@ -3408,7 +3408,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.minimal.p1': 'Crea <code>Documents/Hive/Plugins/hello.mjs</code> con lo siguiente:',
         'docs.firstPlugin.minimal.p2': 'Aquí intervienen dos herramientas separadas, y esa separación es importante:',
         'docs.firstPlugin.minimal.li1': '<code>ctx</code> es el <strong>runtime del plugin</strong>. Muy pequeño. Solo se encarga de cosas que tienen sentido por plugin: identidad (<code>name</code>, <code>category</code>), estado controlado por el dashboard (<code>enabled</code>), settings del plugin y comandos de chat del plugin. Nada más.',
-        'docs.firstPlugin.minimal.li2': '<code>@hive/sdk</code> es la <strong>API del juego</strong>. Todo lo que habla con el mundo del juego, chat, events, enemies, players, self, world, inventory, combat, loot, vive ahí. Scripts y plugins comparten exactamente el mismo SDK.',
+        'docs.firstPlugin.minimal.li2': '<code>@luthermanager/sdk</code> es la <strong>API del juego</strong>. Todo lo que habla con el mundo del juego, chat, events, enemies, players, self, world, inventory, combat, loot, vive ahí. Scripts y plugins comparten exactamente el mismo SDK.',
         'docs.firstPlugin.minimal.p3': 'Así que <code>ctx.registerCommand(\'hello\', …)</code> registra el comando <code>/hello</code>, mientras que <code>chat.notify(\'Hi …\', \'Hello\')</code> (del SDK) muestra la notificación. Los plugins llegan al juego <strong>solo</strong> a través de imports del SDK. No existe <code>ctx.chat</code>, <code>ctx.events</code> ni <code>ctx.world</code>.',
         'docs.firstPlugin.minimal.p4': 'Puedes importar el SDK en dos estilos equivalentes. Usa el que te resulte más legible:',
         'docs.firstPlugin.minimal.p5': '<code>chat</code> y <code>Hive.chat</code> son literalmente el mismo objeto (igual con <code>events</code>, <code>inventory</code>, etc.), así que ambos estilos se pueden mezclar libremente en el mismo archivo. Después de activar el plugin en Hive:',
@@ -3446,7 +3446,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.hooks.li4': '<code>ctx.registerSetting(key, def, onChange?)</code> — registra una setting editable por el usuario, como se mostró arriba.',
         'docs.firstPlugin.hooks.li5': '<code>ctx.getSetting(key)</code> — lee el valor actual de una setting.',
         'docs.firstPlugin.hooks.li6': '<code>ctx.registerCommand(name, handler)</code> — se dispara cuando el usuario escribe <code>/name …</code> en el chat. Tu handler recibe los argumentos ya parseados como <code>string[]</code>; la línea de chat nunca se envía al servidor. Respeta <code>ctx.enabled</code> automáticamente.',
-        'docs.firstPlugin.hooks.p2': 'No hay <code>ctx.log</code>, ni <code>ctx.hookPacket</code>, ni <code>ctx.world</code>. Para depurar usa <code>console.log</code>. Para cleanup, devuelve una función desde <code>register</code>. Para <em>todo</em> lo relacionado con el juego, chat, events, enemies, world, self, inventory, impórtalo desde <code>@hive/sdk</code>. Puedes acceder a cada namespace de dos formas equivalentes:',
+        'docs.firstPlugin.hooks.p2': 'No hay <code>ctx.log</code>, ni <code>ctx.hookPacket</code>, ni <code>ctx.world</code>. Para depurar usa <code>console.log</code>. Para cleanup, devuelve una función desde <code>register</code>. Para <em>todo</em> lo relacionado con el juego, chat, events, enemies, world, self, inventory, impórtalo desde <code>@luthermanager/sdk</code>. Puedes acceder a cada namespace de dos formas equivalentes:',
         'docs.firstPlugin.hooks.p3': 'Por debajo son los mismos objetos, así que <code>chat === Hive.chat</code>. Usa el estilo que te resulte más claro. La superficie completa del SDK está documentada en la pestaña <strong>Referencia de la API</strong>. Algunos namespaces que usarás constantemente son <code>chat</code>, <code>events</code>, <code>Hive.self</code>, <code>Hive.world</code>, <code>Hive.enemies</code>, <code>Hive.players</code>, <code>Hive.inventory</code>, <code>Hive.combat</code>, <code>Hive.walking</code>. Algunos patrones muy comunes:',
         'docs.firstPlugin.hooks.li7': 'Reaccionar a un evento — usa una suscripción <code>events.on…</code>. Devuelve una función <code>unsubscribe</code>; guárdala en <code>register</code> y llámala desde el cleanup que devuelvas.',
         'docs.firstPlugin.hooks.li8': 'Leer estado actual — llama getters en <code>Hive.self</code>, <code>Hive.world</code>, <code>Hive.enemies</code>, <code>Hive.players</code>, <code>Hive.inventory</code>, etc.',
@@ -3468,7 +3468,7 @@ export default class MyScript extends TreeScript {
         'docs.runPlugins.twoSources.p1': 'Hive carga plugins desde dos lugares, y ambos aparecen en la pestaña <strong>Complementos</strong>:',
         'docs.runPlugins.twoSources.li1': '<strong>Bundled plugins</strong> — plugins first-party que vienen con la app (auto-nexus, anti-debuffs, etc.). Siempre disponibles y siempre actualizados junto con el cliente.',
         'docs.runPlugins.twoSources.li2': '<strong>User plugins</strong> — archivos <code>.mjs</code> que tú o la comunidad colocáis en <code>Documents/Hive/Plugins/</code>.',
-        'docs.runPlugins.twoSources.p2': 'Los bundled plugins se ejecutan con acceso completo a nivel de packet porque somos nosotros quienes distribuimos ese código y confiamos en él. Los plugins de la comunidad se ejecutan en un contexto restringido; solo interactúan con el juego a través de <code>@hive/sdk</code>, la misma superficie de alto nivel que usan los scripts. Ambos tipos se registran de la misma manera (exportan una función <code>register</code> y aparecen como tarjetas en el dashboard), así que la experiencia de autoría es casi idéntica.',
+        'docs.runPlugins.twoSources.p2': 'Los bundled plugins se ejecutan con acceso completo a nivel de packet porque somos nosotros quienes distribuimos ese código y confiamos en él. Los plugins de la comunidad se ejecutan en un contexto restringido; solo interactúan con el juego a través de <code>@luthermanager/sdk</code>, la misma superficie de alto nivel que usan los scripts. Ambos tipos se registran de la misma manera (exportan una función <code>register</code> y aparecen como tarjetas en el dashboard), así que la experiencia de autoría es casi idéntica.',
         'docs.runPlugins.h3.folder': 'La carpeta Plugins',
         'docs.runPlugins.folder.p1': 'La carpeta se crea automáticamente la primera vez que abres Hive. Si por alguna razón no existe, puedes crearla tú mismo o simplemente dejar ahí un archivo <code>.mjs</code>; Hive lo detectará en el siguiente escaneo.',
         'docs.runPlugins.h3.dashboard': 'La pestaña Plugins',
@@ -3500,9 +3500,9 @@ export default class MyScript extends TreeScript {
         'docs.troubleshooting.entryNotFound.means': '<strong>Qué significa:</strong> Hive encontró el manifest, pero el archivo al que apunta todavía no existe. Casi siempre esto significa que aún no has ejecutado el build: el manifest dice <code>dist/index.mjs</code>, pero todavía no existe la carpeta <code>dist/</code>.',
         'docs.troubleshooting.entryNotFound.fix': '<strong>Cómo arreglarlo:</strong> ejecuta <code>npm run build</code> dentro de la carpeta del script, confirma que <code>dist/index.mjs</code> ya existe y luego pulsa Refresh en la pestaña <strong>Guiones</strong>.',
         'docs.troubleshooting.h3.sdkFail': 'El import del SDK falla en runtime',
-        'docs.troubleshooting.sdkFail.see': '<strong>Qué verás:</strong> el script empieza a ejecutarse y enseguida falla con algo como <code>Cannot find module \'@hive/sdk\'</code>.',
+        'docs.troubleshooting.sdkFail.see': '<strong>Qué verás:</strong> el script empieza a ejecutarse y enseguida falla con algo como <code>Cannot find module \'@luthermanager/sdk\'</code>.',
         'docs.troubleshooting.sdkFail.means': '<strong>Qué significa:</strong> TSUP ha empaquetado una copia privada del SDK dentro de tu salida en lugar de dejar el import intacto. El SDK "real" lo inyecta Hive en tiempo de ejecución; tu bundle nunca debería llevar su propia copia.',
-        'docs.troubleshooting.sdkFail.fix': '<strong>Cómo arreglarlo:</strong> abre <code>tsup.config.ts</code> y asegúrate de que el array <code>external</code> incluya <code>\'@hive/sdk\'</code>. Vuelve a compilar y reinicia el script.',
+        'docs.troubleshooting.sdkFail.fix': '<strong>Cómo arreglarlo:</strong> abre <code>tsup.config.ts</code> y asegúrate de que el array <code>external</code> incluya <code>\'@luthermanager/sdk\'</code>. Vuelve a compilar y reinicia el script.',
         'docs.troubleshooting.h3.staleCode': 'Tus cambios no se están ejecutando',
         'docs.troubleshooting.staleCode.see': '<strong>Qué verás:</strong> has reconstruido el bundle, pero el script sigue comportándose igual que antes.',
         'docs.troubleshooting.staleCode.means': '<strong>Qué significa:</strong> o bien el script sigue ejecutando el bundle antiguo, o bien tu build falló silenciosamente.',
@@ -3685,7 +3685,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li1': '<code>entry</code> — die eine Datei, bei der TSUP mit dem Lesen beginnt. Jeder <code>import</code>, auf den TSUP dabei trifft, wird in die Ausgabe aufgenommen.',
         'docs.tsup.config.li2': '<code>format: [\'esm\']</code> — gibt ES-Module aus. Hive laedt Skripte ueber dynamisches <code>import()</code>, das nur ESM versteht.',
         'docs.tsup.config.li3': '<code>platform: \'node\'</code> + <code>target: \'node20\'</code> — moderne Node-Syntax (optional chaining, top-level <code>await</code> usw.) bleibt unveraendert, statt polyfilled zu werden.',
-        'docs.tsup.config.li4': '<code>external: [\'@hive/sdk\']</code> — <strong>kopiere das SDK nicht in dein Bundle.</strong> Hive injiziert das Live-SDK zur Laufzeit. Eine gebuendelte Kopie wuerde es nur duplizieren und Typen wie <code>Script</code> kaputtmachen.',
+        'docs.tsup.config.li4': '<code>external: [\'@luthermanager/sdk\']</code> — <strong>kopiere das SDK nicht in dein Bundle.</strong> Hive injiziert das Live-SDK zur Laufzeit. Eine gebuendelte Kopie wuerde es nur duplizieren und Typen wie <code>Script</code> kaputtmachen.',
         'docs.tsup.config.li5': '<code>outDir: \'dist\'</code> + <code>outExtension</code> — schreibt das Ergebnis nach <code>dist/index.mjs</code>. Dieser Pfad muss zum Feld <code>entry</code> in deinem Manifest <code>hive.script.json</code> passen.',
         'docs.tsup.config.li6': '<code>sourcemap: true</code> — erzeugt zusaetzlich <code>dist/index.mjs.map</code>, damit Laufzeit-Stacktraces auf deine urspruenglichen <code>.ts</code>-Zeilen zeigen und nicht auf die gebuendelte Ausgabe.',
         'docs.tsup.config.li7': '<code>clean: true</code> — leert <code>dist/</code> vor jedem Build, damit keine veralteten Dateien liegen bleiben.',
@@ -3693,7 +3693,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li9': '<code>dts: false</code> — ueberspringt das Erzeugen von <code>.d.ts</code>-Typdeklarationsdateien. Skripte brauchen sie nicht.',
         'docs.tsup.h3.writeCode': 'Schritt 4: Deinen Quellcode schreiben',
         'docs.tsup.writeCode.p1': 'Lege jede TypeScript-Datei, die du schreibst, unter <code>src/</code> ab. Beginne mit <code>src/index.ts</code>. Diese Datei ist in <code>entry</code> eingetragen, und dort beginnt TSUP mit dem Bundling.',
-        'docs.tsup.writeCode.p2': 'Die lokalen Imports (<code>./branches/combat</code>, <code>./branches/vault</code>) werden <em>in</em> <code>dist/index.mjs</code> gebuendelt. Der Import <code>@hive/sdk</code> bleibt unveraendert. Er wird auf das Live-SDK aufgeloest, das Hive bereitstellt, wenn das Skript laeuft.',
+        'docs.tsup.writeCode.p2': 'Die lokalen Imports (<code>./branches/combat</code>, <code>./branches/vault</code>) werden <em>in</em> <code>dist/index.mjs</code> gebuendelt. Der Import <code>@luthermanager/sdk</code> bleibt unveraendert. Er wird auf das Live-SDK aufgeloest, das Hive bereitstellt, wenn das Skript laeuft.',
         'docs.tsup.h3.build': 'Schritt 5: Bauen',
         'docs.tsup.build.p1': 'TSUP liest deine Konfiguration, kompiliert jede <code>.ts</code>-Datei, die vom Entry-Point aus erreicht wird, und schreibt das Bundle:',
         'docs.tsup.build.p2': 'Oeffne Hive, gehe zum Tab <strong>Skripte</strong>, und dein Skript sollte jetzt bereit zum Ausfuehren erscheinen. Falls es bereits mit einem aelteren Build lief, stoppe es und starte es erneut, damit das neue Bundle verwendet wird.',
@@ -3703,7 +3703,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.h3.troubleshooting': 'Wenn etwas schiefgeht',
         'docs.tsup.trouble.li1': '<strong>"Cannot find module \'tsup\'"</strong> — du hast <code>npm install</code> uebersprungen. Fuehre es im Skript-Ordner aus.',
         'docs.tsup.trouble.li2': '<strong>Skript erscheint nicht im Tab Skripte</strong> — das Feld <code>entry</code> in deinem Manifest passt nicht zu dem Ort, an den TSUP die Datei tatsaechlich geschrieben hat. Beides sollte <code>dist/index.mjs</code> sein.',
-        'docs.tsup.trouble.li3': '<strong>Typfehler zu <code>@hive/sdk</code></strong> — stelle sicher, dass es in <code>tsup.config.ts</code> als <code>external</code> eingetragen ist. Bundle das SDK niemals mit.',
+        'docs.tsup.trouble.li3': '<strong>Typfehler zu <code>@luthermanager/sdk</code></strong> — stelle sicher, dass es in <code>tsup.config.ts</code> als <code>external</code> eingetragen ist. Bundle das SDK niemals mit.',
         'docs.tsup.trouble.li4': '<strong>Aenderungen werden nicht uebernommen</strong> — stoppe und starte das Skript nach jedem Rebuild in Hive neu, auch im Watch Mode.',
         'docs.tsup.trouble.li5': '<strong>Laufzeitfehler zeigen auf merkwuerdige Zeilennummern</strong> — pruefe, dass <code>dist/index.mjs.map</code> neben <code>dist/index.mjs</code> existiert. Diese Datei ordnet Fehler wieder deinem TypeScript zu.',
         'docs.runScripts.p1': 'Sobald du ein Skript gebaut hast, entweder von Hand oder mit TSUP, erfahrst du hier genau, wie Hive es findet, im Dashboard anzeigt und ausfuehrt. Dieser Leitfaden erklaert auch, was du tun kannst, wenn es nicht auftaucht.',
@@ -3728,7 +3728,7 @@ export default class MyScript extends TreeScript {
         'docs.runScripts.reloading.p1': 'Wenn du den Quellcode deines Skripts bearbeitest und neu baust, uebernimmt Hive die Aenderung nicht automatisch. Druecke in der Zeile <strong>Stop</strong> und dann wieder <strong>Run</strong>. Jeder neue Start invalidiert den Import-Cache, sodass immer die aktuelle <code>dist/index.mjs</code> geladen wird.',
         'docs.runScripts.reloading.p2': 'Wenn du waehrend Hive geoeffnet war ein komplett neues Skript hinzugefuegt hast, druecke zuerst <strong>Refresh</strong>, damit der neue Ordner in der Liste erscheint.',
         'docs.treescript.p1': 'Sobald dein Skript mehr als eine Sache tut, also Kaempfen <em>und</em> looten <em>und</em> nexusen <em>und</em> einlagern, wird ein einzelnes <code>onLoop()</code> schnell unuebersichtlich. <strong>TreeScript</strong> ist ein kleines Framework, mit dem du ein Skript als Entscheidungsbaum aus <strong>branches</strong> (Bedingungen) und <strong>leaves</strong> (Aktionen) organisieren kannst, damit jedes Verhalten klein, benannt und voneinander getrennt bleibt.',
-        'docs.treescript.p2': 'Es orientiert sich an <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot\'s TreeScript</a>. Wenn du von dort kommst, wird dir die Form bekannt vorkommen. Alles ist bereits in <code>@hive/sdk</code> enthalten. Du musst nichts Neues installieren.',
+        'docs.treescript.p2': 'Es orientiert sich an <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot\'s TreeScript</a>. Wenn du von dort kommst, wird dir die Form bekannt vorkommen. Alles ist bereits in <code>@luthermanager/sdk</code> enthalten. Du musst nichts Neues installieren.',
         'docs.treescript.h3.when': 'Wann du dazu greifen solltest',
         'docs.treescript.when.p1': 'Du <em>musst</em> TreeScript nicht verwenden. Eine normale <code>Script</code>-Klasse mit einer handgeschriebenen <code>onLoop()</code> ist fuer kleine Skripte voellig in Ordnung. Greif zu TreeScript, wenn eines oder mehrere dieser Probleme auftreten:',
         'docs.treescript.when.li1': 'Dein <code>onLoop()</code> ist zu einem Turm aus <code>if</code>/<code>else if</code>-Zweigen geworden.',
@@ -3797,7 +3797,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.minimal.p1': 'Erstelle <code>Documents/Hive/Plugins/hello.mjs</code> und fuege Folgendes ein:',
         'docs.firstPlugin.minimal.p2': 'Hier spielen zwei getrennte Werkzeuge zusammen, und diese Trennung ist wichtig:',
         'docs.firstPlugin.minimal.li1': '<code>ctx</code> ist die <strong>plugin runtime</strong>. Sehr klein. Sie kuemmert sich um Dinge, die nur fuer ein einzelnes Plugin sinnvoll sind: Identitaet (<code>name</code>, <code>category</code>), dashboard-gesteuerter Zustand (<code>enabled</code>), plugin-spezifische Settings und plugin-spezifische Chatbefehle. Mehr ist es nicht.',
-        'docs.firstPlugin.minimal.li2': '<code>@hive/sdk</code> ist die <strong>game API</strong>. Alles rund um die Spielwelt, also chat, events, enemies, players, self, world, inventory, combat, loot, lebt dort. Skripte und Plugins teilen sich exakt dasselbe SDK.',
+        'docs.firstPlugin.minimal.li2': '<code>@luthermanager/sdk</code> ist die <strong>game API</strong>. Alles rund um die Spielwelt, also chat, events, enemies, players, self, world, inventory, combat, loot, lebt dort. Skripte und Plugins teilen sich exakt dasselbe SDK.',
         'docs.firstPlugin.minimal.p3': '<code>ctx.registerCommand(\'hello\', …)</code> verdrahtet also den Befehl <code>/hello</code>, und <code>chat.notify(\'Hi …\', \'Hello\')</code> (aus dem SDK) zeigt das Popup an. Plugins erreichen das Spiel <strong>ausschliesslich</strong> ueber SDK-Imports. Es gibt also kein <code>ctx.chat</code>, <code>ctx.events</code> oder <code>ctx.world</code>.',
         'docs.firstPlugin.minimal.p4': 'Du kannst das SDK in zwei gleichwertigen Stilen importieren. Nimm einfach den, der fuer dich besser lesbar ist:',
         'docs.firstPlugin.minimal.p5': '<code>chat</code> und <code>Hive.chat</code> sind buchstaeblich dasselbe Objekt (genauso bei <code>events</code>, <code>inventory</code> usw.), daher lassen sich beide Stile frei in derselben Datei kombinieren. Nach dem Aktivieren des Plugins in Hive:',
@@ -3835,7 +3835,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.hooks.li4': '<code>ctx.registerSetting(key, def, onChange?)</code> — ein vom Benutzer bearbeitbares Setting, wie oben gezeigt.',
         'docs.firstPlugin.hooks.li5': '<code>ctx.getSetting(key)</code> — liest den aktuellen Wert eines Settings.',
         'docs.firstPlugin.hooks.li6': '<code>ctx.registerCommand(name, handler)</code> — feuert, wenn der Benutzer im Chat <code>/name …</code> eingibt. Dein Handler erhaelt die geparste Argumentliste als <code>string[]</code>; die Chat-Zeile wird nie an den Server gesendet. Automatisch durch <code>ctx.enabled</code> gesteuert.',
-        'docs.firstPlugin.hooks.p2': 'Kein <code>ctx.log</code>, kein <code>ctx.hookPacket</code>, kein <code>ctx.world</code>. Fuer Debug-Ausgaben verwende <code>console.log</code>. Fuer Cleanup gib eine Funktion aus <code>register</code> zurueck. Fuer <em>alles</em> Spielbezogene, also chat, events, enemies, world, self, inventory, importiere es aus <code>@hive/sdk</code>. Du kannst jeden Namespace auf zwei gleichwertige Arten erreichen:',
+        'docs.firstPlugin.hooks.p2': 'Kein <code>ctx.log</code>, kein <code>ctx.hookPacket</code>, kein <code>ctx.world</code>. Fuer Debug-Ausgaben verwende <code>console.log</code>. Fuer Cleanup gib eine Funktion aus <code>register</code> zurueck. Fuer <em>alles</em> Spielbezogene, also chat, events, enemies, world, self, inventory, importiere es aus <code>@luthermanager/sdk</code>. Du kannst jeden Namespace auf zwei gleichwertige Arten erreichen:',
         'docs.firstPlugin.hooks.p3': 'Unter der Haube sind das dieselben Objekte, also <code>chat === Hive.chat</code>. Verwende den Stil, der sich fuer dich besser liest. Die vollstaendige SDK-Oberflaeche ist im Tab <strong>API Reference</strong> dokumentiert. Zu den Namespaces, die du am haeufigsten verwenden wirst, gehoeren <code>chat</code>, <code>events</code>, <code>Hive.self</code>, <code>Hive.world</code>, <code>Hive.enemies</code>, <code>Hive.players</code>, <code>Hive.inventory</code>, <code>Hive.combat</code>, <code>Hive.walking</code>. Einige Muster, die staendig vorkommen:',
         'docs.firstPlugin.hooks.li7': 'Auf ein Ereignis reagieren — verwende eine <code>events.on…</code>-Subscription. Sie gibt eine <code>unsubscribe</code>-Funktion zurueck. Speichere sie in <code>register</code> und rufe sie aus dem Cleanup auf, das du zurueckgibst.',
         'docs.firstPlugin.hooks.li8': 'Aktuellen Zustand lesen — rufe einen Getter auf <code>Hive.self</code>, <code>Hive.world</code>, <code>Hive.enemies</code>, <code>Hive.players</code>, <code>Hive.inventory</code> usw. auf.',
@@ -3857,7 +3857,7 @@ export default class MyScript extends TreeScript {
         'docs.runPlugins.twoSources.p1': 'Hive laedt Plugins aus zwei Orten, und beide siehst du im Tab <strong>Erweiterungen</strong>:',
         'docs.runPlugins.twoSources.li1': '<strong>Bundled plugins</strong> — First-Party-Plugins, die mit der App ausgeliefert werden (auto-nexus, anti-debuffs usw.). Immer verfuegbar, immer mit dem Client auf dem neuesten Stand.',
         'docs.runPlugins.twoSources.li2': '<strong>User plugins</strong> — <code>.mjs</code>-Dateien, die du oder die Community in <code>Documents/Hive/Plugins/</code> abgelegt habt.',
-        'docs.runPlugins.twoSources.p2': 'Bundled plugins laufen mit vollem Zugriff auf Packet-Ebene, weil wir diesen Code selbst ausliefern und ihm vertrauen. Community-Plugins laufen mit einem eingeschraenkten Kontext. Sie interagieren mit dem Spiel ausschliesslich ueber <code>@hive/sdk</code>, also dieselbe High-Level-Oberflaeche, die auch Scripts verwenden. Beide Arten werden auf dieselbe Weise registriert (sie exportieren eine <code>register</code>-Funktion und erscheinen als Karte im Dashboard), daher ist das Authoring-Erlebnis fast identisch.',
+        'docs.runPlugins.twoSources.p2': 'Bundled plugins laufen mit vollem Zugriff auf Packet-Ebene, weil wir diesen Code selbst ausliefern und ihm vertrauen. Community-Plugins laufen mit einem eingeschraenkten Kontext. Sie interagieren mit dem Spiel ausschliesslich ueber <code>@luthermanager/sdk</code>, also dieselbe High-Level-Oberflaeche, die auch Scripts verwenden. Beide Arten werden auf dieselbe Weise registriert (sie exportieren eine <code>register</code>-Funktion und erscheinen als Karte im Dashboard), daher ist das Authoring-Erlebnis fast identisch.',
         'docs.runPlugins.h3.folder': 'Der Plugins-Ordner',
         'docs.runPlugins.folder.p1': 'Der Ordner wird automatisch beim ersten Start von Hive angelegt. Falls er aus irgendeinem Grund nicht vorhanden ist, erstelle ihn selbst oder lege einfach eine <code>.mjs</code> dort ab, wo er sein sollte, und Hive erkennt sie beim naechsten Scan.',
         'docs.runPlugins.h3.dashboard': 'Der Tab Erweiterungen',
@@ -3889,9 +3889,9 @@ export default class MyScript extends TreeScript {
         'docs.troubleshooting.entryNotFound.means': '<strong>Was es bedeutet:</strong> Hive hat das Manifest gefunden, aber die Datei, auf die es zeigt, existiert noch nicht. Fast immer liegt das daran, dass du noch nicht gebaut hast. Das Manifest sagt <code>dist/index.mjs</code>, aber es gibt noch keinen Ordner <code>dist/</code>.',
         'docs.troubleshooting.entryNotFound.fix': '<strong>Loesung:</strong> Fuehre <code>npm run build</code> in deinem Skript-Ordner aus, bestaetige, dass <code>dist/index.mjs</code> jetzt existiert, und druecke dann im Tab <strong>Skripte</strong> auf Refresh.',
         'docs.troubleshooting.h3.sdkFail': 'SDK-Import scheitert zur Laufzeit',
-        'docs.troubleshooting.sdkFail.see': '<strong>Was du sehen wirst:</strong> Das Skript startet und bricht dann sofort mit etwas wie <code>Cannot find module \'@hive/sdk\'</code> ab.',
+        'docs.troubleshooting.sdkFail.see': '<strong>Was du sehen wirst:</strong> Das Skript startet und bricht dann sofort mit etwas wie <code>Cannot find module \'@luthermanager/sdk\'</code> ab.',
         'docs.troubleshooting.sdkFail.means': '<strong>Was es bedeutet:</strong> TSUP hat eine private Kopie des SDK in deine Ausgabe gebuendelt, statt den Import unveraendert zu lassen. Das Live-SDK wird von Hive zur Laufzeit bereitgestellt; dein Bundle sollte es nie enthalten.',
-        'docs.troubleshooting.sdkFail.fix': '<strong>Loesung:</strong> Oeffne <code>tsup.config.ts</code> und stelle sicher, dass das Array <code>external</code> <code>\'@hive/sdk\'</code> enthaelt. Baue neu und starte das Skript dann erneut.',
+        'docs.troubleshooting.sdkFail.fix': '<strong>Loesung:</strong> Oeffne <code>tsup.config.ts</code> und stelle sicher, dass das Array <code>external</code> <code>\'@luthermanager/sdk\'</code> enthaelt. Baue neu und starte das Skript dann erneut.',
         'docs.troubleshooting.h3.staleCode': 'Aenderungen werden nicht ausgefuehrt',
         'docs.troubleshooting.staleCode.see': '<strong>Was du sehen wirst:</strong> Du hast neu gebaut, aber das Skript verhaelt sich immer noch wie vorher.',
         'docs.troubleshooting.staleCode.means': '<strong>Was es bedeutet:</strong> Entweder laeuft das Skript noch mit dem alten Bundle, oder dein Build ist still fehlgeschlagen.',
@@ -4074,7 +4074,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li1': '<code>entry</code> — o arquivo a partir do qual o TSUP começa a ler. Todo <code>import</code> encontrado entra na saída.',
         'docs.tsup.config.li2': '<code>format: [\'esm\']</code> — emite módulos ES. O Hive carrega scripts via <code>import()</code> dinâmico, que só entende ESM.',
         'docs.tsup.config.li3': '<code>platform: \'node\'</code> + <code>target: \'node20\'</code> — a sintaxe moderna do Node (optional chaining, top-level <code>await</code> etc.) é mantida como está em vez de receber polyfills.',
-        'docs.tsup.config.li4': '<code>external: [\'@hive/sdk\']</code> — <strong>não copie o SDK para dentro do seu bundle.</strong> O Hive injeta o SDK real em runtime; empacotar uma cópia só o duplicaria e quebraria tipos como <code>Script</code>.',
+        'docs.tsup.config.li4': '<code>external: [\'@luthermanager/sdk\']</code> — <strong>não copie o SDK para dentro do seu bundle.</strong> O Hive injeta o SDK real em runtime; empacotar uma cópia só o duplicaria e quebraria tipos como <code>Script</code>.',
         'docs.tsup.config.li5': '<code>outDir: \'dist\'</code> + <code>outExtension</code> — escreve o resultado em <code>dist/index.mjs</code>. Esse caminho precisa coincidir com o campo <code>entry</code> do seu manifesto <code>hive.script.json</code>.',
         'docs.tsup.config.li6': '<code>sourcemap: true</code> — também gera <code>dist/index.mjs.map</code> para que stack traces em runtime apontem para suas linhas originais de <code>.ts</code> em vez da saída empacotada.',
         'docs.tsup.config.li7': '<code>clean: true</code> — limpa <code>dist/</code> antes de cada build para que arquivos antigos não fiquem sobrando.',
@@ -4082,7 +4082,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li9': '<code>dts: false</code> — pula a geração de arquivos de declaração <code>.d.ts</code>. Scripts não precisam deles.',
         'docs.tsup.h3.writeCode': 'Passo 4: escrever seu código-fonte',
         'docs.tsup.writeCode.p1': 'Coloque todo arquivo TypeScript que você criar dentro de <code>src/</code>. Comece por <code>src/index.ts</code>; esse é o arquivo listado em <code>entry</code> e é onde o TSUP começa o bundle.',
-        'docs.tsup.writeCode.p2': 'Os imports locais (<code>./branches/combat</code>, <code>./branches/vault</code>) são empacotados <em>dentro de</em> <code>dist/index.mjs</code>. O import de <code>@hive/sdk</code> é deixado intacto; ele será resolvido para o SDK real que o Hive fornece quando o script rodar.',
+        'docs.tsup.writeCode.p2': 'Os imports locais (<code>./branches/combat</code>, <code>./branches/vault</code>) são empacotados <em>dentro de</em> <code>dist/index.mjs</code>. O import de <code>@luthermanager/sdk</code> é deixado intacto; ele será resolvido para o SDK real que o Hive fornece quando o script rodar.',
         'docs.tsup.h3.build': 'Passo 5: build',
         'docs.tsup.build.p1': 'O TSUP lê sua configuração, compila cada arquivo <code>.ts</code> alcançado a partir do entry point e grava o bundle:',
         'docs.tsup.build.p2': 'Abra o Hive, vá para a aba <strong>Scripts</strong>, e seu script deve aparecer pronto para rodar. Se ele já estava rodando com um build antigo, pare e inicie novamente para carregar o novo bundle.',
@@ -4092,7 +4092,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.h3.troubleshooting': 'Se algo der errado',
         'docs.tsup.trouble.li1': '<strong>"Cannot find module \'tsup\'"</strong> — você pulou <code>npm install</code>. Rode-o a partir da pasta do script.',
         'docs.tsup.trouble.li2': '<strong>O script não aparece na aba Scripts</strong> — o campo <code>entry</code> do manifesto não coincide com onde o TSUP realmente escreveu o arquivo. Ambos devem ser <code>dist/index.mjs</code>.',
-        'docs.tsup.trouble.li3': '<strong>Erros de tipo sobre <code>@hive/sdk</code></strong> — verifique se ele está listado como <code>external</code> em <code>tsup.config.ts</code>. Nunca empacote o SDK.',
+        'docs.tsup.trouble.li3': '<strong>Erros de tipo sobre <code>@luthermanager/sdk</code></strong> — verifique se ele está listado como <code>external</code> em <code>tsup.config.ts</code>. Nunca empacote o SDK.',
         'docs.tsup.trouble.li4': '<strong>As edições não estão entrando</strong> — pare e inicie o script novamente no Hive após cada rebuild, mesmo em watch mode.',
         'docs.tsup.trouble.li5': '<strong>Erros de runtime apontam para números de linha estranhos</strong> — confira se <code>dist/index.mjs.map</code> existe ao lado de <code>dist/index.mjs</code>. É isso que mapeia os erros de volta para seu TypeScript.',
         'docs.runScripts.p1': 'Depois que você criar o build de um script, manualmente ou com TSUP, aqui está exatamente como o Hive o encontra, o mostra no dashboard e o executa. Este guia também cobre o que fazer quando ele não aparece.',
@@ -4117,7 +4117,7 @@ export default class MyScript extends TreeScript {
         'docs.runScripts.reloading.p1': 'Quando você edita o código-fonte do script e faz o build de novo, o Hive não pega a mudança automaticamente. Pressione <strong>Stop</strong> e depois <strong>Run</strong> outra vez na linha; cada execução invalida o cache do import para que você sempre receba o <code>dist/index.mjs</code> mais recente.',
         'docs.runScripts.reloading.p2': 'Se você adicionou um script completamente novo enquanto o Hive estava aberto, pressione <strong>Refresh</strong> primeiro para que a nova pasta apareça na lista.',
         'docs.treescript.p1': 'Quando seu script faz mais de uma coisa — combate <em>e</em> loot <em>e</em> nexus <em>e</em> vault — um único <code>onLoop()</code> fica bagunçado rápido. <strong>TreeScript</strong> é um pequeno framework que permite organizar um script como uma árvore de decisão com <strong>branches</strong> (condições) e <strong>leaves</strong> (ações), para que cada parte do comportamento continue pequena, nomeada e independente.',
-        'docs.treescript.p2': 'Ele é inspirado no <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">TreeScript do DreamBot</a>. Se você já veio de lá, a forma vai parecer familiar. Tudo já está incluído em <code>@hive/sdk</code>; não é preciso instalar nada novo.',
+        'docs.treescript.p2': 'Ele é inspirado no <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">TreeScript do DreamBot</a>. Se você já veio de lá, a forma vai parecer familiar. Tudo já está incluído em <code>@luthermanager/sdk</code>; não é preciso instalar nada novo.',
         'docs.treescript.h3.when': 'Quando usar',
         'docs.treescript.when.p1': 'Você <em>não precisa</em> usar TreeScript. Uma classe <code>Script</code> comum com um <code>onLoop()</code> escrito à mão é totalmente aceitável para scripts pequenos. Considere usar TreeScript quando um ou mais destes pontos começarem a aparecer:',
         'docs.treescript.when.li1': 'Seu <code>onLoop()</code> virou uma torre de <code>if</code>/<code>else if</code>.',
@@ -4186,7 +4186,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.minimal.p1': 'Crie <code>Documents/Hive/Plugins/hello.mjs</code> com o seguinte conteúdo:',
         'docs.firstPlugin.minimal.p2': 'Aqui existem duas ferramentas separadas, e essa separação é importante:',
         'docs.firstPlugin.minimal.li1': '<code>ctx</code> é o <strong>runtime do plugin</strong>. Bem pequeno. Ele cuida só do que faz sentido por plugin: identidade (<code>name</code>, <code>category</code>), estado controlado pelo dashboard (<code>enabled</code>), settings específicas e comandos de chat específicos do plugin. Só isso.',
-        'docs.firstPlugin.minimal.li2': '<code>@hive/sdk</code> é a <strong>API do jogo</strong>. Tudo que fala com o mundo do jogo — chat, events, enemies, players, self, world, inventory, combat, loot — vive ali. Scripts e plugins compartilham exatamente o mesmo SDK.',
+        'docs.firstPlugin.minimal.li2': '<code>@luthermanager/sdk</code> é a <strong>API do jogo</strong>. Tudo que fala com o mundo do jogo — chat, events, enemies, players, self, world, inventory, combat, loot — vive ali. Scripts e plugins compartilham exatamente o mesmo SDK.',
         'docs.firstPlugin.minimal.p3': 'Ou seja, <code>ctx.registerCommand(\'hello\', …)</code> registra o comando <code>/hello</code>, enquanto <code>chat.notify(\'Hi …\', \'Hello\')</code> (vindo do SDK) mostra a notificação. Plugins acessam o jogo <strong>apenas</strong> via imports do SDK. Não existe <code>ctx.chat</code>, <code>ctx.events</code> ou <code>ctx.world</code>.',
         'docs.firstPlugin.minimal.p4': 'Você pode importar o SDK em dois estilos equivalentes. Use o que achar mais legível:',
         'docs.firstPlugin.minimal.p5': '<code>chat</code> e <code>Hive.chat</code> são literalmente o mesmo objeto (o mesmo vale para <code>events</code>, <code>inventory</code> etc.), então os dois estilos podem ser misturados livremente na mesma file. Depois de habilitar o plugin no Hive:',
@@ -4224,7 +4224,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.hooks.li4': '<code>ctx.registerSetting(key, def, onChange?)</code> — registra uma setting editável pelo usuário, como mostrado acima.',
         'docs.firstPlugin.hooks.li5': '<code>ctx.getSetting(key)</code> — lê o valor atual de uma setting.',
         'docs.firstPlugin.hooks.li6': '<code>ctx.registerCommand(name, handler)</code> — dispara quando o usuário digita <code>/name …</code> no chat. Seu handler recebe os argumentos já quebrados como <code>string[]</code>; a mensagem não é enviada ao servidor. Isso já respeita <code>ctx.enabled</code> automaticamente.',
-        'docs.firstPlugin.hooks.p2': 'Não existe <code>ctx.log</code>, <code>ctx.hookPacket</code> nem <code>ctx.world</code>. Use <code>console.log</code> para depuração. Retorne uma função de cleanup a partir de <code>register</code> se precisar desmontar algo. Para <em>tudo</em> relacionado ao jogo — chat, events, enemies, world, self, inventory — importe do <code>@hive/sdk</code>. Você pode acessar cada namespace em dois estilos equivalentes:',
+        'docs.firstPlugin.hooks.p2': 'Não existe <code>ctx.log</code>, <code>ctx.hookPacket</code> nem <code>ctx.world</code>. Use <code>console.log</code> para depuração. Retorne uma função de cleanup a partir de <code>register</code> se precisar desmontar algo. Para <em>tudo</em> relacionado ao jogo — chat, events, enemies, world, self, inventory — importe do <code>@luthermanager/sdk</code>. Você pode acessar cada namespace em dois estilos equivalentes:',
         'docs.firstPlugin.hooks.p3': 'Por baixo dos panos, são os mesmos objetos, então <code>chat === Hive.chat</code>. Use o estilo que ler melhor para você. A superfície completa do SDK está documentada na aba <strong>Referência da API</strong>. Alguns namespaces que você vai usar o tempo todo: <code>chat</code>, <code>events</code>, <code>Hive.self</code>, <code>Hive.world</code>, <code>Hive.enemies</code>, <code>Hive.players</code>, <code>Hive.inventory</code>, <code>Hive.combat</code>, <code>Hive.walking</code>. Alguns padrões comuns:',
         'docs.firstPlugin.hooks.li7': 'Reagir a um evento — use uma subscription <code>events.on…</code>. Ela retorna uma função <code>unsubscribe</code>; guarde-a em <code>register</code> e chame no cleanup que você retornar.',
         'docs.firstPlugin.hooks.li8': 'Ler estado atual — chame getters em <code>Hive.self</code>, <code>Hive.world</code>, <code>Hive.enemies</code>, <code>Hive.players</code>, <code>Hive.inventory</code> etc.',
@@ -4246,7 +4246,7 @@ export default class MyScript extends TreeScript {
         'docs.runPlugins.twoSources.p1': 'O Hive carrega plugins de dois lugares, e ambos aparecem na aba <strong>Complementos</strong>:',
         'docs.runPlugins.twoSources.li1': '<strong>Bundled plugins</strong> — plugins first-party enviados junto com o app (auto-nexus, anti-debuffs e por aí vai). Sempre disponíveis, sempre atualizados junto com o cliente.',
         'docs.runPlugins.twoSources.li2': '<strong>User plugins</strong> — arquivos <code>.mjs</code> que você ou a comunidade colocam em <code>Documents/Hive/Plugins/</code>.',
-        'docs.runPlugins.twoSources.p2': 'Bundled plugins rodam com acesso completo em nível de packet porque somos nós que os distribuímos e confiamos nesse código. Plugins da comunidade rodam em um contexto restrito; eles só interagem com o jogo via <code>@hive/sdk</code>, a mesma superfície de alto nível usada pelos scripts. Os dois tipos são registrados do mesmo jeito (exportam uma função <code>register</code> e aparecem como cards no dashboard), então a experiência de autoria é quase igual.',
+        'docs.runPlugins.twoSources.p2': 'Bundled plugins rodam com acesso completo em nível de packet porque somos nós que os distribuímos e confiamos nesse código. Plugins da comunidade rodam em um contexto restrito; eles só interagem com o jogo via <code>@luthermanager/sdk</code>, a mesma superfície de alto nível usada pelos scripts. Os dois tipos são registrados do mesmo jeito (exportam uma função <code>register</code> e aparecem como cards no dashboard), então a experiência de autoria é quase igual.',
         'docs.runPlugins.h3.folder': 'A pasta Plugins',
         'docs.runPlugins.folder.p1': 'A pasta é criada automaticamente na primeira vez que você abre o Hive. Se por algum motivo ela não existir, você pode criá-la manualmente ou simplesmente salvar um arquivo <code>.mjs</code> nesse local; o Hive o encontrará no próximo scan.',
         'docs.runPlugins.h3.dashboard': 'A aba Plugins',
@@ -4278,9 +4278,9 @@ export default class MyScript extends TreeScript {
         'docs.troubleshooting.entryNotFound.means': '<strong>O que isso significa:</strong> o Hive encontrou o manifesto, mas o arquivo apontado por ele ainda não existe. Quase sempre isso quer dizer que você ainda não executou o build: o manifesto aponta para <code>dist/index.mjs</code>, mas a pasta <code>dist/</code> ainda não foi criada.',
         'docs.troubleshooting.entryNotFound.fix': '<strong>Como corrigir:</strong> rode <code>npm run build</code> dentro da pasta do script, confirme que <code>dist/index.mjs</code> agora existe e então clique em Refresh na aba <strong>Scripts</strong>.',
         'docs.troubleshooting.h3.sdkFail': 'O import do SDK falha em runtime',
-        'docs.troubleshooting.sdkFail.see': '<strong>O que você vai ver:</strong> o script começa a rodar e logo falha com algo como <code>Cannot find module \'@hive/sdk\'</code>.',
+        'docs.troubleshooting.sdkFail.see': '<strong>O que você vai ver:</strong> o script começa a rodar e logo falha com algo como <code>Cannot find module \'@luthermanager/sdk\'</code>.',
         'docs.troubleshooting.sdkFail.means': '<strong>O que isso significa:</strong> o TSUP empacotou uma cópia privada do SDK dentro da sua saída em vez de deixar o import intacto. O SDK "de verdade" é injetado pelo Hive em tempo de execução; seu bundle nunca deve carregar uma cópia dele.',
-        'docs.troubleshooting.sdkFail.fix': '<strong>Como corrigir:</strong> abra <code>tsup.config.ts</code> e confirme que o array <code>external</code> inclui <code>\'@hive/sdk\'</code>. Depois faça o build de novo e reinicie o script.',
+        'docs.troubleshooting.sdkFail.fix': '<strong>Como corrigir:</strong> abra <code>tsup.config.ts</code> e confirme que o array <code>external</code> inclui <code>\'@luthermanager/sdk\'</code>. Depois faça o build de novo e reinicie o script.',
         'docs.troubleshooting.h3.staleCode': 'Suas alterações não estão rodando',
         'docs.troubleshooting.staleCode.see': '<strong>O que você vai ver:</strong> você rebuildou, mas o script ainda se comporta como antes.',
         'docs.troubleshooting.staleCode.means': '<strong>O que isso significa:</strong> ou o script ainda está rodando o bundle antigo, ou o build falhou silenciosamente.',
@@ -4463,7 +4463,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li1': '<code>entry</code> — TSUP が読み始める 1 つの file です。そこで見つかったすべての <code>import</code> が output に取り込まれます。',
         'docs.tsup.config.li2': '<code>format: [\'esm\']</code> — ES modules を出力します。Hive は script を動的 <code>import()</code> で読み込むため、ESM しか理解しません。',
         'docs.tsup.config.li3': '<code>platform: \'node\'</code> + <code>target: \'node20\'</code> — modern Node syntax（optional chaining、top-level <code>await</code> など）は polyfill されず、そのまま残されます。',
-        'docs.tsup.config.li4': '<code>external: [\'@hive/sdk\']</code> — <strong>SDK を bundle の中にコピーしないでください。</strong> Hive は runtime で live SDK を注入します。コピーを bundle すると重複するだけで、<code>Script</code> のような types も壊れます。',
+        'docs.tsup.config.li4': '<code>external: [\'@luthermanager/sdk\']</code> — <strong>SDK を bundle の中にコピーしないでください。</strong> Hive は runtime で live SDK を注入します。コピーを bundle すると重複するだけで、<code>Script</code> のような types も壊れます。',
         'docs.tsup.config.li5': '<code>outDir: \'dist\'</code> + <code>outExtension</code> — 結果を <code>dist/index.mjs</code> に書き出します。この path は <code>hive.script.json</code> manifest の <code>entry</code> field と一致している必要があります。',
         'docs.tsup.config.li6': '<code>sourcemap: true</code> — <code>dist/index.mjs.map</code> も出力し、runtime の stack trace が bundle 後の code ではなく元の <code>.ts</code> lines を指すようにします。',
         'docs.tsup.config.li7': '<code>clean: true</code> — 毎回 build の前に <code>dist/</code> を空にして、古い files が残らないようにします。',
@@ -4471,7 +4471,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.config.li9': '<code>dts: false</code> — <code>.d.ts</code> type declaration files の生成を省略します。scripts には不要です。',
         'docs.tsup.h3.writeCode': '手順 4: source を書く',
         'docs.tsup.writeCode.p1': '作成する TypeScript files はすべて <code>src/</code> の下に置いてください。まずは <code>src/index.ts</code> から始めます。これは <code>entry</code> に書かれている file であり、TSUP が bundle を開始する場所です。',
-        'docs.tsup.writeCode.p2': 'ローカル imports（<code>./branches/combat</code>、<code>./branches/vault</code>）は <code>dist/index.mjs</code> に <em>まとめて</em> bundle されます。<code>@hive/sdk</code> の import はそのまま残り、script 実行時に Hive が提供する live SDK に解決されます。',
+        'docs.tsup.writeCode.p2': 'ローカル imports（<code>./branches/combat</code>、<code>./branches/vault</code>）は <code>dist/index.mjs</code> に <em>まとめて</em> bundle されます。<code>@luthermanager/sdk</code> の import はそのまま残り、script 実行時に Hive が提供する live SDK に解決されます。',
         'docs.tsup.h3.build': '手順 5: build',
         'docs.tsup.build.p1': 'TSUP は config を読み、entry point から到達できる各 <code>.ts</code> file を compile し、bundle を書き出します:',
         'docs.tsup.build.p2': 'Hive を開いて <strong>スクリプト</strong> tab に移動すると、script は実行可能な状態で表示されるはずです。古い build のまま既に動いていたなら、停止してからもう一度開始し、新しい bundle を読み込ませてください。',
@@ -4481,7 +4481,7 @@ export default class MyScript extends TreeScript {
         'docs.tsup.h3.troubleshooting': '問題が起きたら',
         'docs.tsup.trouble.li1': '<strong>"Cannot find module \'tsup\'"</strong> — <code>npm install</code> を飛ばしています。script フォルダーで実行してください。',
         'docs.tsup.trouble.li2': '<strong>script がスクリプト tab に出てこない</strong> — manifest の <code>entry</code> field が、TSUP が実際に file を書き出した場所と一致していません。どちらも <code>dist/index.mjs</code> であるべきです。',
-        'docs.tsup.trouble.li3': '<strong><code>@hive/sdk</code> に関する type errors</strong> — <code>tsup.config.ts</code> の <code>external</code> に入っていることを確認してください。SDK を bundle してはいけません。',
+        'docs.tsup.trouble.li3': '<strong><code>@luthermanager/sdk</code> に関する type errors</strong> — <code>tsup.config.ts</code> の <code>external</code> に入っていることを確認してください。SDK を bundle してはいけません。',
         'docs.tsup.trouble.li4': '<strong>編集が反映されない</strong> — watch mode 中でも、各 rebuild のあと Hive で script を止めて再起動してください。',
         'docs.tsup.trouble.li5': '<strong>runtime errors の line numbers が崩れている</strong> — <code>dist/index.mjs</code> の隣に <code>dist/index.mjs.map</code> があるか確認してください。それが TypeScript に error を対応付けるものです。',
         'docs.runScripts.p1': 'script を build したら、手書きでも TSUP でも、Hive がそれをどう見つけて dashboard に表示し、どう実行するかは次のとおりです。このガイドでは、表示されないときに何を確認すればいいかも説明します。',
@@ -4506,7 +4506,7 @@ export default class MyScript extends TreeScript {
         'docs.runScripts.reloading.p1': 'script の source を編集して build し直しても、Hive はその変更を自動では拾いません。その行で <strong>Stop</strong> を押し、続けて <strong>Run</strong> を押してください。実行し直すたびに import cache が破棄されるので、常に最新の <code>dist/index.mjs</code> が読み込まれます。',
         'docs.runScripts.reloading.p2': 'Hive を開いている間に script をまるごと新しく追加した場合は、まず <strong>Refresh</strong> を押して新しい folder を一覧に出してください。',
         'docs.treescript.p1': 'スクリプトが 1 つ以上のことをし始めると、combat <em>も</em> loot <em>も</em> nexus <em>も</em> vault <em>も</em>という状態になり、1 つの <code>onLoop()</code> はすぐに混乱します。<strong>TreeScript</strong> は、スクリプトを <strong>branches</strong>（条件）と <strong>leaves</strong>（行動）からなる決定木として整理するための小さな framework で、各振る舞いを小さく、名前付きで、独立したまま保てます。',
-        'docs.treescript.p2': 'これは <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot の TreeScript</a> に着想を得ています。そちらを使ったことがあるなら形はすぐ分かるはずです。必要なものはすべて <code>@hive/sdk</code> に含まれているので、新しく何かをインストールする必要はありません。',
+        'docs.treescript.p2': 'これは <a href="https://dreambot.org/javadocs/org/dreambot/api/script/frameworks/treebranch/TreeScript.html" target="_blank" rel="noreferrer">DreamBot の TreeScript</a> に着想を得ています。そちらを使ったことがあるなら形はすぐ分かるはずです。必要なものはすべて <code>@luthermanager/sdk</code> に含まれているので、新しく何かをインストールする必要はありません。',
         'docs.treescript.h3.when': 'いつ使うべきか',
         'docs.treescript.when.p1': 'TreeScript は必須ではありません。小さなスクリプトなら、手書きの <code>onLoop()</code> を持つ普通の <code>Script</code> クラスで十分です。次のような状態になってきたら検討してください:',
         'docs.treescript.when.li1': 'あなたの <code>onLoop()</code> が <code>if</code>/<code>else if</code> の塔になっている。',
@@ -4575,7 +4575,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.minimal.p1': '<code>Documents/Hive/Plugins/hello.mjs</code> を作り、次の内容を入れてください:',
         'docs.firstPlugin.minimal.p2': 'ここでは 2 つの別々の道具が使われていて、この分離が大切です:',
         'docs.firstPlugin.minimal.li1': '<code>ctx</code> は <strong>plugin runtime</strong> です。とても小さく、1 つの plugin にだけ意味があるものだけを扱います。identity（<code>name</code>, <code>category</code>）、dashboard 管理の state（<code>enabled</code>）、plugin 固有の settings、plugin 固有の chat commands です。それ以上はありません。',
-        'docs.firstPlugin.minimal.li2': '<code>@hive/sdk</code> は <strong>game API</strong> です。game world に関わるもの、つまり chat、events、enemies、players、self、world、inventory、combat、loot はすべてここにあります。scripts と plugins はまったく同じ SDK を共有します。',
+        'docs.firstPlugin.minimal.li2': '<code>@luthermanager/sdk</code> は <strong>game API</strong> です。game world に関わるもの、つまり chat、events、enemies、players、self、world、inventory、combat、loot はすべてここにあります。scripts と plugins はまったく同じ SDK を共有します。',
         'docs.firstPlugin.minimal.p3': 'つまり <code>ctx.registerCommand(\'hello\', …)</code> は <code>/hello</code> command を登録し、<code>chat.notify(\'Hi …\', \'Hello\')</code>（SDK から来るもの）は通知ポップアップを表示します。plugins が game に触れるのは <strong>SDK の import を通してのみ</strong> です。<code>ctx.chat</code> も <code>ctx.events</code> も <code>ctx.world</code> も存在しません。',
         'docs.firstPlugin.minimal.p4': 'SDK は 2 つの同等な style で import できます。読みやすい方を使ってください:',
         'docs.firstPlugin.minimal.p5': '<code>chat</code> と <code>Hive.chat</code> は文字どおり同じ object です（<code>events</code>、<code>inventory</code> なども同様）。なので同じ file の中で両方の style を自由に混ぜて構いません。Hive で plugin を有効化したら:',
@@ -4613,7 +4613,7 @@ export default class MyScript extends TreeScript {
         'docs.firstPlugin.hooks.li4': '<code>ctx.registerSetting(key, def, onChange?)</code> — 上で見たような user-editable setting を登録します。',
         'docs.firstPlugin.hooks.li5': '<code>ctx.getSetting(key)</code> — setting の現在値を読みます。',
         'docs.firstPlugin.hooks.li6': '<code>ctx.registerCommand(name, handler)</code> — user が chat で <code>/name …</code> と打ったときに発火します。handler は parse 済みの引数を <code>string[]</code> として受け取り、その chat line は server には送られません。これ自体は自動的に <code>ctx.enabled</code> を尊重します。',
-        'docs.firstPlugin.hooks.p2': '<code>ctx.log</code> も <code>ctx.hookPacket</code> も <code>ctx.world</code> もありません。debug には <code>console.log</code> を使ってください。cleanup が必要なら <code>register</code> から関数を返します。game に関する <em>すべて</em>、つまり chat、events、enemies、world、self、inventory などは <code>@hive/sdk</code> から import します。各 namespace には 2 つの等価な書き方でアクセスできます:',
+        'docs.firstPlugin.hooks.p2': '<code>ctx.log</code> も <code>ctx.hookPacket</code> も <code>ctx.world</code> もありません。debug には <code>console.log</code> を使ってください。cleanup が必要なら <code>register</code> から関数を返します。game に関する <em>すべて</em>、つまり chat、events、enemies、world、self、inventory などは <code>@luthermanager/sdk</code> から import します。各 namespace には 2 つの等価な書き方でアクセスできます:',
         'docs.firstPlugin.hooks.p3': '内部的には同じ object なので、<code>chat === Hive.chat</code> です。読みやすい style を使ってください。SDK の完全な surface area は <strong>APIリファレンス</strong> tab にあります。よく使う namespaces は <code>chat</code>、<code>events</code>、<code>Hive.self</code>、<code>Hive.world</code>、<code>Hive.enemies</code>、<code>Hive.players</code>、<code>Hive.inventory</code>、<code>Hive.combat</code>、<code>Hive.walking</code> です。よく出てくるパターンをいくつか挙げると:',
         'docs.firstPlugin.hooks.li7': 'event に反応する — <code>events.on…</code> の subscription を使います。これは <code>unsubscribe</code> 関数を返すので、<code>register</code> 内で保持し、返す cleanup から呼びます。',
         'docs.firstPlugin.hooks.li8': '現在の state を読む — <code>Hive.self</code>、<code>Hive.world</code>、<code>Hive.enemies</code>、<code>Hive.players</code>、<code>Hive.inventory</code> などの getter を呼びます。',
@@ -4635,7 +4635,7 @@ export default class MyScript extends TreeScript {
         'docs.runPlugins.twoSources.p1': 'Hive は 2 か所から plugins を読み込み、どちらも <strong>プラグイン</strong> タブに表示されます:',
         'docs.runPlugins.twoSources.li1': '<strong>Bundled plugins</strong> — app に同梱されている first-party plugins（auto-nexus、anti-debuffs など）です。常に利用可能で、client と一緒に更新されます。',
         'docs.runPlugins.twoSources.li2': '<strong>User plugins</strong> — あなたや community が <code>Documents/Hive/Plugins/</code> に置く <code>.mjs</code> files です。',
-        'docs.runPlugins.twoSources.p2': 'bundled plugins は、自分たちが配布し信頼している code なので packet level の完全な access で動きます。community plugins は制限された context で動き、game とのやり取りは <code>@hive/sdk</code> を通じてのみ行います。これは scripts が使うのと同じ high-level surface です。どちらも登録方法は同じで（<code>register</code> 関数を export し、dashboard に card として現れる）、authoring 体験はかなり似ています。',
+        'docs.runPlugins.twoSources.p2': 'bundled plugins は、自分たちが配布し信頼している code なので packet level の完全な access で動きます。community plugins は制限された context で動き、game とのやり取りは <code>@luthermanager/sdk</code> を通じてのみ行います。これは scripts が使うのと同じ high-level surface です。どちらも登録方法は同じで（<code>register</code> 関数を export し、dashboard に card として現れる）、authoring 体験はかなり似ています。',
         'docs.runPlugins.h3.folder': 'Plugins フォルダー',
         'docs.runPlugins.folder.p1': 'このフォルダーは Hive を初めて開いたときに自動作成されます。もし何らかの理由で存在しないなら、自分で作ってもいいですし、正しい場所に <code>.mjs</code> file を 1 つ置くだけでも次回 scan 時に認識されます。',
         'docs.runPlugins.h3.dashboard': 'プラグインタブ',
@@ -4667,9 +4667,9 @@ export default class MyScript extends TreeScript {
         'docs.troubleshooting.entryNotFound.means': '<strong>意味:</strong> Hive は manifest を見つけましたが、そこが指している file がまだ存在しません。ほとんどの場合、まだ build していないだけです。manifest は <code>dist/index.mjs</code> を指しているのに、<code>dist/</code> がまだない状態です。',
         'docs.troubleshooting.entryNotFound.fix': '<strong>対処法:</strong> script フォルダー内で <code>npm run build</code> を実行し、<code>dist/index.mjs</code> ができたことを確認してから、<strong>スクリプト</strong> タブで Refresh を押してください。',
         'docs.troubleshooting.h3.sdkFail': 'SDK import が runtime で失敗する',
-        'docs.troubleshooting.sdkFail.see': '<strong>何が起こるか:</strong> script は起動しようとしますが、すぐに <code>Cannot find module \'@hive/sdk\'</code> のような error で落ちます。',
+        'docs.troubleshooting.sdkFail.see': '<strong>何が起こるか:</strong> script は起動しようとしますが、すぐに <code>Cannot find module \'@luthermanager/sdk\'</code> のような error で落ちます。',
         'docs.troubleshooting.sdkFail.means': '<strong>意味:</strong> TSUP が import をそのまま残す代わりに、SDK の private copy を output の中に bundle してしまっています。本物の SDK は runtime で Hive が注入するもので、bundle が持つべきではありません。',
-        'docs.troubleshooting.sdkFail.fix': '<strong>対処法:</strong> <code>tsup.config.ts</code> を開き、<code>external</code> array に <code>\'@hive/sdk\'</code> が含まれていることを確認してください。その後 build し直して script を再起動します。',
+        'docs.troubleshooting.sdkFail.fix': '<strong>対処法:</strong> <code>tsup.config.ts</code> を開き、<code>external</code> array に <code>\'@luthermanager/sdk\'</code> が含まれていることを確認してください。その後 build し直して script を再起動します。',
         'docs.troubleshooting.h3.staleCode': '変更した code が実行されない',
         'docs.troubleshooting.staleCode.see': '<strong>何が起こるか:</strong> build し直したのに、script の挙動が前と同じままです。',
         'docs.troubleshooting.staleCode.means': '<strong>意味:</strong> まだ古い bundle を実行しているか、build が静かに失敗しています。',

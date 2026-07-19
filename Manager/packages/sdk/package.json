@@ -1,14 +1,14 @@
 {
-    "name": "@hive/sdk",
+    "name": "@luthermanager/sdk",
     "version": "1.0.0",
-    "description": "Hive SDK - RotMG Script Development Kit",
+    "description": "LutherManager SDK - RotMG Script Development Kit",
     "main": "./dist/index.js",
     "types": "./dist/types/index.d.ts",
     "scripts": {
         "build": "tsc",
         "watch": "tsc --watch"
     },
-    "keywords": ["hive", "sdk", "rotmg"],
+    "keywords": ["luthermanager", "sdk", "rotmg"],
     "devDependencies": {
         "typescript": "^5.0.0"
     }

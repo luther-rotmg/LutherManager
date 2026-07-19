@@ -1,4 +1,4 @@
-import { chat, events } from '@hive/sdk';
+import { chat, events } from '@luthermanager/sdk';
 import type {
   CharacterFameThresholdEvent,
   ChatHandler,
@@ -13,7 +13,7 @@ import type {
   PlayerJoinPartyEvent,
   PlayerJoinPartyMatchMode,
   ShotFiredEvent,
-} from '@hive/sdk';
+} from '@luthermanager/sdk';
 import type { BridgeDeps } from '../BridgeDeps.js';
 import type { ClientConnection } from '../../../proxy/ClientConnection.js';
 import type { Packet } from '../../../packets/Packet.js';

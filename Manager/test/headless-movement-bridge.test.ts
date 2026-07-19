@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Walking } from '@hive/sdk';
+import { Walking } from '@luthermanager/sdk';
 import type { Client, CombatPathfindingRange } from 'headless-client';
 import type { BridgeDeps } from '../src/scripts/bridge/BridgeDeps.js';
 import { installHeadlessBridge } from '../src/scripts/bridge/headless/HeadlessBridge.js';
