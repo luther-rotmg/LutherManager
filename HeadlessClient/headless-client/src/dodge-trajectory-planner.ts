@@ -76,6 +76,17 @@ export interface DodgePlannerMetrics {
   coalescedProjectileUpdates: number;
 }
 
+/**
+ * Same shape as {@link DodgePlannerMetrics} minus the three wall-clock fields
+ * (`planningDurationMs`, `averagePlanningDurationMs`, `worstPlanningDurationMs`).
+ * Populated by {@link SpaceTimeDodgePlanner.getDeterministicMetrics} for
+ * callers that need byte-identical replays — e.g. `AutoDodgeState`.
+ */
+export type DeterministicDodgePlannerMetrics = Omit<
+  DodgePlannerMetrics,
+  'planningDurationMs' | 'averagePlanningDurationMs' | 'worstPlanningDurationMs'
+>;
+
 export interface DodgePlannerOptions {
   timeLayersMs?: readonly number[];
   maxStatesPerLayer?: number;
@@ -626,6 +637,32 @@ export class SpaceTimeDodgePlanner {
       totalPlans: this.totalPlans,
       averagePlanningDurationMs: this.totalPlans > 0 ? this.totalDurationMs / this.totalPlans : 0,
       worstPlanningDurationMs: this.worstDurationMs,
+      coalescedProjectileUpdates: this.coalescedProjectileUpdates,
+    };
+  }
+
+  /**
+   * Same as {@link getMetrics} but excludes the three `performance.now()`-
+   * sourced fields (`planningDurationMs`, `averagePlanningDurationMs`,
+   * `worstPlanningDurationMs`). Use this when the returned metrics flow into
+   * something that requires byte-identical replays — `AutoDodgeState`,
+   * regression fixtures, `assert.deepStrictEqual`-style diffs. Live telemetry
+   * (dodge viewer, dashboards) should keep using {@link getMetrics}.
+   */
+  getDeterministicMetrics(): DeterministicDodgePlannerMetrics {
+    return {
+      layerCount: this.lastCounters.layerCount,
+      statesEnteringLayers: [...this.lastCounters.statesEnteringLayers],
+      candidatesGenerated: this.lastCounters.candidatesGenerated,
+      candidatesRejectedByGeometry: this.lastCounters.candidatesRejectedByGeometry,
+      candidatesRejectedByProjectiles: this.lastCounters.candidatesRejectedByProjectiles,
+      statesMerged: this.lastCounters.statesMerged,
+      statesPrunedByBeam: this.lastCounters.statesPrunedByBeam,
+      activeProjectilesConsidered: this.lastCounters.activeProjectilesConsidered,
+      trajectoryInvalidations: this.trajectoryInvalidations,
+      normalReplans: this.normalReplans,
+      urgentReplans: this.urgentReplans,
+      totalPlans: this.totalPlans,
       coalescedProjectileUpdates: this.coalescedProjectileUpdates,
     };
   }

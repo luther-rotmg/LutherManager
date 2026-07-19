@@ -1046,6 +1046,56 @@ test('thrown AOE tracker learns a radius for later matching effects', () => {
   assert.equal(active[0]?.landingTime, 500);
 });
 
+test('AutoDodgeState.plannerMetrics excludes wall-clock fields for replay determinism', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  const state = controller.evaluate({
+    time: 300,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.0096,
+    intentVelocity: { x: 0, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [hostileProjectile()],
+    aoes: [],
+    environment: openEnvironment,
+  });
+  const metrics = state.plannerMetrics as Record<string, unknown>;
+  assert.equal(metrics.planningDurationMs, undefined,
+    'planningDurationMs is wall-clock; must not appear on AutoDodgeState');
+  assert.equal(metrics.averagePlanningDurationMs, undefined,
+    'averagePlanningDurationMs is wall-clock-derived; must not appear on AutoDodgeState');
+  assert.equal(metrics.worstPlanningDurationMs, undefined,
+    'worstPlanningDurationMs is wall-clock-derived; must not appear on AutoDodgeState');
+  assert.ok(typeof state.plannerMetrics.candidatesRejectedByProjectiles === 'number',
+    'deterministic counter fields must still be present');
+  assert.ok(typeof state.plannerMetrics.totalPlans === 'number');
+});
+
+test('two independent controllers produce byte-identical AutoDodgeState on identical input', () => {
+  const buildEval = () => {
+    const controller = new PredictiveAutoDodgeController();
+    controller.setEnabled(true);
+    return controller.evaluate({
+      time: 300,
+      playerId: 10,
+      position: { x: 5, y: 5 },
+      moveSpeed: 0.0096,
+      intentVelocity: { x: 0, y: 0 },
+      movementLeadMs: 16,
+      projectiles: [hostileProjectile()],
+      aoes: [],
+      environment: openEnvironment,
+    });
+  };
+  const stateA = buildEval();
+  const stateB = buildEval();
+  // Byte-identical replay across two independent controller instances. Pre-
+  // P5 this failed on `planningDurationMs` differing between runs even for
+  // byte-identical inputs. The `getDeterministicMetrics` split makes it pass.
+  assert.deepStrictEqual(stateB, stateA);
+});
+
 test('dodge collision world rejects damaging and occupied tiles', () => {
   const data: CombatDataProvider = {
     getObject: (type) => type === 1
