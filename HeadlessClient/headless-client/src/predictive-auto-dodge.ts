@@ -6,6 +6,7 @@ import {
 } from './dodge-movement-intent';
 import {
   SpaceTimeDodgePlanner,
+  type DeterministicDodgePlannerMetrics,
   type DodgePlannerMetrics,
   type DodgePlannerOptions,
   type DodgePlanningAoe,
@@ -24,6 +25,7 @@ import {
 } from './dodge-jump-limiter';
 
 export type {
+  DeterministicDodgePlannerMetrics,
   DodgePlannerMetrics,
   DodgeTrajectory,
   TimedDodgeWaypoint,
@@ -127,7 +129,15 @@ export interface AutoDodgeState {
   lookaheadRevision: number;
   lookaheadChanged: boolean;
   decision: string;
-  plannerMetrics: DodgePlannerMetrics;
+  /**
+   * Deterministic subset of {@link DodgePlannerMetrics} — the three wall-clock
+   * fields (`planningDurationMs`, `averagePlanningDurationMs`,
+   * `worstPlanningDurationMs`) are excluded so two byte-identical replays
+   * produce byte-identical AutoDodgeState. Live telemetry consumers (dodge
+   * viewer, dashboards) should use {@link PredictiveAutoDodgeController.getPlannerMetrics}
+   * instead, which still returns the full DodgePlannerMetrics.
+   */
+  plannerMetrics: DeterministicDodgePlannerMetrics;
 }
 
 interface CommittedPlan {
@@ -200,7 +210,7 @@ export class PredictiveAutoDodgeController {
 
   constructor(plannerOptions: DodgePlannerOptions = {}) {
     this.planner = new SpaceTimeDodgePlanner(plannerOptions);
-    this.state = emptyState(false, this.planner.getMetrics());
+    this.state = emptyState(false, this.planner.getDeterministicMetrics());
   }
 
   setEnabled(enabled: boolean, options: AutoDodgeOptions = {}): void {
@@ -253,7 +263,7 @@ export class PredictiveAutoDodgeController {
     this.lastLookaheadTarget = null;
     this.lookaheadRevision = 0;
     this.lastMovementCommandAt = null;
-    this.state = emptyState(this.enabled, this.planner.getMetrics());
+    this.state = emptyState(this.enabled, this.planner.getDeterministicMetrics());
   }
 
   getState(): AutoDodgeState {
@@ -287,7 +297,7 @@ export class PredictiveAutoDodgeController {
     this.lastLookaheadTarget = null;
     this.replanCause = 'correction';
     this.state = {
-      ...emptyState(this.enabled, this.planner.getMetrics()),
+      ...emptyState(this.enabled, this.planner.getDeterministicMetrics()),
       planRevision: this.planRevision,
       searchRevision: this.searchRevision,
       lastReplanAt: this.lastReplanAt,
@@ -313,7 +323,7 @@ export class PredictiveAutoDodgeController {
   evaluate(snapshot: AutoDodgeSnapshot): AutoDodgeState {
     this.beginEvaluation();
     if (!this.enabled) {
-      this.state = emptyState(false, this.planner.getMetrics(), snapshot.intentVelocity);
+      this.state = emptyState(false, this.planner.getDeterministicMetrics(), snapshot.intentVelocity);
       return this.state;
     }
 
@@ -754,7 +764,7 @@ export class PredictiveAutoDodgeController {
       lookaheadRevision: this.lookaheadRevision,
       lookaheadChanged,
       decision: result.decision,
-      plannerMetrics: this.planner.getMetrics(),
+      plannerMetrics: this.planner.getDeterministicMetrics(),
     };
     return this.state;
   }
@@ -885,7 +895,7 @@ export class ThrownAoeTracker {
 
 function emptyState(
   enabled: boolean,
-  metrics: DodgePlannerMetrics,
+  metrics: DeterministicDodgePlannerMetrics,
   velocity = { x: 0, y: 0 },
 ): AutoDodgeState {
   return {
@@ -945,7 +955,9 @@ function cloneState(state: AutoDodgeState): AutoDodgeState {
   };
 }
 
-function cloneMetrics(metrics: DodgePlannerMetrics): DodgePlannerMetrics {
+function cloneMetrics(
+  metrics: DeterministicDodgePlannerMetrics,
+): DeterministicDodgePlannerMetrics {
   return { ...metrics, statesEnteringLayers: [...metrics.statesEnteringLayers] };
 }
 
