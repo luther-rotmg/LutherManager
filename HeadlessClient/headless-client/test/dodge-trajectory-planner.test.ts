@@ -695,6 +695,30 @@ test('planner metrics expose layer, rejection, merge, beam, and duration data', 
   assert.equal(result.metrics.activeProjectilesConsidered, 1);
 });
 
+test('createCollisionQuery fallback quantises enemyDistance to Float32 for snapshot parity', () => {
+  // A full-double value that doesn't round-trip through Float32. Pre-P5, the
+  // fallback path returned this value verbatim while the snapshot path stored
+  // it in a Float32Array and returned a quantised readback — same math input
+  // produced different softCost/terminalCost through evaluateEdge and could
+  // flip ULP rankScore ties. Post-P5 the fallback quantises to match.
+  const fullDouble = 0.12345678901234567;
+  const quantised = Math.fround(fullDouble);
+  assert.notEqual(quantised, fullDouble,
+    'sanity: the test value must actually differ under Math.fround');
+  const env: DodgePlanningEnvironment = {
+    canOccupy: () => true,
+    enemyClearance: () => fullDouble,
+    isProjectileSegmentOpen: () => true,
+  };
+  const result = plan(planningInput({ environment: env }));
+  // Direct probe: minimumEnemyClearance is populated from the collision
+  // query's enemyDistance return, funneled through evaluateEdge sample
+  // walks. Regardless of trajectory choice, the observed clearance must
+  // round through Float32 (i.e., match Math.fround exactly at some sample).
+  assert.equal(Math.fround(result.minimumEnemyClearance), result.minimumEnemyClearance,
+    'fallback path enemyDistance must be Float32-quantised');
+});
+
 function testPlanner(options: ConstructorParameters<typeof SpaceTimeDodgePlanner>[0] = {}) {
   return new SpaceTimeDodgePlanner({ maxStatesPerLayer: 64, ...options });
 }

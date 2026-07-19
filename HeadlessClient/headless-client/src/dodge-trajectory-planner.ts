@@ -1752,7 +1752,13 @@ function createCollisionQuery(
       blocked: (x, y) => rawBlocked(x, y)
         && !(allowStartingTile && isStartingTile(x, y)),
       damagingFloor: () => 0,
-      enemyDistance: (x, y) => environment.enemyClearance?.(x, y) ?? Infinity,
+      // Snapshot path (production, dodge-collision-world) stores enemyDistance
+      // as Float32Array; the fallback (tests) returns full-double
+      // environment.enemyClearance. Precision fork through evaluateEdge's
+      // softCost + terminalCost could flip degenerate rankScore ties between
+      // the two paths. Quantise to Float32 here so the fallback matches
+      // snapshot semantics — closes the fork at negligible cost.
+      enemyDistance: (x, y) => Math.fround(environment.enemyClearance?.(x, y) ?? Infinity),
     };
   }
   const indexAt = (x: number, y: number): number => {
