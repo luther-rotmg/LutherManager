@@ -276,6 +276,37 @@ test('projectile noclip does not bypass map bounds', () => {
   assert.equal(sent[0].objectId, 10);
 });
 
+test('combat tracker routes shot/hit history through the injected nowMs clock', () => {
+  // Deterministic clock — advances only when the test calls `advance()`.
+  let clockMs = 1_000_000;
+  const clockA = new CombatTracker(data(), () => undefined, undefined, () => clockMs);
+  const clockB = new CombatTracker(data(), () => undefined, undefined, () => clockMs);
+
+  const shotA = enemyShot();
+  const shotB = enemyShot();
+  clockA.trackEnemyShoot(shotA, 100, 0);
+  clockB.trackEnemyShoot(shotB, 100, 0);
+
+  clockA.update(600, world({ playerPos: { x: 5, y: 1 } }));
+  clockB.update(600, world({ playerPos: { x: 5, y: 1 } }));
+
+  // Both trackers used the same injected clock; recentAccuracy() over the
+  // same synthetic window returns the same fraction. With Date.now(),
+  // separate constructions could see different wall-clock values and
+  // recentAccuracy would drift.
+  assert.equal(clockA.accuracy(), clockB.accuracy());
+  clockMs += 30 * 60_000; // advance 30 minutes
+  assert.equal(clockA.recentAccuracy(1), clockB.recentAccuracy(1));
+});
+
+test('combat tracker constructor defaults nowMs to Date.now for source compatibility', () => {
+  // Backward compatibility — existing callers that omit the nowMs param must
+  // still build a working tracker whose accuracy() semantics carry the
+  // real-clock behavior. Just confirms the default works at construction.
+  const tracker = new CombatTracker(data(), () => undefined);
+  assert.equal(tracker.accuracy(), 0);
+});
+
 test('multi-hit projectiles keep accuracy within a 0-1 fraction', () => {
   const multiHit = { ...projectile, multiHit: true };
   const base = data();

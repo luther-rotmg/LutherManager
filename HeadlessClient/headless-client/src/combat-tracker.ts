@@ -172,6 +172,13 @@ export class CombatTracker {
     private readonly data: CombatDataProvider,
     private readonly send: (packet: Packet) => void,
     private readonly onPlayerHit?: (hit: CombatPlayerHit) => boolean,
+    /**
+     * Wall-clock source for accuracy-history bookkeeping. Defaults to
+     * `Date.now` for source compatibility with existing callers. Replay
+     * harnesses inject a deterministic clock (e.g. a frame-tick derived
+     * counter) so shot/hit history is byte-identical across runs.
+     */
+    private readonly nowMs: () => number = Date.now,
   ) {}
 
   clear(): void {
@@ -240,7 +247,7 @@ export class CombatTracker {
     if (ownerId === -1) {
       return;
     }
-    this.shotTimes.push(Date.now());
+    this.shotTimes.push(this.nowMs());
     this.pruneAccuracy();
     const baseDefinition = this.data.getProjectile(packet.containerType, projectileId);
     if (!baseDefinition || baseDefinition.lifetimeMs <= 0) {
@@ -321,7 +328,7 @@ export class CombatTracker {
 
   recentAccuracy(minutes: number): number {
     this.pruneAccuracy();
-    const cutoff = Date.now() - Math.max(0, minutes) * 60_000;
+    const cutoff = this.nowMs() - Math.max(0, minutes) * 60_000;
     const shots = this.shotTimes.filter((time) => time >= cutoff).length;
     if (shots === 0) return 0;
     return Math.min(1, this.hitTimes.filter((time) => time >= cutoff).length / shots);
@@ -333,7 +340,7 @@ export class CombatTracker {
   }
 
   private pruneAccuracy(): void {
-    const cutoff = Date.now() - ACCURACY_HISTORY_MS;
+    const cutoff = this.nowMs() - ACCURACY_HISTORY_MS;
     while (this.shotTimes.length > 0 && this.shotTimes[0]! < cutoff) this.shotTimes.shift();
     while (this.hitTimes.length > 0 && this.hitTimes[0]! < cutoff) this.hitTimes.shift();
   }
@@ -479,7 +486,7 @@ export class CombatTracker {
     hit.kill = false;
     hit.mainId = projectile.ownerId;
     this.send(hit);
-    this.hitTimes.push(Date.now());
+    this.hitTimes.push(this.nowMs());
     this.pruneAccuracy();
     projectile.hitObjects.add(enemy.objectId);
     return !projectile.definition.multiHit;
