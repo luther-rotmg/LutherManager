@@ -335,6 +335,13 @@ interface PlannerContext {
   collision: CollisionQuery;
   projectileSegments: ProjectileSegment[];
   projectileIndex: ProjectileSpatialIndex;
+  /**
+   * A defensive copy of `input.aoes` sorted by (landingTime, x, y, radius) so
+   * AoE iteration order is deterministic across replays. IEEE-754
+   * non-associativity would otherwise let iteration-order permutations flip
+   * ULP-scale rankScore ties.
+   */
+  sortedAoes: readonly DodgePlanningAoe[];
   controls: MovementControl[];
   counters: PlanCounters;
   startEnemyDistance: number;
@@ -670,6 +677,12 @@ export class SpaceTimeDodgePlanner {
       this.config.timeLayersMs,
       horizonMs,
     );
+    const sortedAoes = [...input.aoes].sort((a, b) => {
+      return a.landingTime - b.landingTime
+        || a.x - b.x
+        || a.y - b.y
+        || a.radius - b.radius;
+    });
     return {
       input,
       intent,
@@ -681,6 +694,7 @@ export class SpaceTimeDodgePlanner {
       collision,
       projectileSegments,
       projectileIndex,
+      sortedAoes,
       controls: createPlanningControls(input, projectileSegments),
       counters,
       startEnemyDistance: collision.enemyDistance(input.position.x, input.position.y),
@@ -1143,7 +1157,7 @@ export class SpaceTimeDodgePlanner {
       return undefined;
     }
 
-    for (const aoe of context.input.aoes) {
+    for (const aoe of context.sortedAoes) {
       const landingMs = aoe.landingTime - context.input.time;
       if (landingMs < startMs || landingMs > endMs) continue;
       const ratio = clamp((landingMs - startMs) / durationMs, 0, 1);
@@ -1461,7 +1475,16 @@ export class SpaceTimeDodgePlanner {
   ): ProjectileSegment[] {
     const segments: ProjectileSegment[] = [];
     const maximumReach = input.moveSpeed * horizonMs + PROJECTILE_NEAR_BAND + 2;
-    for (const projectile of input.projectiles) {
+    // Iterate projectiles in stable (ownerId, bulletId, startTime) order so the
+    // segment insertion order — and therefore the per-edge projectileCost sum
+    // order — is deterministic across replays. IEEE-754 non-associativity would
+    // otherwise let iteration-order permutations flip rankScore ties.
+    const sortedProjectiles = [...input.projectiles].sort((a, b) => {
+      return a.ownerId - b.ownerId
+        || a.bulletId - b.bulletId
+        || a.startTime - b.startTime;
+    });
+    for (const projectile of sortedProjectiles) {
       if (projectile.side !== 'enemy'
         || projectile.hitObjects.has(input.playerId)
         || projectile.startTime > input.time + horizonMs
@@ -1594,7 +1617,7 @@ export class SpaceTimeDodgePlanner {
           );
         }
       });
-      for (const aoe of input.aoes) {
+      for (const aoe of context.sortedAoes) {
         const landingMs = aoe.landingTime - input.time;
         if (landingMs < startMs || landingMs > endMs) continue;
         const ratio = (landingMs - startMs) / durationMs;
@@ -2033,7 +2056,10 @@ function retainSpatialCandidate(bucket: CandidateState[], candidate: CandidateSt
   }
   let worstIndex = 0;
   for (let index = 1; index < bucket.length; index++) {
-    if (candidateBefore(bucket[worstIndex]!, bucket[index]!)) worstIndex = index;
+    // Use the same comparator as every downstream consumer of the bucket
+    // (candidateDominatedBeforeSafety, retained.sort, diverseBeam) so we don't
+    // drop a rank-better incoming candidate while keeping a rank-worse held one.
+    if (candidateBeforeSort(bucket[worstIndex]!, bucket[index]!) < 0) worstIndex = index;
   }
   if (candidateBeforeSort(candidate, bucket[worstIndex]!) < 0) bucket[worstIndex] = candidate;
 }

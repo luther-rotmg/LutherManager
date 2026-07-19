@@ -695,6 +695,28 @@ test('planner metrics expose layer, rejection, merge, beam, and duration data', 
   assert.equal(result.metrics.activeProjectilesConsidered, 1);
 });
 
+test('projectile iteration order does not affect plan result (determinism)', () => {
+  const a = projectile({
+    ownerId: 100, bulletId: 1, startX: 4, startY: 5, angle: 0,
+    definition: { speed: 100 },
+  });
+  const b = projectile({
+    ownerId: 200, bulletId: 2, startX: 4, startY: 4.5, angle: 0,
+    definition: { speed: 100 },
+  });
+  const forward = plan(planningInput({ projectiles: [a, b] }));
+  const reversed = plan(planningInput({ projectiles: [b, a] }));
+  assert.deepStrictEqual(trajectorySignature(reversed), trajectorySignature(forward));
+});
+
+test('aoe iteration order does not affect plan result (determinism)', () => {
+  const a = { x: 6, y: 4.8, radius: 0.7, landingTime: 150 };
+  const b = { x: 6.5, y: 5.1, radius: 0.6, landingTime: 250 };
+  const forward = plan(planningInput({ aoes: [a, b] }));
+  const reversed = plan(planningInput({ aoes: [b, a] }));
+  assert.deepStrictEqual(trajectorySignature(reversed), trajectorySignature(forward));
+});
+
 function testPlanner(options: ConstructorParameters<typeof SpaceTimeDodgePlanner>[0] = {}) {
   return new SpaceTimeDodgePlanner({ maxStatesPerLayer: 64, ...options });
 }
