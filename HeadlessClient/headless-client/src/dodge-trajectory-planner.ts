@@ -1052,7 +1052,13 @@ export class SpaceTimeDodgePlanner {
     let enemyExposure = 0;
     let damagingExposure = 0;
     const spatialSteps = Math.ceil(travel / Math.max(0.05, context.collision.resolution));
-    const temporalSteps = travel <= DISTANCE_EPSILON ? 1 : Math.ceil(durationMs / STATIC_SAMPLE_MAX_MS);
+    // Wait edges (travel == 0) get sampled only once at ratio=1 (end of interval),
+    // which misses mid-wait combat-target dips inside `hardMinimumRange`. Force
+    // multi-sampling whenever combat-range intent is active so mobile-target
+    // range violations are caught.
+    const temporalSteps = travel <= DISTANCE_EPSILON && !combatIntent
+      ? 1
+      : Math.ceil(durationMs / STATIC_SAMPLE_MAX_MS);
     const sampleCount = Math.max(1, spatialSteps, temporalSteps);
     for (let sample = 1; sample <= sampleCount; sample++) {
       const ratio = sample / sampleCount;
@@ -1159,7 +1165,10 @@ export class SpaceTimeDodgePlanner {
 
     for (const aoe of context.sortedAoes) {
       const landingMs = aoe.landingTime - context.input.time;
-      if (landingMs < startMs || landingMs > endMs) continue;
+      // Half-open interval [startMs, endMs): an AoE landing exactly at a shared
+      // layer boundary is now included in the LATER edge only, not both edges,
+      // so soft projectileCost isn't accumulated twice for the same AoE.
+      if (landingMs < startMs || landingMs >= endMs) continue;
       const ratio = clamp((landingMs - startMs) / durationMs, 0, 1);
       const x = from.x + dx * ratio;
       const y = from.y + dy * ratio;
@@ -1619,7 +1628,11 @@ export class SpaceTimeDodgePlanner {
       });
       for (const aoe of context.sortedAoes) {
         const landingMs = aoe.landingTime - input.time;
-        if (landingMs < startMs || landingMs > endMs) continue;
+        // Half-open interval [startMs, endMs) — see the same fix in evaluateEdge's
+        // AoE loop above. earliestIntentCollision's use of Math.min is
+        // idempotent so double-counting here was harmless, but the parity keeps
+        // the two AoE-sample sites reading identically.
+        if (landingMs < startMs || landingMs >= endMs) continue;
         const ratio = (landingMs - startMs) / durationMs;
         const x = current.x + (next.x - current.x) * ratio;
         const y = current.y + (next.y - current.y) * ratio;
