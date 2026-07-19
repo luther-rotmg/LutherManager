@@ -8,12 +8,12 @@
 
 import { resolve } from 'path';
 import { existsSync, unlinkSync } from 'fs';
-import { extractGameXmls, getHiveDataDir } from '../src/util/rotmgAssetExtractor.js';
+import { extractGameXmls, getLutherDataDir } from '../src/util/rotmgAssetExtractor.js';
 
 const args = process.argv.slice(2);
 const force = args.includes('--force');
 
-let dataDir = getHiveDataDir();
+let dataDir = getLutherDataDir();
 const dirIdx = args.indexOf('--dir');
 if (dirIdx !== -1 && args[dirIdx + 1]) {
   dataDir = resolve(args[dirIdx + 1]);

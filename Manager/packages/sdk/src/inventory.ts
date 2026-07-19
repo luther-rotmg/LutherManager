@@ -90,63 +90,63 @@ export const INVENTORY_TOTAL_SLOT_COUNT =
 
 export const inventory = {
   getContainerSlots(_container: InventoryContainer): ContainerSlot[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   getContainerObjectId(_container: InventoryContainer): number {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   swapContainers(
     _from: { container: InventoryContainer; slotId: number; itemType?: number },
     _to: { container: InventoryContainer; slotId: number; itemType?: number },
   ): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
-  getFirstFilledSlot(_container: InventoryContainer): ContainerSlot | null { throw new Error('Must be run inside Hive client'); },
-  getFirstEmptySlot(_container: InventoryContainer): ContainerSlot | null { throw new Error('Must be run inside Hive client'); },
-  getContainerItemCount(_container: InventoryContainer): number { throw new Error('Must be run inside Hive client'); },
-  hasSpace(): boolean { throw new Error('Must be run inside Hive client'); },
-  swapInventoryWithPetBag(_inventorySlot: number, _petBagSlot: number, _petBagItemType?: number): boolean { throw new Error('Must be run inside Hive client'); },
-  swapInventoryWithVault(_inventorySlot: number, _vaultSlot: number): boolean { throw new Error('Must be run inside Hive client'); },
-  swapInventoryWithPotionVault(_inventorySlot: number, _potionSlot: number): boolean { throw new Error('Must be run inside Hive client'); },
+  getFirstFilledSlot(_container: InventoryContainer): ContainerSlot | null { throw new Error('Must be run inside LutherManager client'); },
+  getFirstEmptySlot(_container: InventoryContainer): ContainerSlot | null { throw new Error('Must be run inside LutherManager client'); },
+  getContainerItemCount(_container: InventoryContainer): number { throw new Error('Must be run inside LutherManager client'); },
+  hasSpace(): boolean { throw new Error('Must be run inside LutherManager client'); },
+  swapInventoryWithPetBag(_inventorySlot: number, _petBagSlot: number, _petBagItemType?: number): boolean { throw new Error('Must be run inside LutherManager client'); },
+  swapInventoryWithVault(_inventorySlot: number, _vaultSlot: number): boolean { throw new Error('Must be run inside LutherManager client'); },
+  swapInventoryWithPotionVault(_inventorySlot: number, _potionSlot: number): boolean { throw new Error('Must be run inside LutherManager client'); },
 
   /** Structured items in an account storage section. Empty cells are returned as `null`. */
   getStorageItems(_container: InventoryStorageContainer, _range?: InventoryStorageRange): (StorageItem | null)[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /** Find the first matching item in an account storage section. */
   findStorageItem(_container: InventoryStorageContainer, _query: number | string, _range?: InventoryStorageRange): StorageItem | null {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   storageContains(_container: InventoryStorageContainer, _query: number | string, _range?: InventoryStorageRange): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /** Move the first matching storage item into the first free carried slot. */
   withdrawStorageItem(_container: InventoryStorageContainer, _query: number | string, _range?: InventoryStorageRange): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /** Move as many selected storage items as possible into carried inventory. */
   withdrawAllStorageItems(_container: InventoryStorageContainer, _range?: InventoryStorageRange): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /** Move the first matching carried item into the first free selected storage slot. */
   depositStorageItem(_container: InventoryStorageContainer, _query: number | string, _range?: InventoryStorageRange): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   getStorageFreeSlots(_container: InventoryStorageContainer, _range?: InventoryStorageRange): number {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   isStorageFull(_container: InventoryStorageContainer, _range?: InventoryStorageRange): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   getSlot(_index: number): InventoryItem | null {
@@ -191,7 +191,7 @@ export const inventory = {
    * Derived from wire stat **130** (BackpackTier: `0` / `8` / `16`+) with legacy stat **75** when tier is absent or `0`.
    */
   getBackpack(): InventoryBackpackTier {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
@@ -199,12 +199,12 @@ export const inventory = {
    * Until backpack metadata is known, returns only guaranteed base slots 4–11.
    */
   getCapacity(): InventoryCapacity {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /** Usable bag slot ids for the current character (see {@link getCapacity}). */
   getUsableSlotIds(): number[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
@@ -212,12 +212,12 @@ export const inventory = {
    * Throws if the vault has not been entered yet.
    *
    * ```ts
-   * const slots = Hive.inventory.getVault();
+   * const slots = Luther.inventory.getVault();
    * // slots[0] = item type id of first vault slot, -1 if empty
    * ```
    */
   getVault(): number[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
@@ -225,7 +225,7 @@ export const inventory = {
    * Throws if the vault has not been entered yet.
    *
    * ```ts
-   * const v = Hive.inventory.getEntireVault();
+   * const v = Luther.inventory.getEntireVault();
    * console.log(v.vault);           // main vault chest — number[]
    * console.log(v.material);        // material chest
    * console.log(v.gift);            // gift chest
@@ -235,56 +235,56 @@ export const inventory = {
    * ```
    */
   getEntireVault(): VaultStorageSnapshot {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /** Alias with an explicit name for consumers that retain and compare revisions. */
   getVaultSnapshot(): VaultStorageSnapshot {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
    * Item type ids in the material chest, `-1` = empty. Throws if the vault has not been entered yet.
    *
    * ```ts
-   * const mats = Hive.inventory.getMaterials();
+   * const mats = Luther.inventory.getMaterials();
    * ```
    */
   getMaterials(): number[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
    * Item type ids in the potion storage chest, `-1` = empty. Throws if the vault has not been entered yet.
    *
    * ```ts
-   * const pots = Hive.inventory.getPotions();
+   * const pots = Luther.inventory.getPotions();
    * ```
    */
   getPotions(): number[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
    * Item type ids in the gift chest, `-1` = empty. Throws if the vault has not been entered yet.
    *
    * ```ts
-   * const gifts = Hive.inventory.getGifts();
+   * const gifts = Luther.inventory.getGifts();
    * ```
    */
   getGifts(): number[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
    * Item type ids in the seasonal spoils chest, `-1` = empty. Throws if the vault has not been entered yet.
    *
    * ```ts
-   * const spoils = Hive.inventory.getSeasonalSpoils();
+   * const spoils = Luther.inventory.getSeasonalSpoils();
    * ```
    */
   getSeasonalSpoils(): number[] {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
@@ -297,7 +297,7 @@ export const inventory = {
    *   **first occupied** vault cell.
    */
   withdraw(_target: number, _side: InventoryStorageSide): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 
   /**
@@ -309,7 +309,7 @@ export const inventory = {
    *   occupied** inventory slot.
    */
   deposit(_target: number, _side: InventoryStorageSide): boolean {
-    throw new Error('Must be run inside Hive client');
+    throw new Error('Must be run inside LutherManager client');
   },
 };
 

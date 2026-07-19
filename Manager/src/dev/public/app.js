@@ -1,4 +1,4 @@
-// Hive Dashboard
+// Luther Dashboard
 (function() {
   // ── Electron detection & window controls ──
   const isElectron = !!(window.electronAPI);
@@ -190,7 +190,7 @@
       'tutorial.settings.replayLabel': 'Replay tutorial',
       'tutorial.settings.replayDesc': 'Walk through the app introduction again.',
       'tutorial.settings.replayBtn': 'Replay',
-      'tutorial.step0.title': 'Welcome to Hive',
+      'tutorial.step0.title': 'Welcome to Luther',
       'tutorial.step0.body': 'Your all-in-one companion for Realm of the Mad God. Let\'s take a quick tour so you know where everything is.',
       'tutorial.step0.dim': 'This will only take a minute.',
       'tutorial.step1.title': 'Home',
@@ -299,7 +299,7 @@
       'home.script.start': 'Start',
       'home.script.pause': 'Pause',
       'home.script.openScriptsTab': 'Scripts',
-      'home.script.note.setup': 'Use the Scripts tab to run .mjs script packages from Documents/Hive/Scripts.',
+      'home.script.note.setup': 'Use the Scripts tab to run .mjs script packages from Documents/Luther/Scripts.',
       'home.script.note.lastRun': 'Last run: {name} ({duration})',
       'home.script.state.running': 'Running',
       'home.script.state.paused': 'Paused',
@@ -508,14 +508,14 @@
       'multibox.presetTitle6': 'Estilo Kronk: grande arriba-derecha, dos a la izquierda, fila inferior ×3',
       'multibox.presetTitle8': '8 clientes: grande arriba-derecha, izquierda ×2, fila inferior ×5',
       'tab.developer': 'Desarrollador',
-      'memHelper.hero.kicker': 'Hive · herramientas admin',
+      'memHelper.hero.kicker': 'Luther · herramientas admin',
       'memHelper.hero.title': 'Ayuda Mem',
       'memHelper.hero.tagline': 'Higiene de memoria en vivo para ROTMG: recorta colas de paquetes, cachés del Packet Lab y buffers de la UI cuando NEWTICK/MOVE saturen el panel.',
       'memHelper.btn.smartTrim': 'Recorte inteligente',
       'memHelper.btn.serverTrim': 'Recortar buffers del proxy',
       'memHelper.btn.refresh': 'Actualizar estadísticas',
       'memHelper.metrics.title': 'Proceso proxy (Node)',
-      'memHelper.metrics.note': 'Mide Hive / proxy — no Flash ni Unity Exalt.',
+      'memHelper.metrics.note': 'Mide Luther / proxy — no Flash ni Unity Exalt.',
       'memHelper.metrics.rss': 'RSS',
       'memHelper.metrics.heapUsed': 'Heap usado',
       'memHelper.metrics.heapTotal': 'Heap total',
@@ -527,7 +527,7 @@
       'memHelper.feat.dashboard.title': 'Buffers del panel',
       'memHelper.feat.dashboard.desc': 'Reduce historial de paquetes, recorta logs de plugins y compacta el feed de inicio.',
       'memHelper.feat.performance.title': 'Consejo',
-      'memHelper.feat.performance.desc': 'Para afinado de CPU en Windows, inspírate en herramientas como Bitsum Process Lasso; Hive solo recorta proxy y UI.',
+      'memHelper.feat.performance.desc': 'Para afinado de CPU en Windows, inspírate en herramientas como Bitsum Process Lasso; Luther solo recorta proxy y UI.',
       'memHelper.danger.title': 'Avanzado',
       'memHelper.danger.intro': 'Poco habitual. Borra entidades/tiles rastreados en el espejo del mundo del panel — los scripts pueden fallar hasta lleguen UPDATE nuevos.',
       'memHelper.danger.btnWorld': 'Reset duro del mundo del panel',
@@ -581,7 +581,7 @@
       'tutorial.settings.replayLabel': 'Repetir tutorial',
       'tutorial.settings.replayDesc': 'Recorre de nuevo la introducción de la app.',
       'tutorial.settings.replayBtn': 'Repetir',
-      'tutorial.step0.title': 'Bienvenido a Hive',
+      'tutorial.step0.title': 'Bienvenido a Luther',
       'tutorial.step0.body': 'Tu compañero todo en uno para Realm of the Mad God. Hagamos un recorrido rápido para que sepas dónde está todo.',
       'tutorial.step0.dim': 'Esto solo tomará un minuto.',
       'tutorial.step1.title': 'Inicio',
@@ -689,7 +689,7 @@
       'home.script.start': 'Iniciar',
       'home.script.pause': 'Pausa',
       'home.script.openScriptsTab': 'Guiones',
-      'home.script.note.setup': 'Usa la pestaña Guiones para ejecutar paquetes .mjs desde Documents/Hive/Scripts.',
+      'home.script.note.setup': 'Usa la pestaña Guiones para ejecutar paquetes .mjs desde Documents/Luther/Scripts.',
       'home.script.note.lastRun': 'Última ejecución: {name} ({duration})',
       'home.script.state.running': 'En ejecución',
       'home.script.state.paused': 'En pausa',
@@ -844,14 +844,14 @@
       'multibox.presetTitle6': 'Wie KronkBoxer: groß oben rechts, zwei links gestapelt, unten ×3',
       'multibox.presetTitle8': '8 Clients: groß oben rechts, links ×2, unten ×5',
       'tab.developer': 'Entwickler',
-      'memHelper.hero.kicker': 'Hive · Admin-Tools',
+      'memHelper.hero.kicker': 'Luther · Admin-Tools',
       'memHelper.hero.title': 'Speicher-Hilfe',
       'memHelper.hero.tagline': 'Live-Speicherhygiene für ROTMG: Paket-Backlog, Packet-Lab-Caches und Dashboard-Puffer kappen, wenn NEWTICK/MOVE fluten.',
       'memHelper.btn.smartTrim': 'Smart trim',
       'memHelper.btn.serverTrim': 'Proxy-Puffer leeren',
       'memHelper.btn.refresh': 'Statistik aktualisieren',
       'memHelper.metrics.title': 'Proxy-Prozess (Node)',
-      'memHelper.metrics.note': 'Misst Hive / Proxy — nicht Flash oder Unity Exalt.',
+      'memHelper.metrics.note': 'Misst Luther / Proxy — nicht Flash oder Unity Exalt.',
       'memHelper.metrics.rss': 'RSS',
       'memHelper.metrics.heapUsed': 'Heap belegt',
       'memHelper.metrics.heapTotal': 'Heap gesamt',
@@ -863,7 +863,7 @@
       'memHelper.feat.dashboard.title': 'Dashboard-Puffer',
       'memHelper.feat.dashboard.desc': 'Kürzt Paketliste, Plugin-Logs und Home-Feed gemeinsam mit dem Node-Trim.',
       'memHelper.feat.performance.title': 'Hinweis',
-      'memHelper.feat.performance.desc': 'CPU-Affinität und Priorität: z. B. Bitsum Process Lasso; Hive trimmt nur Proxy/UI.',
+      'memHelper.feat.performance.desc': 'CPU-Affinität und Priorität: z. B. Bitsum Process Lasso; Luther trimmt nur Proxy/UI.',
       'memHelper.danger.title': 'Erweitert',
       'memHelper.danger.intro': 'Löscht getrackte Entities/Tiles — Skripte können haken, bis neue UPDATEs kommen.',
       'memHelper.danger.btnWorld': 'Welt-Snapshot hart zurücksetzen',
@@ -917,7 +917,7 @@
       'tutorial.settings.replayLabel': 'Tutorial erneut abspielen',
       'tutorial.settings.replayDesc': 'Gehe die App-Einführung noch einmal durch.',
       'tutorial.settings.replayBtn': 'Erneut abspielen',
-      'tutorial.step0.title': 'Willkommen bei Hive',
+      'tutorial.step0.title': 'Willkommen bei Luther',
       'tutorial.step0.body': 'Dein All-in-One-Begleiter für Realm of the Mad God. Machen wir eine kurze Tour, damit du weißt, wo alles ist.',
       'tutorial.step0.dim': 'Das dauert nur eine Minute.',
       'tutorial.step1.title': 'Start',
@@ -1025,7 +1025,7 @@
       'home.script.start': 'Start',
       'home.script.pause': 'Pause',
       'home.script.openScriptsTab': 'Skripte',
-      'home.script.note.setup': 'Nutze den Skripte-Tab, um .mjs-Pakete aus Documents/Hive/Scripts auszuführen.',
+      'home.script.note.setup': 'Nutze den Skripte-Tab, um .mjs-Pakete aus Documents/Luther/Scripts auszuführen.',
       'home.script.note.lastRun': 'Letzter Lauf: {name} ({duration})',
       'home.script.state.running': 'Läuft',
       'home.script.state.paused': 'Pausiert',
@@ -1180,14 +1180,14 @@
       'multibox.presetTitle6': 'Como ferramentas de multibox: grande canto superior direito, dois à esquerda, base ×3',
       'multibox.presetTitle8': '8 clientes: grande top-direito, esquerda ×2, inferior ×5',
       'tab.developer': 'Desenvolvedor',
-      'memHelper.hero.kicker': 'Hive · admin',
+      'memHelper.hero.kicker': 'Luther · admin',
       'memHelper.hero.title': 'Ajuda Memória',
       'memHelper.hero.tagline': 'Higiene de memória ao vivo para ROTMG: reduz filas de pacotes, caches do Packet Lab e buffers do painel.',
       'memHelper.btn.smartTrim': 'Corte inteligente',
       'memHelper.btn.serverTrim': 'Limpar buffers do proxy',
       'memHelper.btn.refresh': 'Atualizar estatísticas',
       'memHelper.metrics.title': 'Processo proxy (Node)',
-      'memHelper.metrics.note': 'Mede Hive / proxy — não Flash nem Unity Exalt.',
+      'memHelper.metrics.note': 'Mede Luther / proxy — não Flash nem Unity Exalt.',
       'memHelper.metrics.rss': 'RSS',
       'memHelper.metrics.heapUsed': 'Heap em uso',
       'memHelper.metrics.heapTotal': 'Heap total',
@@ -1199,7 +1199,7 @@
       'memHelper.feat.dashboard.title': 'Buffers da UI',
       'memHelper.feat.dashboard.desc': 'Encolhe histórico, logs de plugins e feed inicial.',
       'memHelper.feat.performance.title': 'Dica',
-      'memHelper.feat.performance.desc': 'CPU no Windows: veja Bitsum Process Lasso; Hive só corta proxy/UI.',
+      'memHelper.feat.performance.desc': 'CPU no Windows: veja Bitsum Process Lasso; Luther só corta proxy/UI.',
       'memHelper.danger.title': 'Avançado',
       'memHelper.danger.intro': 'Apaga entidades/tiles rastreados — scripts podem falhar até novos UPDATEs.',
       'memHelper.danger.btnWorld': 'Reset duro do snapshot do mundo',
@@ -1253,7 +1253,7 @@
       'tutorial.settings.replayLabel': 'Rever tutorial',
       'tutorial.settings.replayDesc': 'Percorra novamente a introdução do app.',
       'tutorial.settings.replayBtn': 'Rever',
-      'tutorial.step0.title': 'Bem-vindo ao Hive',
+      'tutorial.step0.title': 'Bem-vindo ao Luther',
       'tutorial.step0.body': 'Seu companheiro tudo-em-um para Realm of the Mad God. Vamos fazer um tour rápido para você saber onde fica tudo.',
       'tutorial.step0.dim': 'Isso leva só um minuto.',
       'tutorial.step1.title': 'Início',
@@ -1361,7 +1361,7 @@
       'home.script.start': 'Iniciar',
       'home.script.pause': 'Pausar',
       'home.script.openScriptsTab': 'Roteiros',
-      'home.script.note.setup': 'Use a aba Roteiros para executar pacotes .mjs em Documents/Hive/Scripts.',
+      'home.script.note.setup': 'Use a aba Roteiros para executar pacotes .mjs em Documents/Luther/Scripts.',
       'home.script.note.lastRun': 'Última execução: {name} ({duration})',
       'home.script.state.running': 'Em execução',
       'home.script.state.paused': 'Pausado',
@@ -1517,14 +1517,14 @@
       'multibox.presetTitle6': 'Kronk風：右上メイン約半分／左縦2／下に3並び（一般的なマルチボックス並びに近い）',
       'multibox.presetTitle8': '8窓：右上メイン広め、左縦2、下に5列',
       'tab.developer': '開発者',
-      'memHelper.hero.kicker': 'Hive · 管理者向け',
+      'memHelper.hero.kicker': 'Luther · 管理者向け',
       'memHelper.hero.title': 'メモリヘルパー',
       'memHelper.hero.tagline': 'ROTMG向けのリアルタイムメモリ管理。パケットキュー、パケットラボ、UIバッファを整理し、NEWTICK/MOVEの多い場面でもダッシュボードを軽く。',
       'memHelper.btn.smartTrim': 'スマートトリム',
       'memHelper.btn.serverTrim': 'プロキシバッファをクリア',
       'memHelper.btn.refresh': '統計を更新',
       'memHelper.metrics.title': 'プロキシプロセス（Node）',
-      'memHelper.metrics.note': 'Hive / プロキシの値 — Flash や Unity Exalt ではありません。',
+      'memHelper.metrics.note': 'Luther / プロキシの値 — Flash や Unity Exalt ではありません。',
       'memHelper.metrics.rss': 'RSS',
       'memHelper.metrics.heapUsed': '使用中ヒープ',
       'memHelper.metrics.heapTotal': 'ヒープ合計',
@@ -1536,7 +1536,7 @@
       'memHelper.feat.dashboard.title': 'ダッシュボードバッファ',
       'memHelper.feat.dashboard.desc': 'パケット履歴・プラグインログ・ホームフィードをまとめて縮小。',
       'memHelper.feat.performance.title': 'ヒント',
-      'memHelper.feat.performance.desc': 'CPUの割り当ては Bitsum Process Lasso などを参照。HiveはプロキシとUIのみトリム。',
+      'memHelper.feat.performance.desc': 'CPUの割り当ては Bitsum Process Lasso などを参照。LutherはプロキシとUIのみトリム。',
       'memHelper.danger.title': '上級',
       'memHelper.danger.intro': '追跡エンティティ/タイルを消去 — UPDATEが来るまでスクリプトが乱れる場合あり。',
       'memHelper.danger.btnWorld': 'ワールドスナップショットを強制リセット',
@@ -1590,7 +1590,7 @@
       'tutorial.settings.replayLabel': 'チュートリアルを再生',
       'tutorial.settings.replayDesc': 'アプリの紹介をもう一度確認します。',
       'tutorial.settings.replayBtn': '再生',
-      'tutorial.step0.title': 'Hive へようこそ',
+      'tutorial.step0.title': 'Luther へようこそ',
       'tutorial.step0.body': 'Realm of the Mad God のためのオールインワン companion です。どこに何があるか分かるように、短いツアーを始めましょう。',
       'tutorial.step0.dim': '1分ほどで終わります。',
       'tutorial.step1.title': 'ホーム',
@@ -1698,7 +1698,7 @@
       'home.script.start': '開始',
       'home.script.pause': '一時停止',
       'home.script.openScriptsTab': 'スクリプト',
-      'home.script.note.setup': 'Documents/Hive/Scripts の .mjs パッケージはスクリプトタブから実行してください。',
+      'home.script.note.setup': 'Documents/Luther/Scripts の .mjs パッケージはスクリプトタブから実行してください。',
       'home.script.note.lastRun': '前回の実行: {name} ({duration})',
       'home.script.state.running': '実行中',
       'home.script.state.paused': '一時停止',
@@ -2099,7 +2099,7 @@
     'developer': { plans: ['developer'], isAdmin: false, label: 'Developer user' },
   };
   /** Website for gem purchases & subscriptions (Payment page) */
-  var HIVE_WEB_BASE = 'https://hive.world';
+  var LUTHER_WEB_BASE = 'https://hive.world';
   var BACKEND_API_DISABLED = true;
   if (BACKEND_API_DISABLED) {
     accessToken = null;
@@ -3207,9 +3207,9 @@
    * @param {{ gems?: number, method?: string }} [opts]
    * gems appends ?gems=N, method appends &method=X to the payment URL.
    */
-  function openHivePaymentPage(opts) {
+  function openLutherPaymentPage(opts) {
     opts = opts || {};
-    var url = HIVE_WEB_BASE + '/payment';
+    var url = LUTHER_WEB_BASE + '/payment';
     var params = [];
     var g = opts.gems;
     if (g != null && g !== '') {
@@ -3348,7 +3348,7 @@
     }
 
     closePurchaseModal();
-    openHivePaymentPage({ gems: n, method: method });
+    openLutherPaymentPage({ gems: n, method: method });
   }
 
   function refreshAccountBillingFromApi() {
@@ -3463,7 +3463,7 @@
   function openPurchaseModal() {
     trackEvent('gem_buy_open');
     var overlay = document.getElementById('purchase-modal-overlay');
-    if (!overlay) { openHivePaymentPage(); return; }
+    if (!overlay) { openLutherPaymentPage(); return; }
 
     // Always start on step 1; collapse any open payment category panels
     var step1 = document.getElementById('purchase-step-qty');
@@ -3533,7 +3533,7 @@
       badge: 'Pro',
       description: 'Full SDK access and developer tooling.',
       features: [
-        'Hive SDK bridge access',
+        'Luther SDK bridge access',
         'Custom plugin development',
         'Script hosting & management',
         'Developer API access',
@@ -3651,7 +3651,7 @@
   function openPlanModal() {
     trackEvent('plan_modal_open');
     var overlay = document.getElementById('plan-modal-overlay');
-    if (!overlay) { openHivePaymentPage(); return; }
+    if (!overlay) { openLutherPaymentPage(); return; }
 
     var body = document.getElementById('plan-modal-body');
     setPlanModalMsg('', false);
@@ -5274,11 +5274,11 @@
     if (!disconnectOverlay) return;
     disconnectOverlay.setAttribute('data-mode', mode === 'register' ? 'register' : 'signin');
     var sub = document.getElementById('disconnect-auth-subtitle');
-    if (sub) sub.textContent = mode === 'register' ? 'Create a Hive account' : 'Sign in to your Hive account';
+    if (sub) sub.textContent = mode === 'register' ? 'Create a Luther account' : 'Sign in to your Luther account';
     var notice = document.getElementById('disconnect-auth-notice');
     if (notice) notice.textContent = mode === 'register'
-      ? 'Do not use your Realm password. Create a new password for Hive.'
-      : 'This is not your Realm account. Use the credentials you created for Hive.';
+      ? 'Do not use your Realm password. Create a new password for Luther.'
+      : 'This is not your Realm account. Use the credentials you created for Luther.';
     setOverlayLoginError('');
     resetOverlayPasswordVisibility();
   }
@@ -5862,7 +5862,7 @@
     });
   }
 
-  /** When the script has not set Hive.ui.status, show Idle/Running/Error (not raw lowercase). */
+  /** When the script has not set Luther.ui.status, show Idle/Running/Error (not raw lowercase). */
   function formatScriptEngineStatusForDisplay(engineStatusStr) {
     var s = String(engineStatusStr != null ? engineStatusStr : 'idle').toLowerCase();
     if (s === 'running') return 'Running';
@@ -14738,7 +14738,7 @@
           '</div>' +
           '<div class="plugin-modal-section">' +
             '<div class="plugin-modal-section-title">File locations</div>' +
-            '<p style="margin:0 0 4px">Save these files in <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px">Documents\\Hive\\</code></p>' +
+            '<p style="margin:0 0 4px">Save these files in <code style="font-size:11px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px">Documents\\Luther\\</code></p>' +
             '<div class="plugin-modal-code">autoloot-whitelist.json\nautoloot-blacklist.json</div>' +
           '</div>' +
           '<div class="plugin-modal-section">' +
@@ -17859,7 +17859,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: password }),
-    }, 15000, 'Sign in timed out. The local dashboard or Hive auth API is not responding.')
+    }, 15000, 'Sign in timed out. The local dashboard or Luther auth API is not responding.')
       .then(function (r) { return readAuthResponse(r, 'Sign in failed.'); })
       .then(function (data) {
         if (!data.access_token) throw new Error('Sign in failed: no session token returned.');
@@ -17904,7 +17904,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: password }),
-    }, 15000, 'Account creation timed out. The local dashboard or Hive auth API is not responding.')
+    }, 15000, 'Account creation timed out. The local dashboard or Luther auth API is not responding.')
       .then(function (r) { return readAuthResponse(r, 'Account creation failed.'); })
       .then(function (data) {
         if (!data.access_token) throw new Error('Account creation failed: no session token returned.');
@@ -19523,7 +19523,7 @@
     });
   })();
 
-  // ===== Script-defined popout panels (Hive.ui.panel) =====
+  // ===== Script-defined popout panels (Luther.ui.panel) =====
   //
   // Renders a centered modal from a serializable widget tree the script
   // declared. Widget interactions are forwarded over the dashboard WS as
@@ -20642,7 +20642,7 @@
     var hasPanel = !!panelKey;
     btn.disabled = !hasPanel;
     btn.title = hasPanel
-      ? 'Open the GUI this script registered via Hive.ui.panel'
+      ? 'Open the GUI this script registered via Luther.ui.panel'
       : 'The selected script has not registered a GUI panel.';
     btn.dataset.scriptOpenGui = String(panelKey || '');
   }

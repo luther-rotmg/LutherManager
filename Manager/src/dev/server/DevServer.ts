@@ -32,7 +32,7 @@ import {
   type ProxyConfig,
   type ProxyProtocol,
 } from 'headless-client';
-import { getHiveDataDir, getHiveDocumentsDir } from '../../util/rotmgAssetExtractor.js';
+import { getLutherDataDir, getLutherDocumentsDir } from '../../util/rotmgAssetExtractor.js';
 
 function liveEnchantIdsBySlot(raw: string | undefined, slotCount = 28): number[][] {
   const result = Array.from({ length: slotCount }, () => [] as number[]);
@@ -116,7 +116,7 @@ class DisabledBotApiClient {
   logout(): void { this.loggedIn = false; }
 
   async login(..._args: unknown[]): Promise<GemStatusResponse> {
-    throw new Error('Hive backend login has been removed.');
+    throw new Error('HiveManager backend login has been removed (upstream feature; not carried into LutherManager fork).');
   }
 
   async checkGems(..._args: unknown[]): Promise<GemStatusResponse> {
@@ -362,7 +362,7 @@ export class DevServer {
   private headlessPacketSequence = 0;
 
   private getConfigsDir(): string {
-    return join(getHiveDocumentsDir(), 'configs');
+    return join(getLutherDocumentsDir(), 'configs');
   }
 
   private getActivePluginConfigId(): string {
@@ -370,33 +370,36 @@ export class DevServer {
   }
 
   private getAccountsFile(): string {
-    return join(this.getHiveDocumentsDir(), '_accounts.json');
+    return join(this.getLutherDocumentsDir(), '_accounts.json');
   }
 
   private getProxiesFile(): string {
-    return join(this.getHiveDocumentsDir(), '_proxies.json');
+    return join(this.getLutherDocumentsDir(), '_proxies.json');
   }
 
   private getAccountsCacheDir(): string {
-    return join(this.getHiveDocumentsDir(), 'Accounts');
+    return join(this.getLutherDocumentsDir(), 'Accounts');
   }
 
-  private getHiveDocumentsDir(): string {
+  private getLutherDocumentsDir(): string {
+    // Path stays 'Documents/Hive' in Phase 3 to preserve existing installs.
+    // Phase 5 will introduce a fallback resolver: prefer 'Documents/LutherManager'
+    // if it exists, else fall back here.
     return join(process.env.USERPROFILE || process.env.HOME || '.', 'Documents', 'Hive');
   }
 
-  /** Preserve existing Hive data while migrating it to Hive. */
+  /** Preserve existing Luther data while migrating it to Luther. */
   private prepareDashboardAccountStorage(): void {
     if (this.dashboardAccountStoragePrepared) return;
     this.dashboardAccountStoragePrepared = true;
 
-    const targetDir = this.getHiveDocumentsDir();
+    const targetDir = this.getLutherDocumentsDir();
     const targetAccountsFile = this.getAccountsFile();
     const targetCacheDir = this.getAccountsCacheDir();
     this.ensureDir(targetDir);
     this.ensureDir(targetCacheDir);
 
-    const legacyDir = getHiveDocumentsDir();
+    const legacyDir = getLutherDocumentsDir();
     const legacyAccountsFile = join(legacyDir, '_accounts.json');
     if (!existsSync(targetAccountsFile) && existsSync(legacyAccountsFile)) {
       copyFileSync(legacyAccountsFile, targetAccountsFile);
@@ -535,7 +538,7 @@ export class DevServer {
   private readDashboardAccounts(): DashboardAccountRecord[] {
     try {
       this.prepareDashboardAccountStorage();
-      const dir = this.getHiveDocumentsDir();
+      const dir = this.getLutherDocumentsDir();
       this.ensureDir(dir);
       const filePath = this.getAccountsFile();
       debugLog(`readDashboardAccounts: dir="${dir}" file="${filePath}" exists=${existsSync(filePath)}`);
@@ -558,7 +561,7 @@ export class DevServer {
 
   private writeDashboardAccounts(accounts: DashboardAccountRecord[]): void {
     this.prepareDashboardAccountStorage();
-    this.ensureDir(this.getHiveDocumentsDir());
+    this.ensureDir(this.getLutherDocumentsDir());
     writeFileSync(this.getAccountsFile(), JSON.stringify({ accounts }, null, 2), 'utf8');
   }
 
@@ -599,7 +602,7 @@ export class DevServer {
 
   private readDashboardProxies(): DashboardProxyRecord[] {
     try {
-      this.ensureDir(this.getHiveDocumentsDir());
+      this.ensureDir(this.getLutherDocumentsDir());
       const filePath = this.getProxiesFile();
       if (!existsSync(filePath)) return [];
       const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as { proxies?: unknown[] };
@@ -612,7 +615,7 @@ export class DevServer {
   }
 
   private writeDashboardProxies(proxies: DashboardProxyRecord[]): void {
-    this.ensureDir(this.getHiveDocumentsDir());
+    this.ensureDir(this.getLutherDocumentsDir());
     writeFileSync(this.getProxiesFile(), JSON.stringify({ proxies }, null, 2), 'utf8');
   }
 
@@ -1846,7 +1849,7 @@ export class DevServer {
     const nested = join(this.publicDir, '..', '..', '..', 'data', 'rotmg-extractor-game', 'GameData');
     if (existsSync(join(nested, 'spritesheet.xml')) && existsSync(join(nested, 'images'))) return nested;
     // Auto-extracted data written by rotmgAssetExtractor at startup
-    const realmDir = getHiveDataDir();
+    const realmDir = getLutherDataDir();
     if (existsSync(join(realmDir, 'spritesheet.xml')) && existsSync(join(realmDir, 'images'))) return realmDir;
     return null;
   }
@@ -3225,7 +3228,7 @@ export class DevServer {
     // ── Bot API auth proxy (dashboard uses /api/auth/* on DevServer origin) ──
     if (req.url?.startsWith('/api/auth/') || req.url?.startsWith('/api/payments/')) {
       res.writeHead(410, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ detail: 'Hive backend auth and payments have been removed.' }));
+      res.end(JSON.stringify({ detail: 'Luther backend auth and payments have been removed.' }));
       return;
     }
 
@@ -3335,7 +3338,7 @@ export class DevServer {
       return;
     }
 
-    // ── Admin: Node process memory (Hive proxy) ───────────────────────
+    // ── Admin: Node process memory (Luther proxy) ───────────────────────
     if (req.url === '/api/admin/memory' && req.method === 'GET') {
       const mu = process.memoryUsage();
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -3351,8 +3354,8 @@ export class DevServer {
       return;
     }
 
-    // ── Dashboard data: Documents/Hive (configs, accounts) ─────────
-    const hiveUserDir = getHiveDocumentsDir();
+    // ── Dashboard data: Documents/Luther (configs, accounts) ─────────
+    const hiveUserDir = getLutherDocumentsDir();
     const configsDir = this.getConfigsDir();
     const ensureHiveUserDir = () => this.ensureDir(hiveUserDir);
     const ensureConfigsDir = () => this.ensureDir(configsDir);
@@ -4231,7 +4234,7 @@ export class DevServer {
             } else if (msg.type === 'getBundles') {
               ws.send(JSON.stringify({ type: 'bundles', bundles: [] }));
             } else {
-              ws.send(JSON.stringify({ type: 'botApiError', error: 'Hive backend API has been removed.' }));
+              ws.send(JSON.stringify({ type: 'botApiError', error: 'Luther backend API has been removed.' }));
             }
           }
           return;
@@ -4912,7 +4915,7 @@ export class DevServer {
     }
   }
 
-  /** Outbound panel state / patches from `Hive.ui.panel.*`. */
+  /** Outbound panel state / patches from `Luther.ui.panel.*`. */
   broadcastScriptPanelMessage(msg: ScriptPanelOutboundMessage): void {
     const payload = JSON.stringify(msg);
     for (const client of this.wss.clients) {

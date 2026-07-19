@@ -7,4 +7,4 @@
  * Key derivation: HMAC-SHA256(SCRIPT_RUNTIME_SECRET, "${userId}:${hwid}")
  * The resulting 32-byte key is unique to each user on each machine.
  */
-export const SCRIPT_RUNTIME_SECRET = 'hive-script-runtime-dev-key-2024';
+export const SCRIPT_RUNTIME_SECRET = 'luther-script-runtime-dev-key-2024';

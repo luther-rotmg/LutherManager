@@ -9,10 +9,10 @@
  * ```ts
  * class NexusAtLowHp extends Leaf {
  *   isValid() {
- *     return Hive.self.getHP() / Hive.self.getMaxHP() < 0.3;
+ *     return Luther.self.getHP() / Luther.self.getMaxHP() < 0.3;
  *   }
  *   onLoop() {
- *     Hive.walking.nexus();
+ *     Luther.walking.nexus();
  *     return 1000; // sleep 1s before the tree re-evaluates
  *   }
  * }
@@ -25,7 +25,7 @@
  * const heartbeat = Leaf.of({
  *   name: 'Heartbeat',
  *   isValid: () => true,
- *   onLoop: () => { Hive.log.info('tick'); return 2000; },
+ *   onLoop: () => { Luther.log.info('tick'); return 2000; },
  * });
  * ```
  */
@@ -76,8 +76,8 @@ export abstract class Leaf {
      * ```ts
      * Leaf.of({
      *   name: 'Escape',
-     *   isValid: () => Hive.self.getHPPercent() < 0.3,
-     *   onLoop: () => { Hive.walking.nexus(); return 2000; },
+     *   isValid: () => Luther.self.getHPPercent() < 0.3,
+     *   onLoop: () => { Luther.walking.nexus(); return 2000; },
      * });
      * ```
      */

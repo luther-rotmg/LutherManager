@@ -4,7 +4,7 @@ import type { BridgeDeps } from '../BridgeDeps.js';
 
 function active(deps: BridgeDeps): Client {
   const client = deps.getHeadlessClient?.();
-  if (!client) throw new Error('No headless account is connected to Hive.');
+  if (!client) throw new Error('No headless account is connected to Luther.');
   return client;
 }
 

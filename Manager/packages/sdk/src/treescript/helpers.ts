@@ -9,8 +9,8 @@ import { Branch, BranchWalker } from './Branch';
  * ```ts
  * const escape = leaf({
  *   name: 'Escape',
- *   isValid: () => Hive.self.getHPPercent() < 0.3,
- *   onLoop: () => { Hive.walking.nexus(); return 2000; },
+ *   isValid: () => Luther.self.getHPPercent() < 0.3,
+ *   onLoop: () => { Luther.walking.nexus(); return 2000; },
  * });
  * ```
  */
@@ -30,7 +30,7 @@ export function leaf(opts: {
  * ```ts
  * const combat = branch({
  *   name: 'Combat',
- *   isValid: () => Hive.enemies.count() > 0,
+ *   isValid: () => Luther.enemies.count() > 0,
  *   children: [nexusLowHp, attackNearest],
  * });
  * ```
@@ -50,7 +50,7 @@ export function branch(opts: {
  * leaf `isValid()` is `cond() && inner.isValid()`; `onLoop()` is delegated.
  *
  * ```ts
- * when(() => Hive.world.isRealm(), attackNearest);
+ * when(() => Luther.world.isRealm(), attackNearest);
  * ```
  */
 export function when(cond: () => boolean, inner: Leaf): Leaf {

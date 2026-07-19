@@ -1,4 +1,4 @@
-/** Settings for a new party-finder listing (`Hive.party.createParty`). */
+/** Settings for a new party-finder listing (`Luther.party.createParty`). */
 export interface CreatePartyParams {
   /** Short text shown on the listing. */
   description: string;
@@ -16,7 +16,7 @@ export interface CreatePartyParams {
   unreadTrailingHex?: string;
 }
 
-/** One row from `Hive.party.getPartyList()`. */
+/** One row from `Luther.party.getPartyList()`. */
 export interface PartyFinderParty {
   name: string;
   partyId: number;
@@ -29,9 +29,9 @@ export interface PartyFinderParty {
   serverIndex: number;
 }
 
-/** Someone in your current party (`Hive.party.getPartyMembers()`). */
+/** Someone in your current party (`Luther.party.getPartyMembers()`). */
 export interface PartyMember {
-  /** Pass to `Hive.party.kick` to remove this player. */
+  /** Pass to `Luther.party.kick` to remove this player. */
   playerId: number;
   playerName: string;
   classId: number;

@@ -1,7 +1,7 @@
 import type { TradeItem } from './types/trade';
 
 /**
- * Trading API. Stub implementations; Hive's ScriptHost patches these at runtime.
+ * Trading API. Stub implementations; Luther's ScriptHost patches these at runtime.
  */
 export const trade = {
   /**

@@ -114,7 +114,7 @@ function onPlayerTextPacket(client: ClientConnection, packet: Packet): void {
 }
 
 /** Default "sender" name shown on client-only notifications (`chat.notify`). Mirrors `PluginContext.sendNotification`. */
-const DEFAULT_NOTIFICATION_SENDER = 'Hive';
+const DEFAULT_NOTIFICATION_SENDER = 'Luther';
 
 /** Sends a TEXT packet to the client only — does NOT reach the server or other players. Autonexus-style local notice. */
 function sendClientChatNotification(deps: BridgeDeps, message: string, sender: string): void {

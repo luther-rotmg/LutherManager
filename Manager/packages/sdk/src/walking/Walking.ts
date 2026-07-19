@@ -174,10 +174,10 @@ export type TeleportBeaconDestination =
 export class Walking {
     /**
      * Walk directly toward a tile without pathfinding. Pass world **X** and **Y** as two separate numbers
-     * (same units as engine/player world coordinates, e.g. from `Hive.self.getX()` / `getY()`).
+     * (same units as engine/player world coordinates, e.g. from `Luther.self.getX()` / `getY()`).
      */
     static walkTo(x: number, y: number): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -186,7 +186,7 @@ export class Walking {
      * route once the player is within that many tiles of the destination.
      */
     static pathfindingWalkTo(x: number, y: number, arriveThreshold?: number): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -194,7 +194,7 @@ export class Walking {
      * planner owns every movement step, including steps with no active shots.
      */
     static navigateTo(x: number, y: number, options?: NavigationOptions): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -206,7 +206,7 @@ export class Walking {
         y: number,
         options?: CombatPathfindingOptions,
     ): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Pathfind to a firing band while the predictive dodge planner owns movement. */
@@ -215,33 +215,33 @@ export class Walking {
         y: number,
         options?: CombatNavigationOptions,
     ): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static walkToPosition(position: Position): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Walk directly toward the nearest visible combat enemy. */
     static walkToEnemy(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Pathfind to within 1 tile of the nearest visible combat enemy. */
     static pathfindingWalkToEnemy(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static walkToPortal(name: string): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static walkToNearestPortal(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static enterPortal(objectId: number): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -253,108 +253,108 @@ export class Walking {
      *
      * Safe to call repeatedly while waiting for map transitions.
      */
-    static enterVault(): void { throw new Error('Must be run inside Hive client'); }
-    static enterPetYard(): void { throw new Error('Must be run inside Hive client'); }
-    static enterGuildHall(): void { throw new Error('Must be run inside Hive client'); }
-    static enterDailyQuestRoom(): void { throw new Error('Must be run inside Hive client'); }
+    static enterVault(): void { throw new Error('Must be run inside LutherManager client'); }
+    static enterPetYard(): void { throw new Error('Must be run inside LutherManager client'); }
+    static enterGuildHall(): void { throw new Error('Must be run inside LutherManager client'); }
+    static enterDailyQuestRoom(): void { throw new Error('Must be run inside LutherManager client'); }
 
     static walkToNexusPortal(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static walkToLeftWall(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static walkToRightWall(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static walkToTopWall(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static walkToBottomWall(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static followPlayer(name: string): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static stopMoving(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static isMoving(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Current global-pathfinding and local-dodge execution state. */
     static getNavigationState(): NavigationState {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static hasReached(position: Position, tolerance?: number): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static nexus(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Enable predictive projectile and thrown-AOE dodging without clearing the current walk target. */
     static enableAutoDodge(options?: AutoDodgeOptions): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static disableAutoDodge(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static isAutoDodgeEnabled(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getAutoDodgeState(): AutoDodgeState | null {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static setDodgeMovementIntent(intent: DodgeMovementIntent | null): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getDodgeMovementIntent(): DodgeMovementIntent | null {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getDodgePosition(): Position | null {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static dodge(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static dodgeFrom(enemy: Enemy): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static canTeleport(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static teleportToPlayer(name: string): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Teleport to the nearest live teleport beacon matching a region name or alias. */
     static teleportBeacon(destination: TeleportBeaconDestination): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Teleport to a currently tracked teleport beacon by runtime object ID. */
     static teleportToBeacon(objectId: number): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 }

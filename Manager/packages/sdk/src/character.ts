@@ -19,13 +19,13 @@ export interface CharacterInfo {
 
 export const character = {
   /** Character id currently selected by this account client. */
-  getCurrentId(): number { throw new Error('Must be run inside Hive client'); },
+  getCurrentId(): number { throw new Error('Must be run inside LutherManager client'); },
   /** Fetches every existing character on the account. */
-  getAll(): Promise<CharacterInfo[]> { throw new Error('Must be run inside Hive client'); },
+  getAll(): Promise<CharacterInfo[]> { throw new Error('Must be run inside LutherManager client'); },
   /** Reconnects the account using an existing character id. */
-  switchTo(_characterId: number): Promise<void> { throw new Error('Must be run inside Hive client'); },
-  create(_classType: number, _seasonal?: boolean): void { throw new Error('Must be run inside Hive client'); },
-  delete(_characterId: number): Promise<void> { throw new Error('Must be run inside Hive client'); },
-  convertSeasonal(): void { throw new Error('Must be run inside Hive client'); },
-  isSeasonal(): boolean | undefined { throw new Error('Must be run inside Hive client'); },
+  switchTo(_characterId: number): Promise<void> { throw new Error('Must be run inside LutherManager client'); },
+  create(_classType: number, _seasonal?: boolean): void { throw new Error('Must be run inside LutherManager client'); },
+  delete(_characterId: number): Promise<void> { throw new Error('Must be run inside LutherManager client'); },
+  convertSeasonal(): void { throw new Error('Must be run inside LutherManager client'); },
+  isSeasonal(): boolean | undefined { throw new Error('Must be run inside LutherManager client'); },
 };

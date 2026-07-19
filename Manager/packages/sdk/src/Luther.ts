@@ -22,7 +22,7 @@ import { connection } from './connection';
 import { character } from './character';
 import { AutoNexus } from './autoNexus/AutoNexus';
 
-export const Hive = {
+export const Luther = {
     self: Self,
     walking: Walking,
     combat: Combat,
@@ -61,16 +61,16 @@ export const Hive = {
     loot,
     discord,
     /**
-     * User-facing dashboard status (wired in Hive host).
-     * @example Hive.ui.status('Killing Gods');
+     * User-facing dashboard status (wired in Luther host).
+     * @example Luther.ui.status('Killing Gods');
      */
     ui: {
         status(_label: string | null | undefined): void {
-            throw new Error('Must be run inside Hive client');
+            throw new Error('Must be run inside LutherManager client');
         },
         /** Same as `status` — clears when label is null/blank after trim. */
         setStatus(_label: string | null | undefined): void {
-            throw new Error('Must be run inside Hive client');
+            throw new Error('Must be run inside LutherManager client');
         },
         /**
          * Declarative popout panel for this script. Define widgets once; the

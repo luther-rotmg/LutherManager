@@ -13,7 +13,7 @@ import { Leaf } from './Leaf';
  *
  * ```ts
  * class CombatBranch extends Branch {
- *   isValid() { return Hive.enemies.count() > 0; }
+ *   isValid() { return Luther.enemies.count() > 0; }
  * }
  *
  * const combat = new CombatBranch()
@@ -119,7 +119,7 @@ export abstract class Branch extends Leaf {
      * ```ts
      * Branch.of({
      *   name: 'Combat',
-     *   isValid: () => Hive.enemies.count() > 0,
+     *   isValid: () => Luther.enemies.count() > 0,
      *   children: [nexusLowHp, attackNearest],
      * });
      * ```

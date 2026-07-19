@@ -3,7 +3,7 @@
  *
  * Flow:
  *   1. Fetch https://www.realmofthemadgod.com/app/init → baseCdnUrl + buildHash
- *   2. Compare buildHash to Documents/Hive/data/.build-hash (skip if fresh)
+ *   2. Compare buildHash to Documents/Luther/data/.build-hash (skip if fresh)
  *   3. Fetch checksum.json to discover which Unity asset bundle file to download
  *   4. Download + gunzip the bundle, regex-search for <Objects> and <GroundTypes>
  *   5. Write objects.xml + tiles.xml, save new .build-hash
@@ -44,12 +44,12 @@ const BUNDLE_PRIORITY: RegExp[] = [
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function getHiveDataDir(): string {
+export function getLutherDataDir(): string {
   return join(process.env.USERPROFILE || homedir(), 'Documents', 'Hive', 'data');
 }
 
-/** `Documents/Hive` — dashboard accounts, plugin config snapshots; sits alongside `data/`, `Plugins/`, `Scripts/`. */
-export function getHiveDocumentsDir(): string {
+/** `Documents/Luther` — dashboard accounts, plugin config snapshots; sits alongside `data/`, `Plugins/`, `Scripts/`. */
+export function getLutherDocumentsDir(): string {
   return join(process.env.USERPROFILE || homedir(), 'Documents', 'Hive');
 }
 

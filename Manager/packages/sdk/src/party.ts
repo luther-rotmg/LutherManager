@@ -2,7 +2,7 @@ import type { PlayerNameMatchMode } from './players/Players';
 import type { CreatePartyParams, PartyFinderParty, PartyMember } from './types/party';
 
 /**
- * Party finder listings and current party roster. Stubs only; Hive’s
+ * Party finder listings and current party roster. Stubs only; Luther’s
  * `ScriptHost.installBridge()` supplies real implementations.
  */
 export const party = {
@@ -19,7 +19,7 @@ export const party = {
    * if unavailable or timed out. Outside the client, rejects immediately.
    */
   getPartyList(): Promise<PartyFinderParty[]> {
-    return Promise.reject(new Error('Hive.party.getPartyList is only available in Hive'));
+    return Promise.reject(new Error('Luther.party.getPartyList is only available in LutherManager'));
   },
 
   /**

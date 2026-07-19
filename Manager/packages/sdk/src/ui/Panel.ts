@@ -1,5 +1,5 @@
 /**
- * Declarative UI panel that a script can show in the Hive dashboard.
+ * Declarative UI panel that a script can show in the Luther dashboard.
  *
  * Scripts describe their UI as a tree of typed widgets — the dashboard
  * renders them inside a centered, themed popout (the same shape as the
@@ -8,7 +8,7 @@
  *
  * Usage:
  *
- *   const panel = Hive.ui.panel.define({
+ *   const panel = Luther.ui.panel.define({
  *     title: 'My Bot',
  *     autoOpen: true,
  *     widgets: [
@@ -18,7 +18,7 @@
  *       Panel.slider({ id: 'hpPct', label: 'Heal at HP %', value: 40, min: 0, max: 100,
  *         onChange: (v) => settings.healHpPct = v }),
  *       Panel.button({ id: 'nexus', label: 'Nexus now', variant: 'danger',
- *         onClick: () => Hive.walking.nexus() }),
+ *         onClick: () => Luther.walking.nexus() }),
  *       Panel.log({ id: 'feed', maxLines: 200 }),
  *     ],
  *   });
@@ -344,7 +344,7 @@ export interface PanelDefinition {
   maxHeight?: number;
   /** Compact reduces panel spacing without changing the visual language. */
   density?: PanelDensity;
-  /** Optional panel-wide color theme. Unspecified values retain Hive defaults. */
+  /** Optional panel-wide color theme. Unspecified values retain Luther defaults. */
   theme?: PanelTheme;
   /** If true, the popout opens automatically when the script starts. */
   autoOpen?: boolean;
@@ -369,7 +369,7 @@ export interface PanelConfigInfo {
   updatedAt: number;
 }
 
-/** Handle returned by `Hive.ui.panel.define(...)`. */
+/** Handle returned by `Luther.ui.panel.define(...)`. */
 export interface PanelHandle {
   /** Show the popout (no-op if already open). */
   open(): void;
@@ -482,11 +482,11 @@ export const Panel = {
 };
 
 /**
- * Stub — the real implementation is installed by the Hive client when the
+ * Stub — the real implementation is installed by the Luther client when the
  * script runs inside it. Calling these outside the client throws.
  */
 function notInClient(): never {
-  throw new Error('Hive.ui.panel must be run inside the Hive client');
+  throw new Error('Luther.ui.panel must be run inside the Luther client');
 }
 
 export const panel = {

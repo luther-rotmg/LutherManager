@@ -1,5 +1,5 @@
 /**
- * Production build for Hive Manager (no DLL / plugins).
+ * Production build for Luther Manager (no DLL / plugins).
  *
  * Pipeline:
  *   1. Clean dist/

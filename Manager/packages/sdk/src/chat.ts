@@ -3,7 +3,7 @@ import type { ChatChannel, ChatHandler, ChatOutgoingBlockMode, Unsubscribe } fro
 const noopUnsub: Unsubscribe = () => {};
 
 /**
- * Chat listen/send API. Stub implementations; Hive host patches these at runtime.
+ * Chat listen/send API. Stub implementations; Luther host patches these at runtime.
  */
 export const chat = {
     onMessage(handler: ChatHandler): Unsubscribe {
@@ -48,7 +48,7 @@ export const chat = {
      * Show a local-only chat notification in the game client.
      * Nothing reaches the server or other players — useful for plugin /
      * script alerts. `sender` becomes the fake name shown next to the
-     * message (defaults to `'Hive'`).
+     * message (defaults to `'Luther'`).
      */
     notify(message: string, sender?: string): void {
         void message;
@@ -78,7 +78,7 @@ export const chat = {
 
     /**
      * Stop matching lines typed in the game client from reaching the server (drops outgoing `PLAYERTEXT`).
-     * `Hive.chat.onMessage` and other listeners still see the line. Patterns are compared
+     * `Luther.chat.onMessage` and other listeners still see the line. Patterns are compared
      * **case-insensitive** after trim. Does not apply to `chat.say` / `tell` etc. (those bypass the client queue).
      *
      * @param mode  `'equals'` — full wire text (trimmed) equals any `pattern`; `'contains'` — wire text includes any `pattern`.

@@ -39,7 +39,7 @@ function stateFor(client: Client): ChatState {
     for (const filter of current.filters) {
       if (!filter.words.some((word) => lower.includes(word))) continue;
       if (filter.minStars !== undefined && packet.numStars >= filter.minStars) continue;
-      context.cancel('filtered by Hive.chat.filter');
+      context.cancel('filtered by Luther.chat.filter');
       return;
     }
     const sender = String(packet.name || 'System');
@@ -54,7 +54,7 @@ function stateFor(client: Client): ChatState {
       timestamp: Date.now(),
     };
     for (const handler of [...current.handlers]) {
-      try { handler(event); } catch (error) { console.error('[Hive.chat] listener failed:', error); }
+      try { handler(event); } catch (error) { console.error('[Luther.chat] listener failed:', error); }
     }
   }, { priority: 10_000 });
   return state;
@@ -122,11 +122,11 @@ export function installHeadlessChatBridge(deps: BridgeDeps): void {
   chat.party = (message) => { send(deps, message, 'party'); };
   chat.guild = (message) => { send(deps, message, 'guild'); };
   chat.tell = (playerName, message) => { send(deps, message, 'tell', playerName); };
-  chat.notify = (message, sender = 'Hive') => {
+  chat.notify = (message, sender = 'Luther') => {
     const client = current(deps);
     if (!client) return;
     const event: ChatEvent = {
-      sender: sender.trim() || 'Hive',
+      sender: sender.trim() || 'Luther',
       message: String(message ?? ''),
       channel: 'system',
       isLocal: true,

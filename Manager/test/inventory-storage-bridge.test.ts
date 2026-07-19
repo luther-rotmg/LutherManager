@@ -8,7 +8,7 @@ import {
 import type { BridgeDeps } from '../src/scripts/bridge/BridgeDeps.js';
 import { installStorageApi } from '../src/scripts/bridge/inventory/storage.js';
 
-test('Hive.inventory exposes structured operations for every account storage section', () => {
+test('Luther.inventory exposes structured operations for every account storage section', () => {
   const names = new Map<number, string>([
     [101, 'Vault Sword'],
     [102, 'Second Chest Item'],

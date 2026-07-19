@@ -60,9 +60,9 @@ function onPlayerJoinPartyStub(
 }
 
 /**
- * Game lifecycle and world events for scripts (`Hive.events`).
+ * Game lifecycle and world events for scripts (`Luther.events`).
  *
- * In the **Hive** desktop client, `ScriptHost.installBridge()` replaces these
+ * In the **Luther** desktop client, `ScriptHost.installBridge()` replaces these
  * implementations so subscriptions receive real packets (see client `scripts/bridge/events`).
  * Outside the client, each method is a no-op stub that returns a dummy unsubscribe.
  */
@@ -149,8 +149,8 @@ export const events = {
 
   /**
    * Fires when any incoming chat line’s text **contains** `needle` (case-insensitive).
-   * Payload is the same `ChatEvent` as `Hive.chat.onMessage` (`ChatHandler`).
-   * Wired in the client via `Hive.chat` after the TEXT hook is installed.
+   * Payload is the same `ChatEvent` as `Luther.chat.onMessage` (`ChatHandler`).
+   * Wired in the client via `Luther.chat` after the TEXT hook is installed.
    */
   onChat(needle: string, handler: ChatHandler): Unsubscribe {
     void needle;

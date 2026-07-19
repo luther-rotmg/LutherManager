@@ -6,7 +6,7 @@ export interface InventoryItem {
 }
 
 /**
- * Shorthand tier from {@link Hive.inventory}'s backpack state (`getBackpack()`).
+ * Shorthand tier from {@link Luther.inventory}'s backpack state (`getBackpack()`).
  *
  * Mirrors wire stat **130** (BackpackSlots / BackpackTier) with legacy fallback on
  * stat **75** (HasBackpack):

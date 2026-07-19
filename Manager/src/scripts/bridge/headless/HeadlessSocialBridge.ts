@@ -203,7 +203,7 @@ export function installHeadlessSocialBridge(deps: BridgeDeps): void {
   };
   party.getPartyList = () => {
     const client = active(deps);
-    if (!client) return Promise.reject(new Error('No headless account is connected to Hive.'));
+    if (!client) return Promise.reject(new Error('No headless account is connected to Luther.'));
     const state = partyState(client);
     if (state.pendingList) return Promise.reject(new Error('A party-list request is already pending for this account.'));
     return new Promise<PartyFinderParty[]>((resolve, reject) => {

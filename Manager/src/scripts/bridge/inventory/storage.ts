@@ -88,7 +88,7 @@ function findStorageSlot(
   ) ?? null;
 }
 
-/** Installs the structured account-storage API on `Hive.inventory`. */
+/** Installs the structured account-storage API on `Luther.inventory`. */
 export function installStorageApi(deps: BridgeDeps): void {
   inventory.getStorageItems = (container, range) => storageItems(deps, container, range);
   inventory.findStorageItem = (container, query, range) => {

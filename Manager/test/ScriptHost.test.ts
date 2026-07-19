@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { ScriptHost } from '../src/scripts/ScriptHost.js';
 
 test('the same script package can run independently on two headless accounts', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'hive-script-host-'));
+  const root = mkdtempSync(join(tmpdir(), 'luther-script-host-'));
   const previousUserProfile = process.env.USERPROFILE;
   process.env.USERPROFILE = root;
   const scriptRoot = join(root, 'Documents', 'Hive', 'Scripts', 'demo');

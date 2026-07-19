@@ -1,4 +1,4 @@
-export { Hive } from './Hive';
+export { Luther } from './Luther';
 export type { Script } from './Script';
 export type {
   UserPluginContext,

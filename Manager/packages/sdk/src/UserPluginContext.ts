@@ -1,14 +1,14 @@
 /**
  * Type definition for the restricted plugin context passed to the `register()`
  * function of a community `.mjs` plugin. The runtime implementation lives in
- * the Hive client; this module only exists so plugin authors can get
+ * the Luther client; this module only exists so plugin authors can get
  * IntelliSense via a JSDoc annotation:
  *
  *   /\*\* @param {import('@luthermanager/sdk').UserPluginContext} ctx *\/
  *   export function register(ctx) { ... }
  *
  * Plugins reach the game world exclusively through the rest of the SDK
- * (`chat`, `events`, `Hive.self`, etc.). `ctx` only covers
+ * (`chat`, `events`, `Luther.self`, etc.). `ctx` only covers
  * plugin-runtime concerns the SDK cannot scope to an individual plugin:
  * identity, dashboard-driven state (`enabled`), per-plugin settings, and
  * per-plugin chat commands.
@@ -58,13 +58,13 @@ export type PluginCleanup = () => void;
  *
  * Note: full packet-level access, dashboard log routing and structured
  * dashboard broadcasts are reserved for bundled first-party plugins shipped
- * with the Hive client. User plugins compose behaviour out of the
- * rest of `@luthermanager/sdk` (`chat`, `events`, `Hive.*`, ...).
+ * with the Luther client. User plugins compose behaviour out of the
+ * rest of `@luthermanager/sdk` (`chat`, `events`, `Luther.*`, ...).
  */
 export interface UserPluginContext {
   /** The plugin id — derived from the file name, without `.mjs`. Read-only. */
   readonly pluginId: string;
-  /** Absolute path to the `.mjs` file Hive loaded this plugin from. Read-only. */
+  /** Absolute path to the `.mjs` file Luther loaded this plugin from. Read-only. */
   readonly pluginFile: string;
 
   /** Dashboard display name. Defaults to `pluginId` if unset. */

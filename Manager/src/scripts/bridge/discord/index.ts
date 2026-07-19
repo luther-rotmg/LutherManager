@@ -1,4 +1,4 @@
-import { DiscordWebhook, Log, Hive } from '@luthermanager/sdk';
+import { DiscordWebhook, Log, Luther } from '@luthermanager/sdk';
 import type {
   DiscordAllowedMentions,
   DiscordEmbed,
@@ -255,7 +255,7 @@ export function install(_deps: BridgeDeps): void {
       color: 'red',
       fields: {
         Player: event.playerName,
-        Map: Hive.world.getName(),
+        Map: Luther.world.getName(),
       },
       timestamp: true,
     });
@@ -270,7 +270,7 @@ export function install(_deps: BridgeDeps): void {
       description: itemNames(event),
       color: event.bag.rarity === 'white' ? 'white' : event.bag.rarity === 'purple' ? 'purple' : 'blue',
       fields: {
-        Map: Hive.world.getName(),
+        Map: Luther.world.getName(),
         Owner: event.bag.ownerName ?? 'unknown',
         Position: `${event.bag.position.x.toFixed(1)}, ${event.bag.position.y.toFixed(1)}`,
       },
@@ -285,12 +285,12 @@ export function install(_deps: BridgeDeps): void {
       title: 'Fame Snapshot',
       color: 'gold',
       fields: {
-        Player: Hive.self.getName(),
-        Class: Hive.self.getClass(),
-        CharacterFame: Hive.self.getCharacterFame(),
-        AccountFame: Hive.self.getAccountFame(),
-        PowerLevel: Hive.self.getPowerLevel(),
-        Map: Hive.world.getName(),
+        Player: Luther.self.getName(),
+        Class: Luther.self.getClass(),
+        CharacterFame: Luther.self.getCharacterFame(),
+        AccountFame: Luther.self.getAccountFame(),
+        PowerLevel: Luther.self.getPowerLevel(),
+        Map: Luther.world.getName(),
       },
       timestamp: true,
     });
@@ -299,7 +299,7 @@ export function install(_deps: BridgeDeps): void {
   DiscordWebhook.prototype.sendPartyStatus = async function (
     this: DiscordWebhook,
   ): Promise<void> {
-    const members = Hive.party.getPartyMembers();
+    const members = Luther.party.getPartyMembers();
     return this.sendEmbed({
       title: 'Party Status',
       color: 'blue',
@@ -308,7 +308,7 @@ export function install(_deps: BridgeDeps): void {
         : 'No current party members.',
       fields: {
         Count: members.length,
-        Map: Hive.world.getName(),
+        Map: Luther.world.getName(),
       },
       timestamp: true,
     });

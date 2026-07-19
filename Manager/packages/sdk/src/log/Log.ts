@@ -1,4 +1,4 @@
-/** Level for `Hive.log` lines in the dashboard Script log. */
+/** Level for `Luther.log` lines in the dashboard Script log. */
 export type ScriptLogLevel = 'info' | 'warn' | 'error';
 
 /**
@@ -7,14 +7,14 @@ export type ScriptLogLevel = 'info' | 'warn' | 'error';
  */
 export class Log {
     static info(message: string): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static warn(message: string): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static error(message: string): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 }

@@ -4,50 +4,50 @@ import { PlayerEntity } from '../types/entities/PlayerEntity';
 export type PlayerNameMatchMode = 'equals' | 'contains';
 
 /**
- * Tracked player-like entities on the current map (`Hive.players`).
+ * Tracked player-like entities on the current map (`Luther.players`).
  * Wired in the client: names, positions, and vitals from world state status.
  */
 export class Players {
     static getAll(): PlayerEntity[] {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getNearest(): PlayerEntity | null {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static find(name: string): PlayerEntity | null {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getHP(name: string): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getMaxHP(name: string): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getHPPercent(name: string): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getMP(name: string): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
-    /** Account fame for a player (stat **39**, same meaning as `Hive.self.getAccountFame`). */
+    /** Account fame for a player (stat **39**, same meaning as `Luther.self.getAccountFame`). */
     static getAccountFame(name: string): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
-    /** Alive character fame for a player (stat **57**, same meaning as `Hive.self.getCharacterFame`). */
+    /** Alive character fame for a player (stat **57**, same meaning as `Luther.self.getCharacterFame`). */
     static getCharacterFame(name: string): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static count(): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -57,7 +57,7 @@ export class Players {
     static getPlayerGuild(_name: string, _match: PlayerNameMatchMode = 'equals'): string {
         void _name;
         void _match;
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -65,6 +65,6 @@ export class Players {
      * (same pool as {@link Players.getAll}), sorted alphabetically. Omits empty / unknown.
      */
     static getNearbyGuilds(): string[] {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 }

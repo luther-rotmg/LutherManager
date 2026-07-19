@@ -28,35 +28,35 @@ export interface AutoNexusState extends AutoNexusOptions {
 export class AutoNexus {
     /** Enables autonexus. Passing a percentage also updates the threshold. */
     static enable(_thresholdPercent?: number): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static disable(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static setEnabled(_enabled: boolean): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static isEnabled(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Sets the trigger percentage. Valid values are 1 through 100. */
     static setThreshold(_thresholdPercent: number): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getThreshold(): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static configure(_options: Partial<AutoNexusOptions>): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getState(): AutoNexusState {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 }

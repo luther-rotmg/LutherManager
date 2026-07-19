@@ -13,7 +13,7 @@ import { ScriptHost } from '../src/scripts/ScriptHost.js';
 
 test('local script restart reloads the complete nested module graph', async () => {
   const previousProfile = process.env.USERPROFILE;
-  const profile = mkdtempSync(join(tmpdir(), 'hive-script-reload-'));
+  const profile = mkdtempSync(join(tmpdir(), 'luther-script-reload-'));
   const scriptRoot = join(profile, 'Documents', 'Hive', 'Scripts', 'reload-probe');
   mkdirSync(scriptRoot, { recursive: true });
   writeFileSync(join(scriptRoot, 'hive.script.json'), JSON.stringify({

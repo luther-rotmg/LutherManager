@@ -60,7 +60,7 @@ import { Logger } from './util/Logger.js';
 import { ensureRotmgMetadataXml } from './util/ensureRotmgMetadataXml.js';
 import { ensureSdkDeployed } from './util/ensureSdkDeployed.js';
 import { HeadlessFleet } from './headless/HeadlessFleet.js';
-import { HiveMcpServer } from './mcp/HiveMcpServer.js';
+import { LutherMcpServer } from './mcp/LutherMcpServer.js';
 import { AntiTamper } from './security/AntiTamper.js';
 import { getBakedPacketDefinitions, getBakedServers, getBakedStatTypes } from './config/BakedData.js';
 import {
@@ -85,7 +85,7 @@ async function main() {
     ? requestedDevPort
     : 4440;
 
-  Logger.log('Main', 'Hive Manager starting...');
+  Logger.log('Main', 'Luther Manager starting...');
 
   AntiTamper.initialize(ROOT, IS_PROD);
 
@@ -163,7 +163,7 @@ async function main() {
 
   let devServer: DevServer | undefined;
   let scriptHost: ScriptHost | undefined;
-  let mcpServer: HiveMcpServer | undefined;
+  let mcpServer: LutherMcpServer | undefined;
   if (devMode) {
     const inspector = new PacketInspector();
     inspector.attach(proxy);
@@ -205,7 +205,7 @@ async function main() {
     devServer.start(devDashboardPort);
 
     const requestedMcpPort = Number(process.env.HIVE_MCP_PORT ?? 4451);
-    mcpServer = new HiveMcpServer({
+    mcpServer = new LutherMcpServer({
       fleet: headlessFleet,
       gameData,
       scriptHost,
@@ -215,7 +215,7 @@ async function main() {
     try {
       await mcpServer.start();
     } catch (error) {
-      Logger.error('MCP', 'Failed to start the built-in Hive MCP server', error as Error);
+      Logger.error('MCP', 'Failed to start the built-in Luther MCP server', error as Error);
     }
   }
 

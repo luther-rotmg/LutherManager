@@ -11,7 +11,7 @@ import { LoggingMessageNotificationSchema } from '@modelcontextprotocol/sdk/type
 import type { HeadlessFleet, HeadlessSessionSummary } from '../src/headless/HeadlessFleet.js';
 import type { GameDataLoader } from '../src/game-data/GameDataLoader.js';
 import type { ScriptHost } from '../src/scripts/ScriptHost.js';
-import { HiveMcpServer } from '../src/mcp/HiveMcpServer.js';
+import { LutherMcpServer } from '../src/mcp/LutherMcpServer.js';
 
 class FakeFleet extends EventEmitter {
   readonly session: HeadlessSessionSummary = {
@@ -49,7 +49,7 @@ async function availablePort(): Promise<number> {
   return port;
 }
 
-test('Hive MCP authenticates, exposes tools, and streams logs', async () => {
+test('Luther MCP authenticates, exposes tools, and streams logs', async () => {
   const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-test-'));
   const fleet = new FakeFleet();
   const scriptHost = {
@@ -58,7 +58,7 @@ test('Hive MCP authenticates, exposes tools, and streams logs', async () => {
     stop: () => ({ ok: true }),
   } as unknown as ScriptHost;
   const gameData = {} as GameDataLoader;
-  const server = new HiveMcpServer({
+  const server = new LutherMcpServer({
     fleet: fleet as unknown as HeadlessFleet,
     gameData,
     scriptHost,

@@ -116,7 +116,7 @@ export type PlayerJoinPartyMatchMode = 'equals' | 'contains';
 /** A player matched by name joined your party (`PARTYMEMBERADDED`). */
 export interface PlayerJoinPartyEvent {
   playerName: string;
-  /** Roster member id — pass to `Hive.party.kick`. */
+  /** Roster member id — pass to `Luther.party.kick`. */
   playerId: number;
   classId: number;
 }

@@ -293,12 +293,12 @@ export class ScriptPanelRegistry {
     };
   }
 
-  /** Implementation of `Hive.ui.panel.define`. */
+  /** Implementation of `Luther.ui.panel.define`. */
   define(def: PanelDefinition): PanelHandle {
     const session = this.currentSession();
     if (!session) {
       throw new Error(
-        'Hive.ui.panel.define must be called from a script (onStart/onLoop/onStop).',
+        'Luther.ui.panel.define must be called from a script (onStart/onLoop/onStop).',
       );
     }
     const { scriptId, accountId } = session;

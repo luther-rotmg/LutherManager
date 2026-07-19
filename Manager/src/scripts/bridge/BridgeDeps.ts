@@ -9,7 +9,7 @@ import type { Client as HeadlessClient } from 'headless-client';
 /** Live client holder — `DevServer` assigns `.current` when a session attaches */
 export type BridgeClientRef = { current: ClientConnection | undefined };
 
-/** Dashboard Script log line styling (`Hive.log`, lifecycle lines). */
+/** Dashboard Script log line styling (`Luther.log`, lifecycle lines). */
 export type ScriptLogLevel = 'info' | 'warn' | 'error';
 
 /**
@@ -33,7 +33,7 @@ export interface BridgeDeps {
   /** Packet hook bus + factory for outbound packets (e.g. chat bridge). */
   proxy: Proxy;
   /**
-   * Set by `ScriptHost` while `onStart` / `onLoop` / `onStop` run so `Hive.log`
+   * Set by `ScriptHost` while `onStart` / `onLoop` / `onStop` run so `Luther.log`
    * can attribute lines to the active script.
    */
   scriptSession: { scriptId: string | undefined; accountId?: string };
@@ -43,7 +43,7 @@ export interface BridgeDeps {
   /** Forwards one line to dashboard WebSocket clients (Script log tab). */
   emitScriptLog: (scriptId: string, line: string, level: ScriptLogLevel) => void;
   /**
-   * Wired by `ScriptHost`. Running scripts call `Hive.ui.status(...)` (or legacy
+   * Wired by `ScriptHost`. Running scripts call `Luther.ui.status(...)` (or legacy
    * `ScriptUi.setActivity`) to publish a user-facing line on the dashboard.
    */
   setScriptActivityLabel?: (label: string | null) => void;

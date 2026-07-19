@@ -101,7 +101,7 @@ export class ScriptHost {
     this.scriptsDir = join(
       process.env.USERPROFILE || homedir(),
       'Documents',
-      'Hive',
+      'Luther',
       'Scripts'
     );
   }
@@ -403,11 +403,11 @@ export class ScriptHost {
       }
 
       {
-        const diagBag = (globalThis as unknown as { __hiveSDK?: { Hive?: { ui?: { status?: unknown; panel?: { define?: unknown } } } } }).__hiveSDK;
-        const diagUi = diagBag?.Hive?.ui;
+        const diagBag = (globalThis as unknown as { __hiveSDK?: { Luther?: { ui?: { status?: unknown; panel?: { define?: unknown } } } } }).__hiveSDK;
+        const diagUi = diagBag?.Luther?.ui;
         const diagStatusSrc = typeof diagUi?.status === 'function' ? Function.prototype.toString.call(diagUi.status).slice(0, 60) : String(diagUi?.status);
-        console.error('[ScriptHost] DIAG pre-onStart: bag=%s Hive=%s ui=%s status=%s panel.define=%s\n  status.src=%s',
-          !!diagBag, !!diagBag?.Hive, !!diagUi, typeof diagUi?.status, typeof diagUi?.panel?.define, diagStatusSrc);
+        console.error('[ScriptHost] DIAG pre-onStart: bag=%s Luther=%s ui=%s status=%s panel.define=%s\n  status.src=%s',
+          !!diagBag, !!diagBag?.Luther, !!diagUi, typeof diagUi?.status, typeof diagUi?.panel?.define, diagStatusSrc);
       }
 
       this.withScriptId(id, () => {

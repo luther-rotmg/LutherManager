@@ -59,7 +59,7 @@ function fire(state: ClientLootState, key: LootEventKey, bag: LootBag): void {
     try {
       handler({ bag });
     } catch (error) {
-      console.error(`[Hive.loot] ${key} listener failed:`, error);
+      console.error(`[Luther.loot] ${key} listener failed:`, error);
     }
   }
 }

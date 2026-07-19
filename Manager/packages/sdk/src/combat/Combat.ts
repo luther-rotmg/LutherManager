@@ -39,87 +39,87 @@ export interface CombatAutomationState {
 
 export class Combat {
     static shootAt(x: number, y: number, weaponSlot = 0): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Auto-aim weapon shots at a tracked object id until stopped or changed. */
     static aimAt(target: CombatAimTarget): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Aim at a tile; pass world **X** and **Y** as two numbers (same units as `Walking.walkTo`). */
     static aimAtPosition(x: number, y: number): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static stopAiming(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Select and fire at visible enemies until disabled. */
     static enableAutoAim(options?: AutoAimOptions): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Update automatic target selection without changing its enabled state. */
     static setAutoAim(options: AutoAimMode | AutoAimOptions): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static disableAutoAim(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Disable SDK auto-aim and leave weapon shots at the player's manual aim angle. */
     static autoAimOff(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getAutoAimTarget(): number | null {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static getAutomationState(): CombatAutomationState | null {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static useAbility(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Use ability toward a tile; **x** and **y** are world coordinates as numbers. */
     static useAbilityAt(x: number, y: number): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static useAbilityOn(enemy: Enemy): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Automatically use the equipped ability during combat. */
     static enableAutoAbility(options?: AutoAbilityOptions): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static setAutoAbility(options: AutoAbilityOptions): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static disableAutoAbility(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Allow locally fired projectiles to pass through cover objects. */
     static enableProjectileNoclip(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static disableProjectileNoclip(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     static isProjectileNoclipEnabled(): boolean {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -128,7 +128,7 @@ export class Combat {
      * Returns 0 if no shots have been fired.
      */
     static accuracy(): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /**
@@ -136,11 +136,11 @@ export class Combat {
      * Returns a 0–1 fraction. Returns 0 if no shots in the window.
      */
     static recentAccuracy(minutes: number): number {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 
     /** Reset the accuracy counters. */
     static resetAccuracy(): void {
-        throw new Error('Must be run inside Hive client');
+        throw new Error('Must be run inside LutherManager client');
     }
 }

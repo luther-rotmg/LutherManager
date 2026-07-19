@@ -1,5 +1,5 @@
 import {
-  Hive,
+  Luther,
   Position,
   Self,
   StatusEffect,
@@ -33,7 +33,7 @@ import { buildSlotEnchantments } from '../loot/model.js';
 
 function active(deps: BridgeDeps): Client {
   const client = deps.getHeadlessClient?.();
-  if (!client) throw new Error('No headless account is connected to Hive.');
+  if (!client) throw new Error('No headless account is connected to Luther.');
   return client;
 }
 
@@ -433,20 +433,20 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   World.getTile = (x: number, y: number) => optional(deps)?.getTile(x, y);
   World.getObject = (objectId: number) => optional(deps)?.getVisibleObject(objectId);
   World.getNearestObject = () => optional(deps)?.getNearestVisibleObject();
-  Hive.world.isNexus = World.isNexus;
-  Hive.world.isVault = World.isVault;
-  Hive.world.isPetYard = World.isPetYard;
-  Hive.world.isRealm = World.isRealm;
-  Hive.world.isDungeon = World.isDungeon;
-  Hive.world.getName = World.getName;
-  Hive.world.getDimensions = World.getDimensions;
-  Hive.world.getServerHost = World.getServerHost;
-  Hive.world.getRealmPortals = World.getRealmPortals;
-  Hive.world.getVisibleObjects = World.getVisibleObjects;
-  Hive.world.getVisibleTiles = World.getVisibleTiles;
-  Hive.world.getTile = World.getTile;
-  Hive.world.getObject = World.getObject;
-  Hive.world.getNearestObject = World.getNearestObject;
+  Luther.world.isNexus = World.isNexus;
+  Luther.world.isVault = World.isVault;
+  Luther.world.isPetYard = World.isPetYard;
+  Luther.world.isRealm = World.isRealm;
+  Luther.world.isDungeon = World.isDungeon;
+  Luther.world.getName = World.getName;
+  Luther.world.getDimensions = World.getDimensions;
+  Luther.world.getServerHost = World.getServerHost;
+  Luther.world.getRealmPortals = World.getRealmPortals;
+  Luther.world.getVisibleObjects = World.getVisibleObjects;
+  Luther.world.getVisibleTiles = World.getVisibleTiles;
+  Luther.world.getTile = World.getTile;
+  Luther.world.getObject = World.getObject;
+  Luther.world.getNearestObject = World.getNearestObject;
 
   Walking.walkTo = (x: number, y: number) => {
     const client = active(deps);
@@ -896,7 +896,7 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
   connection.stall = (milliseconds?: number) => active(deps).stall(milliseconds);
   connection.resume = () => active(deps).resumeSocket();
   connection.reconnect = (host?: string) => host ? active(deps).connectToServer(host) : active(deps).connect();
-  connection.stop = () => active(deps).stop('stopped by Hive script');
+  connection.stop = () => active(deps).stop('stopped by Luther script');
   connection.getTickInfo = () => active(deps).getTickInfo();
   connection.getStallInfo = () => active(deps).getStallInfo();
   connection.getKnownServers = () => optional(deps)?.knownServers() ?? [];
