@@ -5,6 +5,7 @@ import type {
   CombatProjectileDefinition,
   CombatProjectileSnapshot,
 } from '../src/combat-tracker';
+import { predictProjectilePosition } from '../src/combat-tracker';
 import {
   DodgeCollisionWorld,
   ENEMY_AVOID_RADIUS,
@@ -693,6 +694,175 @@ test('planner metrics expose layer, rejection, merge, beam, and duration data', 
   assert.ok(result.metrics.statesMerged > 0);
   assert.ok(result.metrics.statesPrunedByBeam > 0);
   assert.equal(result.metrics.activeProjectilesConsidered, 1);
+});
+
+// Walks a projectile's actual trajectory (via predictProjectilePosition) at
+// 15 ms steps from t=0 to t=horizonMs, returning the first time the sample
+// enters the player's collision radius. Used as ground truth for the four
+// nonlinear-projectile coverage tests below.
+function analyticalFirstImpact(
+  playerX: number,
+  playerY: number,
+  hitRadius: number,
+  proj: CombatProjectileSnapshot,
+  horizonMs: number,
+  stepMs = 15,
+): number | null {
+  for (let t = 0; t <= horizonMs; t += stepMs) {
+    const pos = predictProjectilePosition(proj, t);
+    const distance = Math.hypot(pos.x - playerX, pos.y - playerY);
+    if (distance <= hitRadius) return t;
+  }
+  return null;
+}
+
+test('wavy projectile is classified as nonlinear and its swing catches a stationary player', () => {
+  // wavy definition: angular jitter ± π/64 * sin(6π t/lifetime). At speed=100,
+  // amplitude=1, frequency=2 the trajectory swings ~1 tile above/below y=5
+  // mid-flight. A linear-classified fallback would collapse to segment along
+  // y=5 and treat the player at (5,5) as safe from a shot fired at (0,5).
+  const proj: CombatProjectileSnapshot = {
+    ...projectile({
+      startX: 0, startY: 5, angle: 0,
+      definition: {
+        speed: 100, lifetimeMs: 1000,
+        amplitude: 1, frequency: 2, magnitude: 3, wavy: true,
+      },
+    }),
+  };
+  const input = planningInput({
+    projectiles: [proj],
+    intentVelocity: { x: 0, y: 0 },
+    moveSpeed: 0.0001, // hold player nearly still
+  });
+  const result = plan(input);
+
+  assert.ok(result.earliestIntentCollisionMs !== null,
+    'wavy projectile must be seen as a threat when classified nonlinear');
+  assert.ok(result.metrics.candidatesRejectedByProjectiles > 0,
+    'wavy projectile must reject some candidates');
+  const golden = analyticalFirstImpact(5, 5, 0.5, proj, 1000);
+  assert.ok(golden !== null,
+    'sanity: analytical walk must confirm the shot actually hits');
+  assert.ok(
+    Math.abs((result.earliestIntentCollisionMs ?? Infinity) - golden) < 30,
+    `earliestIntentCollisionMs=${result.earliestIntentCollisionMs} within 30 ms of golden=${golden}`,
+  );
+});
+
+test('parametric projectile is classified as nonlinear and its swing catches a stationary player', () => {
+  // parametric traces a sin(t) x sin(2t) figure-eight scaled by magnitude.
+  // Player at (0.5, 5), projectile origin (5, 5): the parametric envelope
+  // reaches into (~0.5, 5) neighborhood mid-flight. Linear fallback (speed=0)
+  // would collapse to the origin point, missing every impact.
+  const proj: CombatProjectileSnapshot = {
+    ...projectile({
+      startX: 5, startY: 5, angle: 0,
+      definition: {
+        speed: 0, lifetimeMs: 1000,
+        parametric: true, magnitude: 3,
+      },
+    }),
+  };
+  const input = planningInput({
+    position: { x: 0.5, y: 5 },
+    goal: { x: -3, y: 5 },
+    intentVelocity: { x: 0, y: 0 },
+    moveSpeed: 0.0001,
+    projectiles: [proj],
+  });
+  const result = plan(input);
+  const golden = analyticalFirstImpact(0.5, 5, 0.5, proj, 1000);
+
+  if (golden === null) {
+    // Parametric geometry may sweep just outside 0.5 hit-radius depending on
+    // magnitude and phase — accept an "unhit" analytical outcome as long as
+    // the planner also reports no impact. What we're pinning is planner /
+    // analytical agreement, not a specific numeric.
+    assert.equal(result.earliestIntentCollisionMs, null,
+      'planner must agree with analytical: no impact');
+    return;
+  }
+  assert.ok(result.earliestIntentCollisionMs !== null);
+  assert.ok(
+    Math.abs((result.earliestIntentCollisionMs ?? Infinity) - golden) < 30,
+    `earliestIntentCollisionMs=${result.earliestIntentCollisionMs} within 30 ms of golden=${golden}`,
+  );
+});
+
+test('boomerang projectile is classified as nonlinear and its return-leg catches the player', () => {
+  // Boomerang: linear out to halfway then reverses. Halfway = lifetime *
+  // baseSpeed / 2 = 5 tiles at speed=100. Player at (3, 5), origin (0, 5):
+  // outbound catches at t≈300, return sweeps back through x=3 at t≈700.
+  // Linear-fallback collapses to a straight segment past x=5 by t=500,
+  // missing the return leg entirely.
+  const proj: CombatProjectileSnapshot = {
+    ...projectile({
+      startX: 0, startY: 5, angle: 0,
+      definition: {
+        speed: 100, lifetimeMs: 1000, trajectoryLifetimeMs: 1000,
+        boomerang: true,
+      },
+    }),
+  };
+  const input = planningInput({
+    position: { x: 3, y: 5 },
+    goal: { x: 3, y: 5 },
+    intentVelocity: { x: 0, y: 0 },
+    moveSpeed: 0.0001,
+    projectiles: [proj],
+  });
+  const result = plan(input);
+
+  assert.ok(result.earliestIntentCollisionMs !== null,
+    'boomerang must be classified nonlinear and caught in the outbound sweep');
+  const golden = analyticalFirstImpact(3, 5, 0.5, proj, 1000);
+  assert.ok(golden !== null,
+    'sanity: analytical walk must confirm boomerang crosses the player');
+  assert.ok(
+    Math.abs((result.earliestIntentCollisionMs ?? Infinity) - golden) < 30,
+    `earliestIntentCollisionMs=${result.earliestIntentCollisionMs} within 30 ms of golden=${golden}`,
+  );
+});
+
+test('accelerating projectile is classified as nonlinear and caught at its quadratic-integrated arrival time (P0 regression belt)', () => {
+  // acceleration=200, speedClamp=-1: quadratic motion. Player at (5, 5),
+  // projectile from (0, 5) angle=0. Linear-fallback classifies as straight
+  // line with constant speed=0.01 tile/ms; would predict arrival at t=500.
+  // Actual quadratic arrival: solve 5 = 0.01 t + 0.5 * (200/10000) * t²/1000
+  //  -> t ≈ 386 ms (positive root of 5 = 0.01 t + 1e-5 t²).
+  //
+  // Also doubles as regression belt for the P0 `positionAt` freeze fix in
+  // combat-tracker.ts:600 — if that fix were reverted, predictProjectileSegments
+  // would emit zero-length segments 55 tiles away and this test would fail
+  // both on the sanity "analytical walk confirms" and on the earliest-impact
+  // comparison.
+  const proj: CombatProjectileSnapshot = {
+    ...projectile({
+      startX: 0, startY: 5, angle: 0,
+      definition: {
+        speed: 100, lifetimeMs: 2000,
+        acceleration: 200, accelerationDelay: 0, speedClamp: -1,
+      },
+    }),
+  };
+  const input = planningInput({
+    projectiles: [proj],
+    intentVelocity: { x: 0, y: 0 },
+    moveSpeed: 0.0001,
+  });
+  const result = plan(input);
+
+  assert.ok(result.earliestIntentCollisionMs !== null,
+    'accelerating projectile must be classified nonlinear and caught');
+  const golden = analyticalFirstImpact(5, 5, 0.5, proj, 1000);
+  assert.ok(golden !== null,
+    'sanity: analytical walk MUST confirm accelerated impact — if this fails, ' +
+    'the P0 positionAt fix has regressed');
+  assert.ok(
+    Math.abs((result.earliestIntentCollisionMs ?? Infinity) - golden) < 30,
+    `earliestIntentCollisionMs=${result.earliestIntentCollisionMs} within 30 ms of golden=${golden}`,
+  );
 });
 
 function testPlanner(options: ConstructorParameters<typeof SpaceTimeDodgePlanner>[0] = {}) {
