@@ -2099,7 +2099,7 @@
     'developer': { plans: ['developer'], isAdmin: false, label: 'Developer user' },
   };
   /** Website for gem purchases & subscriptions (Payment page) */
-  var LUTHER_WEB_BASE = 'https://hive.world';
+  var LUTHER_WEB_BASE = 'https://luther-rotmg.com';
   var BACKEND_API_DISABLED = true;
   if (BACKEND_API_DISABLED) {
     accessToken = null;
