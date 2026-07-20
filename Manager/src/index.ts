@@ -204,7 +204,7 @@ async function main() {
     });
     devServer.start(devDashboardPort);
 
-    const requestedMcpPort = Number(process.env.HIVE_MCP_PORT ?? 4451);
+    const requestedMcpPort = Number(process.env.LUTHER_MCP_PORT ?? process.env.HIVE_MCP_PORT ?? 4451);
     mcpServer = new LutherMcpServer({
       fleet: headlessFleet,
       gameData,

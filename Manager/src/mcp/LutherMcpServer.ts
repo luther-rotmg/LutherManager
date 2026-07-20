@@ -144,11 +144,24 @@ function publicSession(session: HeadlessSessionSummary): JsonRecord {
 }
 
 function normalizeLutherPath(path: string): string[] {
-  const trimmed = String(path || '').trim().replace(/^hive\./i, '');
+  // Strip either `luther.` (canonical) or `hive.` (legacy) prefix — both resolve to the same SDK object graph.
+  const trimmed = String(path || '').trim().replace(/^(luther|hive)\./i, '');
   const segments = trimmed.split('.').map((segment) => segment.trim()).filter(Boolean);
   if (!segments.length) throw new Error('A Luther method path is required, for example walking.walkTo.');
   if (segments.some((segment) => BLOCKED_PATH_SEGMENTS.has(segment))) throw new Error('That method path is not allowed.');
   return segments;
+}
+
+function resolveDefaultConfigDir(): string {
+  // Config-dir fallback (matches updater.cjs; formal shared helper pending P1 Phase 5 spec).
+  // Prefer LutherManager/ if it already exists; fall back to Hive/ so existing installs keep working;
+  // otherwise return LutherManager/ (brand-new install gets the new path).
+  const documents = join(process.env.USERPROFILE || homedir(), 'Documents');
+  const luther = join(documents, 'LutherManager');
+  const hive = join(documents, 'Hive');
+  if (existsSync(luther)) return luther;
+  if (existsSync(hive)) return hive;
+  return luther;
 }
 
 function resolveCallable(root: unknown, path: string, rootName: string): CallableTarget {
@@ -247,7 +260,7 @@ export class LutherMcpServer {
 
   constructor(private readonly deps: LutherMcpServerDeps) {
     this.preferredPort = validPort(deps.preferredPort);
-    this.configDir = deps.configDir ?? join(process.env.USERPROFILE || homedir(), 'Documents', 'Hive');
+    this.configDir = deps.configDir ?? resolveDefaultConfigDir();
     this.configPath = join(this.configDir, 'mcp.json');
   }
 
@@ -305,7 +318,7 @@ export class LutherMcpServer {
   }
 
   private async bindAvailablePort(): Promise<{ server: HttpServer; port: number }> {
-    const configured = process.env.HIVE_MCP_PORT !== undefined;
+    const configured = process.env.LUTHER_MCP_PORT !== undefined || process.env.HIVE_MCP_PORT !== undefined;
     const attempts = configured ? 1 : PORT_FALLBACK_COUNT;
     let lastError: Error | undefined;
     for (let offset = 0; offset < attempts; offset++) {
@@ -338,7 +351,7 @@ export class LutherMcpServer {
   private async handleHttpRequest(req: IncomingMessage, res: ServerResponse, port: number): Promise<void> {
     const url = new URL(req.url || '/', `http://127.0.0.1:${port}`);
     if (url.pathname === '/health' && req.method === 'GET') {
-      this.sendJson(res, 200, { ok: true, name: 'hive', endpoint: this.endpoint || `http://127.0.0.1:${port}/mcp` });
+      this.sendJson(res, 200, { ok: true, name: 'luther', endpoint: this.endpoint || `http://127.0.0.1:${port}/mcp` });
       return;
     }
     if (url.pathname !== '/mcp') {
@@ -411,50 +424,99 @@ export class LutherMcpServer {
 
   private createProtocolServer(): McpServer {
     const server = new McpServer(
-      { name: 'hive-headless-debugger', version: '1.0.0' },
+      { name: 'luther-headless-debugger', version: '1.0.0' },
       {
         capabilities: { logging: {} },
         instructions: [
-          'This server controls live Luther headless accounts. Call hive_list_accounts first and pass an explicit accountId to account-bound tools.',
+          'This server controls live Luther headless accounts. Call luther_list_accounts first and pass an explicit accountId to account-bound tools.',
           'Prefer read-only state, logs, and packet tools before mutating the client.',
-          'Use hive_call for normal SDK operations such as walking.walkTo. Use hive_execute only when several Luther calls or temporary callbacks must be composed.',
-          'Mutating tools act immediately on the selected live game account. Logs arrive as MCP logging notifications and are also retained by hive_get_logs.',
+          'Use luther_call for normal SDK operations such as walking.walkTo. Use luther_execute only when several Luther calls or temporary callbacks must be composed.',
+          'Mutating tools act immediately on the selected live game account. Logs arrive as MCP logging notifications and are also retained by luther_get_logs.',
+          'Legacy hive_* tool / resource / prompt names remain registered as deprecated aliases; prefer the luther_* names in new integrations.',
         ].join(' '),
       },
     );
 
-    server.registerTool('hive_list_accounts', {
+    // Register canonical luther_* tools and deprecated hive_* aliases that share the same handler.
+    const registerAliasedTool = <Config extends { description?: string }, Handler>(
+      canonicalName: string,
+      config: Config,
+      handler: Handler,
+    ): void => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (server.registerTool as any)(canonicalName, config, handler);
+      if (canonicalName.startsWith('luther_')) {
+        const aliasName = `hive_${canonicalName.slice('luther_'.length)}`;
+        const aliasConfig = { ...config, description: `[Deprecated alias for ${canonicalName}] ${config.description ?? ''}` };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (server.registerTool as any)(aliasName, aliasConfig, handler);
+      }
+    };
+    const registerAliasedResource = <Config extends { description?: string }, Handler>(
+      canonicalName: string,
+      canonicalUri: string,
+      config: Config,
+      handler: Handler,
+    ): void => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (server.registerResource as any)(canonicalName, canonicalUri, config, handler);
+      if (canonicalName.startsWith('luther-') && canonicalUri.startsWith('luther://')) {
+        const aliasName = `hive-${canonicalName.slice('luther-'.length)}`;
+        const aliasUri = `hive://${canonicalUri.slice('luther://'.length)}`;
+        const aliasConfig = { ...config, description: `[Deprecated alias for ${canonicalName}] ${config.description ?? ''}` };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (server.registerResource as any)(aliasName, aliasUri, aliasConfig, handler);
+      }
+    };
+    const registerAliasedPrompt = <Config extends { description?: string }, Handler>(
+      canonicalName: string,
+      config: Config,
+      handler: Handler,
+    ): void => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (server.registerPrompt as any)(canonicalName, config, handler);
+      const legacyMap: Record<string, string> = { debug_luther_account: 'debug_hive_account' };
+      const aliasName = legacyMap[canonicalName];
+      if (aliasName) {
+        const aliasConfig = { ...config, description: `[Deprecated alias for ${canonicalName}] ${config.description ?? ''}` };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (server.registerPrompt as any)(aliasName, aliasConfig, handler);
+      }
+    };
+
+    registerAliasedTool('luther_list_accounts', {
       title: 'List Luther accounts',
       description: 'List currently launched headless accounts and their connection/map state. Credentials are never returned.',
       annotations: { readOnlyHint: true, openWorldHint: false },
     }, async () => toolResult(this.deps.fleet.list().map(publicSession)));
 
-    server.registerTool('hive_get_state', {
+    registerAliasedTool('luther_get_state', {
       title: 'Inspect a Luther account',
       description: 'Return a detailed engine snapshot for one launched account, including player, movement, combat, world-object, and damage state.',
       inputSchema: { accountId: z.string().min(1) },
       annotations: { readOnlyHint: true, openWorldHint: false },
-    }, async ({ accountId }) => this.withToolErrors(() => this.buildAccountState(accountId)));
+    }, async ({ accountId }: { accountId: string }) => this.withToolErrors(() => this.buildAccountState(accountId)));
 
-    server.registerTool('hive_list_methods', {
+    registerAliasedTool('luther_list_methods', {
       title: 'List callable Luther methods',
-      description: 'Discover method paths accepted by hive_call. Optionally include public headless Client methods for a selected account.',
+      description: 'Discover method paths accepted by luther_call. Optionally include public headless Client methods for a selected account.',
       inputSchema: {
         query: z.string().optional(),
         accountId: z.string().optional(),
         includeClientMethods: z.boolean().default(false),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
-    }, async ({ query, accountId, includeClientMethods }) => this.withToolErrors(() => {
+    }, async ({ query, accountId, includeClientMethods }: { query?: string; accountId?: string; includeClientMethods?: boolean }) => this.withToolErrors(() => {
       const needle = query?.trim().toLowerCase();
-      const hive = needle ? this.lutherMethods.filter((method) => method.toLowerCase().includes(needle)) : this.lutherMethods;
+      const luther = needle ? this.lutherMethods.filter((method) => method.toLowerCase().includes(needle)) : this.lutherMethods;
       const client = includeClientMethods
         ? discoverClientMethods(this.requireClient(accountId || '')).filter((method) => !needle || method.toLowerCase().includes(needle))
         : undefined;
-      return { hive, client };
+      // `hive` field name kept for backward compatibility with existing MCP clients that key on it.
+      return { luther, hive: luther, client };
     }));
 
-    server.registerTool('hive_call', {
+    registerAliasedTool('luther_call', {
       title: 'Call a Luther SDK method',
       description: 'Call any Luther SDK method on a selected account. Use paths such as walking.walkTo, enemies.getNearest, combat.enableAutoAim, or chat.say.',
       inputSchema: {
@@ -463,7 +525,7 @@ export class LutherMcpServer {
         args: z.array(z.unknown()).default([]),
       },
       annotations: { destructiveHint: true, openWorldHint: false },
-    }, async ({ accountId, method, args }, extra) => this.withToolErrors(async () => {
+    }, async ({ accountId, method, args }: { accountId: string; method: string; args: unknown[] }, extra: { sessionId?: string }) => this.withToolErrors(async () => {
       this.requireClient(accountId);
       const target = resolveCallable(Luther, method, 'Luther');
       const result = await runWithScriptExecutionSession(
@@ -473,7 +535,7 @@ export class LutherMcpServer {
       return { method: target.normalizedPath, result };
     }));
 
-    server.registerTool('hive_execute', {
+    registerAliasedTool('luther_execute', {
       title: 'Execute Luther debugging code',
       description: 'Execute trusted JavaScript with Luther available on a selected account. Expression mode returns one expression; script mode supports statements and explicit return. Intended for temporary diagnostics and script prototyping.',
       inputSchema: {
@@ -482,12 +544,12 @@ export class LutherMcpServer {
         mode: z.enum(['expression', 'script']).default('expression'),
       },
       annotations: { destructiveHint: true, openWorldHint: false },
-    }, async ({ accountId, code, mode }, extra) => this.withToolErrors(async () => {
+    }, async ({ accountId, code, mode }: { accountId: string; code: string; mode: 'expression' | 'script' }, extra: { sessionId?: string }) => this.withToolErrors(async () => {
       this.requireClient(accountId);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...values: unknown[]) => Promise<unknown>;
       const body = mode === 'expression'
-        ? `"use strict"; return await (${code});\n//# sourceURL=hive-mcp-expression.js`
-        : `"use strict"; ${code}\n//# sourceURL=hive-mcp-script.js`;
+        ? `"use strict"; return await (${code});\n//# sourceURL=luther-mcp-expression.js`
+        : `"use strict"; ${code}\n//# sourceURL=luther-mcp-script.js`;
       const execute = new AsyncFunction('Luther', body);
       const result = await runWithScriptExecutionSession(
         { scriptId: `mcp:${extra.sessionId || 'session'}`, accountId },
@@ -496,16 +558,16 @@ export class LutherMcpServer {
       return { mode, result };
     }));
 
-    server.registerTool('hive_client_call', {
+    registerAliasedTool('luther_client_call', {
       title: 'Call the headless Client API',
-      description: 'Advanced engine-debugging escape hatch. Calls a public method directly on the selected headless Client. EventEmitter subscription methods are excluded; prefer hive_call for normal automation.',
+      description: 'Advanced engine-debugging escape hatch. Calls a public method directly on the selected headless Client. EventEmitter subscription methods are excluded; prefer luther_call for normal automation.',
       inputSchema: {
         accountId: z.string().min(1),
         method: z.string().min(1),
         args: z.array(z.unknown()).default([]),
       },
       annotations: { destructiveHint: true, openWorldHint: false },
-    }, async ({ accountId, method, args }) => this.withToolErrors(async () => {
+    }, async ({ accountId, method, args }: { accountId: string; method: string; args: unknown[] }) => this.withToolErrors(async () => {
       if (BLOCKED_CLIENT_METHODS.has(method) || BLOCKED_PATH_SEGMENTS.has(method)) throw new Error(`Client.${method} is not exposed through MCP.`);
       const client = this.requireClient(accountId);
       const target = resolveCallable(client, method, 'Client');
@@ -513,7 +575,7 @@ export class LutherMcpServer {
       return { method: target.normalizedPath, result };
     }));
 
-    server.registerTool('hive_scripts', {
+    registerAliasedTool('luther_scripts', {
       title: 'Manage Luther scripts',
       description: 'List installed scripts, or start/stop a script. Starting binds the script to the supplied launched account.',
       inputSchema: {
@@ -522,7 +584,7 @@ export class LutherMcpServer {
         accountId: z.string().optional(),
       },
       annotations: { destructiveHint: true, openWorldHint: false },
-    }, async ({ action, scriptId, accountId }) => this.withToolErrors(async () => {
+    }, async ({ action, scriptId, accountId }: { action: 'list' | 'start' | 'stop'; scriptId?: string; accountId?: string }) => this.withToolErrors(async () => {
       if (action === 'list') return this.deps.scriptHost.list();
       const id = scriptId?.trim();
       if (!id) throw new Error('scriptId is required for start and stop.');
@@ -533,7 +595,7 @@ export class LutherMcpServer {
       return this.deps.scriptHost.start(id, selectedAccount);
     }));
 
-    server.registerTool('hive_get_logs', {
+    registerAliasedTool('luther_get_logs', {
       title: 'Read Luther runtime logs',
       description: 'Read bounded recent Manager, headless engine, and script logs. Use afterSeq to poll without duplicates; new logs are also emitted as MCP logging notifications.',
       inputSchema: {
@@ -544,9 +606,9 @@ export class LutherMcpServer {
         contains: z.string().optional(),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
-    }, async (query) => toolResult(this.diagnostics.recentLogs(query)));
+    }, async (query: Parameters<typeof this.diagnostics.recentLogs>[0]) => toolResult(this.diagnostics.recentLogs(query)));
 
-    server.registerTool('hive_get_packets', {
+    registerAliasedTool('luther_get_packets', {
       title: 'Read Luther packet history',
       description: 'Read bounded raw packet history for disconnect and parser debugging. Payloads are returned as hex only when includePayload is true.',
       inputSchema: {
@@ -558,56 +620,59 @@ export class LutherMcpServer {
         includePayload: z.boolean().default(false),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
-    }, async ({ includePayload, ...query }) => toolResult(
-      this.diagnostics.recentPackets(query).map((packet) => this.presentPacket(packet, includePayload)),
-    ));
+    }, async (input: { includePayload?: boolean } & Parameters<typeof this.diagnostics.recentPackets>[0]) => {
+      const { includePayload, ...query } = input;
+      return toolResult(
+        this.diagnostics.recentPackets(query).map((packet) => this.presentPacket(packet, includePayload ?? false)),
+      );
+    });
 
-    server.registerTool('hive_clear_diagnostics', {
+    registerAliasedTool('luther_clear_diagnostics', {
       title: 'Clear Luther diagnostic history',
       description: 'Clear retained in-memory log and packet history globally or for one account. Live logging continues.',
       inputSchema: { accountId: z.string().optional() },
       annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    }, async ({ accountId }) => toolResult(this.diagnostics.clear(accountId)));
+    }, async ({ accountId }: { accountId?: string }) => toolResult(this.diagnostics.clear(accountId)));
 
-    server.registerResource('hive-accounts', 'hive://accounts', {
+    registerAliasedResource('luther-accounts', 'luther://accounts', {
       title: 'Launched Luther accounts',
       description: 'Current headless account sessions without credentials.',
       mimeType: 'application/json',
-    }, async (uri) => ({
+    }, async (uri: URL) => ({
       contents: [{ uri: uri.href, mimeType: 'application/json', text: serializeToolValue(this.deps.fleet.list().map(publicSession)) }],
     }));
 
-    server.registerResource('hive-sdk-methods', 'hive://sdk/methods', {
+    registerAliasedResource('luther-sdk-methods', 'luther://sdk/methods', {
       title: 'Luther SDK method paths',
-      description: 'Callable paths accepted by the hive_call tool.',
+      description: 'Callable paths accepted by the luther_call tool.',
       mimeType: 'application/json',
-    }, async (uri) => ({
+    }, async (uri: URL) => ({
       contents: [{ uri: uri.href, mimeType: 'application/json', text: serializeToolValue(this.lutherMethods) }],
     }));
 
-    server.registerResource('hive-recent-logs', 'hive://diagnostics/logs', {
+    registerAliasedResource('luther-recent-logs', 'luther://diagnostics/logs', {
       title: 'Recent Luther logs',
       description: 'The most recent retained runtime and script logs.',
       mimeType: 'application/json',
-    }, async (uri) => ({
+    }, async (uri: URL) => ({
       contents: [{ uri: uri.href, mimeType: 'application/json', text: serializeToolValue(this.diagnostics.recentLogs({ limit: 200 })) }],
     }));
 
-    server.registerPrompt('debug_hive_account', {
+    registerAliasedPrompt('debug_luther_account', {
       title: 'Debug a Luther headless account',
       description: 'A disciplined workflow for diagnosing a live Luther account or script failure.',
       argsSchema: { accountId: z.string().optional(), symptom: z.string().optional() },
-    }, ({ accountId, symptom }) => ({
+    }, ({ accountId, symptom }: { accountId?: string; symptom?: string }) => ({
       messages: [{
         role: 'user' as const,
         content: {
           type: 'text' as const,
           text: [
             'Debug the live Luther headless client carefully.',
-            accountId ? `Target accountId: ${accountId}.` : 'Start by calling hive_list_accounts and select the intended account.',
+            accountId ? `Target accountId: ${accountId}.` : 'Start by calling luther_list_accounts and select the intended account.',
             symptom ? `Reported symptom: ${symptom}.` : '',
-            'Inspect hive_get_state, then relevant hive_get_logs and hive_get_packets before changing state.',
-            'Use hive_call for the smallest reproducible SDK action. Use hive_client_call or hive_execute only when normal SDK inspection cannot answer the question.',
+            'Inspect luther_get_state, then relevant luther_get_logs and luther_get_packets before changing state.',
+            'Use luther_call for the smallest reproducible SDK action. Use luther_client_call or luther_execute only when normal SDK inspection cannot answer the question.',
             'Report the evidence, likely engine layer, exact reproduction, and any code-level fix separately from live-client workarounds.',
           ].filter(Boolean).join(' '),
         },
