@@ -25,6 +25,7 @@
     "@luthermanager/sdk": "file:packages/sdk",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "chokidar": "^3.6.0",
+    "electron-updater": "^6.8.9",
     "fast-xml-parser": "^4.3.0",
     "headless-client": "file:../HeadlessClient/headless-client",
     "koffi": "^2.9.0",

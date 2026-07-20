@@ -451,9 +451,9 @@ app.whenReady().then(async () => {
   // the actual lock; this is just the UX layer).
   let updaterApi = null;
   try {
-    updaterApi = null;
+    updaterApi = require('./updater.cjs').createUpdater({ isPackaged: app.isPackaged });
   } catch (err) {
-    console.error('[updater] launch gate failed (allowing startup):', err && (err.message || err));
+    console.error('[updater] init failed (allowing startup):', err && (err.message || err));
   }
 
   startProxy();
