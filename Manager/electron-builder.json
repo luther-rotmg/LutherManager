@@ -2,6 +2,14 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "world.luthermanager.app",
   "productName": "LutherManager",
+  "publish": [
+    {
+      "provider": "generic",
+      "url": "https://luther-rotmg.com/api/releases/win",
+      "channel": "latest",
+      "useMultipleRangeRequest": false
+    }
+  ],
   "directories": {
     "output": "release"
   },

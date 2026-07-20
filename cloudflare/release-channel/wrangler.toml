@@ -1,0 +1,25 @@
+name = "luther-manager-release-channel"
+main = "src/index.ts"
+compatibility_date = "2025-11-01"
+account_id = "67bb9892962154796c210c1f3d15b9c9"
+
+# Serve auto-updates from luther-rotmg.com/api/releases/*
+# The Manager Electron app hits /api/releases/win/latest.yml via electron-updater.
+routes = [
+  { pattern = "luther-rotmg.com/api/releases/*", zone_name = "luther-rotmg.com" },
+]
+
+# R2 bucket holds versioned Electron artifacts (created 2026-07-20).
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "luther-manager-releases"
+
+# KV namespace holds per-install Bearer tokens for auto-update auth
+# (created 2026-07-20). Key = token, value = { revoked: bool, email?, install_date?, note? }.
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "751ded2b0cd5430fb03f01ad36f7fd7a"
+
+# Observability
+[observability]
+enabled = true
