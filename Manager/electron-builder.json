@@ -1,14 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "world.hive.app",
-  "productName": "Hive",
-  "publish": [
-    {
-      "provider": "generic",
-      "url": "https://api.hive.world/api/releases/win",
-      "channel": "latest"
-    }
-  ],
+  "appId": "world.luthermanager.app",
+  "productName": "LutherManager",
   "directories": {
     "output": "release"
   },
@@ -52,6 +45,6 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": "always",
     "createStartMenuShortcut": true,
-    "shortcutName": "Hive"
+    "shortcutName": "LutherManager"
   }
 }

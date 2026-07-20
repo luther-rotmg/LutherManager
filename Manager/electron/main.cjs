@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { runEarlyChecks, hardenWindow } = require('./security.cjs');
 
-const APP_NAME = 'Hive';
-const APP_USER_MODEL_ID = 'world.hive.app';
+const APP_NAME = 'LutherManager';
+const APP_USER_MODEL_ID = 'world.luthermanager.app';
 const DASHBOARD_PORT = 4440;
 const DASHBOARD_URL = 'http://localhost:' + DASHBOARD_PORT;
 const PROXY_STARTUP_TIMEOUT = 60000;
@@ -125,7 +125,7 @@ function cleanupStaleDevProxyProcesses(projectRoot, candidatePids = []) {
       (cmd.includes('src\\index.ts') || cmdSlash.includes('src/index.ts'));
     if (!isRealmDevProxy) continue;
     try {
-      console.log('[Electron] Removing stale Hive dev proxy PID', pid);
+      console.log('[Electron] Removing stale LutherManager dev proxy PID', pid);
       execFileSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
         encoding: 'utf8',
         windowsHide: true,
@@ -153,9 +153,9 @@ function loadingLogoDataUri() {
 function buildLoadingHtml() {
   const _logo = loadingLogoDataUri();
   const _logoTag = _logo
-    ? `<img src="${_logo}" alt="Hive" style="width:108px;height:108px;object-fit:contain;margin-bottom:18px;-webkit-app-region:drag" />`
+    ? `<img src="${_logo}" alt="LutherManager" style="width:108px;height:108px;object-fit:contain;margin-bottom:18px;-webkit-app-region:drag" />`
     : '';
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Hive</title>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>LutherManager</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;overflow:hidden}
 body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;-webkit-app-region:drag;user-select:none}
@@ -166,7 +166,7 @@ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFo
 @keyframes spin{to{transform:rotate(360deg)}}
 </style></head><body>
 ${_logoTag}
-<div style="font-size:22px;font-weight:600;margin-bottom:8px">Hive</div>
+<div style="font-size:22px;font-weight:600;margin-bottom:8px">LutherManager</div>
 <div id="s" style="font-size:13px;color:#8b949e;margin-bottom:32px">Starting...</div>
 <div id="sp" style="width:28px;height:28px;border:3px solid #21262d;border-top-color:#3fb950;border-radius:50%;animation:spin .8s linear infinite"></div>
 <div id="wc">
