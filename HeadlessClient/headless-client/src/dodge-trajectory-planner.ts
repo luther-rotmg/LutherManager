@@ -437,6 +437,31 @@ export class SpaceTimeDodgePlanner {
   // runs it returns a fresh array and `retained` gets reassigned to it (which is fine —
   // the scratch's items get cleared on the next layer's reset).
   private readonly retainedScratch: CandidateState[] = [];
+  // diverseBeam scratch — every Map/Set is .clear()d at diverseBeam top; every array is
+  // .length = 0'd. Called at most once per plan-layer for oversized frontiers. CPU
+  // profile (marathon 5, at 9896fc7) showed diverseBeam at 10.7% self-time; these pools
+  // strip out the per-call Map/Set/array allocations that dominated that self-time.
+  private readonly bestDirectionScratch = new Map<number, CandidateState>();
+  private readonly mostPersistentDirectionScratch = new Map<number, CandidateState>();
+  private readonly bestSectorScratch = new Map<number, CandidateState[]>();
+  private readonly selectedOrdersScratch = new Set<number>();
+  private readonly regionCountsScratch = new Map<number, number>();
+  private readonly diverseBeamSelected: CandidateState[] = [];
+  private readonly diverseBeamRoundScratch: CandidateState[] = [];
+  private readonly sectorArrayPool: CandidateState[][] = [];
+  private sectorArrayPoolCursor = 0;
+
+  private nextSectorArray(): CandidateState[] {
+    const cursor = this.sectorArrayPoolCursor++;
+    if (cursor < this.sectorArrayPool.length) {
+      const arr = this.sectorArrayPool[cursor]!;
+      arr.length = 0;
+      return arr;
+    }
+    const arr: CandidateState[] = [];
+    this.sectorArrayPool.push(arr);
+    return arr;
+  }
 
   /** Take the next reusable bucket array from the pool, or grow the pool by one. */
   private nextBucketArray(): CandidateState[] {
@@ -1518,9 +1543,33 @@ export class SpaceTimeDodgePlanner {
   }
 
   private diverseBeam(candidates: CandidateState[], context: PlannerContext): CandidateState[] {
+    // Radial-band boundaries live in squared-distance space so the per-candidate
+    // Math.sqrt call in the loop can be skipped. band = min(3, floor(sqrt(dsq)/1.25)):
+    //   radius <  1.25 -> band 0    (dsq <  1.5625)
+    //   radius <  2.50 -> band 1    (dsq <  6.25)
+    //   radius <  3.75 -> band 2    (dsq < 14.0625)
+    //   else            -> band 3
+    // Constants below match those thresholds byte-for-byte.
+    const RADIAL_BAND_1_DSQ = 1.5625;
+    const RADIAL_BAND_2_DSQ = 6.25;
+    const RADIAL_BAND_3_DSQ = 14.0625;
+
     candidates.sort(candidateBeforeSort);
-    const selected: CandidateState[] = [];
-    const selectedOrders = new Set<number>();
+    // Reset per-call pools.
+    const selected = this.diverseBeamSelected;
+    selected.length = 0;
+    const selectedOrders = this.selectedOrdersScratch;
+    selectedOrders.clear();
+    const bestDirection = this.bestDirectionScratch;
+    bestDirection.clear();
+    const mostPersistentDirection = this.mostPersistentDirectionScratch;
+    mostPersistentDirection.clear();
+    const bestSector = this.bestSectorScratch;
+    bestSector.clear();
+    const regionCounts = this.regionCountsScratch;
+    regionCounts.clear();
+    this.sectorArrayPoolCursor = 0;
+
     const add = (candidate: CandidateState | undefined): void => {
       if (!candidate || selected.length >= context.stateCap
         || selectedOrders.has(candidate.order)) return;
@@ -1528,9 +1577,6 @@ export class SpaceTimeDodgePlanner {
       selected.push(candidate);
     };
 
-    const bestDirection = new Map<number, CandidateState>();
-    const mostPersistentDirection = new Map<number, CandidateState>();
-    const bestSector = new Map<number, CandidateState[]>();
     for (const candidate of candidates) {
       if (!bestDirection.has(candidate.directionBucket)) {
         bestDirection.set(candidate.directionBucket, candidate);
@@ -1544,26 +1590,45 @@ export class SpaceTimeDodgePlanner {
       }
       const dx = candidate.x - context.input.position.x;
       const dy = candidate.y - context.input.position.y;
-      const radius = Math.sqrt((dx) * (dx) + (dy) * (dy));
-      const radialBand = Math.min(3, Math.floor(radius / 1.25));
+      const dsq = dx * dx + dy * dy;
+      const radialBand = dsq < RADIAL_BAND_1_DSQ ? 0
+                       : dsq < RADIAL_BAND_2_DSQ ? 1
+                       : dsq < RADIAL_BAND_3_DSQ ? 2
+                       : 3;
       const angle = Math.atan2(dy, dx);
       const sector = Math.floor((angle + Math.PI) / (Math.PI * 2) * 16) & 15;
       const key = radialBand * 16 + sector;
       const sectorCandidates = bestSector.get(key);
-      if (!sectorCandidates) bestSector.set(key, [candidate]);
-      else if (sectorCandidates.length < 4) sectorCandidates.push(candidate);
+      if (!sectorCandidates) {
+        const fresh = this.nextSectorArray();
+        fresh.push(candidate);
+        bestSector.set(key, fresh);
+      } else if (sectorCandidates.length < 4) sectorCandidates.push(candidate);
     }
-    for (const candidate of [...bestDirection.values()].sort(candidateBeforeSort)) add(candidate);
-    for (const candidate of [...mostPersistentDirection.values()].sort(candidateBeforeSort)) add(candidate);
+
+    // Consume the sort-into-round scratch across each add-pass instead of allocating
+    // a fresh array with [...map.values()].sort() each time.
+    const round = this.diverseBeamRoundScratch;
+    round.length = 0;
+    for (const value of bestDirection.values()) round.push(value);
+    round.sort(candidateBeforeSort);
+    for (const candidate of round) add(candidate);
+
+    round.length = 0;
+    for (const value of mostPersistentDirection.values()) round.push(value);
+    round.sort(candidateBeforeSort);
+    for (const candidate of round) add(candidate);
+
     for (let sectorRank = 0; sectorRank < 4; sectorRank++) {
-      const round = [...bestSector.values()]
-        .map((sector) => sector[sectorRank])
-        .filter((candidate): candidate is CandidateState => !!candidate)
-        .sort(candidateBeforeSort);
+      round.length = 0;
+      for (const sector of bestSector.values()) {
+        const c = sector[sectorRank];
+        if (c) round.push(c);
+      }
+      round.sort(candidateBeforeSort);
       for (const candidate of round) add(candidate);
     }
 
-    const regionCounts = new Map<number, number>();
     const regionLimit = Math.max(2, Math.ceil(context.stateCap / 64));
     for (const candidate of candidates) {
       if (selected.length >= context.stateCap) break;
