@@ -149,6 +149,24 @@ const DEFAULT_TIME_LAYERS_MS = Object.freeze([
 // Movement controls either wait or use the current authoritative maximum speed.
 const DEFAULT_SPEED_FRACTIONS = Object.freeze([1]);
 const DEFAULT_DIRECTION_COUNT = 16;
+
+// Precomputed cos/sin for the DEFAULT_DIRECTION_COUNT evenly-spaced probe angles.
+// Callers that iterate direction buckets index these directly instead of paying
+// per-invocation Math.cos/Math.sin. Wave 2 audit item escape-opening-count-fanout.
+const DIRECTION_COS = (() => {
+  const out = new Float64Array(DEFAULT_DIRECTION_COUNT);
+  for (let i = 0; i < DEFAULT_DIRECTION_COUNT; i++) {
+    out[i] = Math.cos(i * Math.PI * 2 / DEFAULT_DIRECTION_COUNT);
+  }
+  return out;
+})();
+const DIRECTION_SIN = (() => {
+  const out = new Float64Array(DEFAULT_DIRECTION_COUNT);
+  for (let i = 0; i < DEFAULT_DIRECTION_COUNT; i++) {
+    out[i] = Math.sin(i * Math.PI * 2 / DEFAULT_DIRECTION_COUNT);
+  }
+  return out;
+})();
 // Profiling the 17-control expansion in Node showed that a 1,000-state beam
 // cannot sustain the urgent cadence. The cap remains configurable up to 3,000,
 // but the responsive normal default retains 64 spatially diverse states.
@@ -555,9 +573,8 @@ export class SpaceTimeDodgePlanner {
     let best: EmergencyJumpPlan | undefined;
 
     for (let direction = 0; direction < DEFAULT_DIRECTION_COUNT; direction++) {
-      const angle = direction * Math.PI * 2 / DEFAULT_DIRECTION_COUNT;
-      const directionX = Math.cos(angle);
-      const directionY = Math.sin(angle);
+      const directionX = DIRECTION_COS[direction]!;
+      const directionY = DIRECTION_SIN[direction]!;
       for (const jumpDistance of jumpDistances(allowance)) {
         const target = {
           x: input.position.x + directionX * jumpDistance,
@@ -1371,9 +1388,8 @@ export class SpaceTimeDodgePlanner {
     const probeDistance = 0.4;
     const startEnemy = context.collision.enemyDistance(position.x, position.y);
     for (let direction = 0; direction < DEFAULT_DIRECTION_COUNT; direction++) {
-      const angle = direction * Math.PI * 2 / DEFAULT_DIRECTION_COUNT;
-      const x = position.x + Math.cos(angle) * probeDistance;
-      const y = position.y + Math.sin(angle) * probeDistance;
+      const x = position.x + DIRECTION_COS[direction]! * probeDistance;
+      const y = position.y + DIRECTION_SIN[direction]! * probeDistance;
       if (context.collision.blocked(x, y)) continue;
       const enemyDistance = context.collision.enemyDistance(x, y);
       if (startEnemy >= ENEMY_AVOID_RADIUS
@@ -1798,11 +1814,12 @@ function createFixedControls(): MovementControl[] {
   }];
   let key = 1;
   for (let direction = 0; direction < DEFAULT_DIRECTION_COUNT; direction++) {
-    const angle = direction * Math.PI * 2 / DEFAULT_DIRECTION_COUNT;
+    const cosA = DIRECTION_COS[direction]!;
+    const sinA = DIRECTION_SIN[direction]!;
     for (const speedFraction of DEFAULT_SPEED_FRACTIONS) {
       controls.push({
-        x: Math.cos(angle),
-        y: Math.sin(angle),
+        x: cosA,
+        y: sinA,
         speedFraction,
         key,
         directionBucket: direction + 1,
