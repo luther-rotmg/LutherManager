@@ -24,6 +24,11 @@ const DEFAULT_PORT = 4451;
 const PORT_FALLBACK_COUNT = 10;
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_TOOL_OUTPUT_CHARS = 300_000;
+// luther_execute rate limit: sliding window of EXECUTE_RATE_WINDOW_MS milliseconds
+// during which at most EXECUTE_RATE_LIMIT calls per MCP session are allowed.
+// Defense-in-depth against a stolen Bearer token spamming arbitrary-JS execution.
+const EXECUTE_RATE_LIMIT = 5;
+const EXECUTE_RATE_WINDOW_MS = 60_000;
 const BLOCKED_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor']);
 const BLOCKED_CLIENT_METHODS = new Set([
   'addListener',
@@ -272,6 +277,8 @@ export class LutherMcpServer {
   private readonly lutherMethods = discoverLutherMethods();
   private readonly preferredPort: number;
   private readonly executeToolAllowed: boolean;
+  // sessionId -> ordered call timestamps within the current sliding window.
+  private readonly executeRateLimit = new Map<string, number[]>();
   private token = '';
   private endpoint = '';
   private httpServer?: HttpServer;
@@ -322,6 +329,7 @@ export class LutherMcpServer {
     this.stopLogSubscription = undefined;
     const sessions = Array.from(this.sessions.values());
     this.sessions.clear();
+    this.executeRateLimit.clear();
     await Promise.allSettled(sessions.map((session) => session.protocol.close()));
     const server = this.httpServer;
     this.httpServer = undefined;
@@ -431,18 +439,25 @@ export class LutherMcpServer {
       },
       onsessionclosed: (sessionId) => {
         this.sessions.delete(sessionId);
+        this.executeRateLimit.delete(sessionId);
       },
     });
     const protocol = this.createProtocolServer();
     session = { protocol, transport };
     transport.onclose = () => {
-      if (session.id) this.sessions.delete(session.id);
+      if (session.id) {
+        this.sessions.delete(session.id);
+        this.executeRateLimit.delete(session.id);
+      }
     };
     await protocol.connect(transport);
     try {
       await transport.handleRequest(req, res, body);
     } catch (error) {
-      if (session.id) this.sessions.delete(session.id);
+      if (session.id) {
+        this.sessions.delete(session.id);
+        this.executeRateLimit.delete(session.id);
+      }
       await protocol.close();
       throw error;
     }
@@ -576,6 +591,10 @@ export class LutherMcpServer {
       Logger.warn('MCP', `luther_execute: session=${sessionId} account=${accountId} mode=${mode} codeLen=${code.length} allowed=${this.executeToolAllowed}`);
       if (!this.executeToolAllowed) {
         throw new Error('luther_execute is disabled on this LutherManager server. Set LUTHER_MCP_ALLOW_EXECUTE=1 in the Manager environment to force-enable (not recommended for remote-reachable deployments). Prefer luther_call with a specific SDK method for automation.');
+      }
+      const retryAfterSeconds = this.admitExecuteCall(sessionId);
+      if (retryAfterSeconds !== null) {
+        throw new Error(`luther_execute rate limit exceeded for this MCP session (${EXECUTE_RATE_LIMIT} calls per ${Math.round(EXECUTE_RATE_WINDOW_MS / 1000)}s). Retry in ${retryAfterSeconds}s. If you need higher throughput, prefer luther_call which is not rate-limited.`);
       }
       this.requireClient(accountId);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...values: unknown[]) => Promise<unknown>;
@@ -773,9 +792,32 @@ export class LutherMcpServer {
     };
   }
 
+  /**
+   * Enforces a sliding-window rate limit for luther_execute per MCP session.
+   * Returns the seconds-until-retry when the caller is over the limit;
+   * otherwise records the call and returns null.
+   */
+  private admitExecuteCall(sessionId: string): number | null {
+    const now = Date.now();
+    const cutoff = now - EXECUTE_RATE_WINDOW_MS;
+    const previous = this.executeRateLimit.get(sessionId) ?? [];
+    // Drop expired timestamps.
+    const active = previous.filter((timestamp) => timestamp > cutoff);
+    if (active.length >= EXECUTE_RATE_LIMIT) {
+      const oldest = active[0]!;
+      const retryAfterMs = EXECUTE_RATE_WINDOW_MS - (now - oldest);
+      // Keep only the still-active window; do NOT record a new call.
+      this.executeRateLimit.set(sessionId, active);
+      return Math.max(1, Math.ceil(retryAfterMs / 1000));
+    }
+    active.push(now);
+    this.executeRateLimit.set(sessionId, active);
+    return null;
+  }
+
   private requireClient(accountId: string): Client {
     const normalized = String(accountId || '').trim();
-    if (!normalized) throw new Error('accountId is required. Call hive_list_accounts first.');
+    if (!normalized) throw new Error('accountId is required. Call luther_list_accounts first.');
     const client = this.deps.fleet.get(normalized);
     if (!client) throw new Error(`No launched headless account has accountId "${normalized}".`);
     return client;

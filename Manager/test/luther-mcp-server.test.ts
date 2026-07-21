@@ -132,6 +132,63 @@ test('Luther MCP authenticates, exposes tools, and streams logs', async () => {
   }
 });
 
+test('luther_execute rate-limits repeated calls per MCP session (6th call flips to rate-limit error)', async () => {
+  const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-rate-'));
+  const fleet = new FakeFleet();
+  const scriptHost = {
+    list: () => [],
+    start: async () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+  } as unknown as ScriptHost;
+  const gameData = {} as GameDataLoader;
+  const server = new LutherMcpServer({
+    fleet: fleet as unknown as HeadlessFleet,
+    gameData,
+    scriptHost,
+    preferredPort: await availablePort(),
+    configDir,
+    allowExecuteTool: true, // gate open; testing the rate limit downstream of the gate
+  });
+  let client: McpClient | undefined;
+
+  try {
+    const started = await server.start();
+    const config = JSON.parse(readFileSync(join(configDir, 'mcp.json'), 'utf8')) as { endpoint: string; token: string };
+
+    client = new McpClient({ name: 'hive-mcp-rate-test', version: '1.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL(started.endpoint), {
+      requestInit: { headers: { Authorization: `Bearer ${config.token}` } },
+    });
+    await client.connect(transport);
+
+    // First 5 calls consume the bucket. FakeFleet.get() returns undefined so requireClient
+    // errors, but the rate-limit ticks first — every attempt costs a token.
+    for (let index = 0; index < 5; index++) {
+      const result = await client.callTool({
+        name: 'luther_execute',
+        arguments: { accountId: 'account-1', code: '1 + 1', mode: 'expression' },
+      });
+      assert.equal(result.isError, true, `call ${index + 1} should surface an error (fake fleet has no client)`);
+      const text = result.content[0]?.type === 'text' ? result.content[0].text : '';
+      assert.ok(!text.includes('rate limit'), `call ${index + 1} must NOT be rate-limited yet; got: ${text}`);
+    }
+
+    // 6th call flips to a rate-limit error and does NOT reach requireClient.
+    const overLimit = await client.callTool({
+      name: 'luther_execute',
+      arguments: { accountId: 'account-1', code: '1 + 1', mode: 'expression' },
+    });
+    assert.equal(overLimit.isError, true);
+    const text = overLimit.content[0]?.type === 'text' ? overLimit.content[0].text : '';
+    assert.ok(text.includes('rate limit'), `6th call should be rate-limited; got: ${text}`);
+    assert.ok(text.includes('Retry in'), `6th call should tell the caller how long to wait; got: ${text}`);
+  } finally {
+    await client?.close().catch(() => {});
+    await server.stop();
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
 test('luther_execute is gate-refused when allowExecuteTool is explicitly false', async () => {
   const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-gate-'));
   const fleet = new FakeFleet();
