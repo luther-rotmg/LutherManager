@@ -432,6 +432,11 @@ export class SpaceTimeDodgePlanner {
   private candidatePoolCursor = 0;
   private readonly searchStatePool: SearchState[] = [];
   private searchStatePoolCursor = 0;
+  // Per-layer retained[] scratch — .length = 0 at each layer start. Only wins when
+  // the small-frontier branch (retained.length <= stateCap) runs; when diverseBeam
+  // runs it returns a fresh array and `retained` gets reassigned to it (which is fine —
+  // the scratch's items get cleared on the next layer's reset).
+  private readonly retainedScratch: CandidateState[] = [];
 
   /** Take the next reusable bucket array from the pool, or grow the pool by one. */
   private nextBucketArray(): CandidateState[] {
@@ -1026,7 +1031,8 @@ export class SpaceTimeDodgePlanner {
         }
       }
 
-      let retained: CandidateState[] = [];
+      this.retainedScratch.length = 0;
+      let retained: CandidateState[] = this.retainedScratch;
       for (const bucket of nextByBucket.values()) retained.push(...bucket);
       if (retained.length > context.stateCap) {
         const before = retained.length;
