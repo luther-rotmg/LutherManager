@@ -408,15 +408,36 @@ export class SpaceTimeDodgePlanner {
 
   // Wave 3 audit item beam-candidate-alloc-per-edge (partial):
   // Reused across plan() invocations to cut the allocation churn from the
-  // beam-search inner loop. The Map is `.clear()`d at each layer boundary
-  // (bucket arrays inside get GC'd — pooling those is a follow-up).
-  // The three scratch points are safe to reuse because evaluateEdge and
-  // transitionCost read x/y synchronously and do not retain the passed
-  // reference beyond the call.
+  // beam-search inner loop.
+  //   * nextByBucketScratch — .clear()d at each layer boundary; keys and value
+  //     references are refreshed but the Map instance persists.
+  //   * bucketArrayPool — the CandidateState[] arrays stored as Map values are
+  //     also pooled. On each layer, the cursor resets to 0 and the pool hands
+  //     out empty arrays; grows on demand. Safe because between layers all
+  //     bucket contents get spread-copied into `retained`, so recycling the
+  //     backing arrays doesn't observably alias.
+  //   * toScratch / velocityScratch / previousVelocityScratch — three reusable
+  //     {x, y} points passed to evaluateEdge / transitionCost, which read them
+  //     synchronously and do not retain the reference beyond the call.
   private readonly nextByBucketScratch = new Map<number, CandidateState[]>();
+  private readonly bucketArrayPool: CandidateState[][] = [];
+  private bucketArrayPoolCursor = 0;
   private readonly toScratch = { x: 0, y: 0 };
   private readonly velocityScratch = { x: 0, y: 0 };
   private readonly previousVelocityScratch = { x: 0, y: 0 };
+
+  /** Take the next reusable bucket array from the pool, or grow the pool by one. */
+  private nextBucketArray(): CandidateState[] {
+    const cursor = this.bucketArrayPoolCursor++;
+    if (cursor < this.bucketArrayPool.length) {
+      const arr = this.bucketArrayPool[cursor]!;
+      arr.length = 0;
+      return arr;
+    }
+    const arr: CandidateState[] = [];
+    this.bucketArrayPool.push(arr);
+    return arr;
+  }
 
   constructor(options: DodgePlannerOptions = {}) {
     const timeLayers = normalizeTimeLayers(options.timeLayersMs ?? DEFAULT_TIME_LAYERS_MS);
@@ -827,6 +848,7 @@ export class SpaceTimeDodgePlanner {
       const durationMs = endMs - startMs;
       const nextByBucket = this.nextByBucketScratch;
       nextByBucket.clear();
+      this.bucketArrayPoolCursor = 0;
 
       for (const state of frontier) {
         // Hoist per-state distances out of the 17-control loop — Wave 2 audit
@@ -925,7 +947,9 @@ export class SpaceTimeDodgePlanner {
             rankScore: cumulativeCost + partialRank,
           };
           if (!existing) {
-            nextByBucket.set(bucketKey, [candidate]);
+            const bucket = this.nextBucketArray();
+            bucket.push(candidate);
+            nextByBucket.set(bucketKey, bucket);
           } else {
             context.counters.statesMerged++;
             retainSpatialCandidate(existing, candidate);
