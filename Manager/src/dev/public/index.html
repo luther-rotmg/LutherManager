@@ -2007,5 +2007,104 @@
   <button type="button" class="accounts-ctx-item" data-ql-action="edit">Edit Account</button>
   <button type="button" class="accounts-ctx-item accounts-ctx-item--danger" data-ql-action="clear">Clear</button>
 </div>
+
+<!-- Auto-updater status toast. Hidden by default; shown by inline script below when
+     electron-updater fires an interesting state ('available' / 'downloading' /
+     'downloaded' / 'error'). Sits bottom-right, above every other floating UI. -->
+<div id="updater-toast" role="status" aria-live="polite" style="
+  position: fixed; right: 20px; bottom: 20px; z-index: 10000;
+  min-width: 260px; max-width: 380px; padding: 12px 16px;
+  background: #0d1117; color: #e6edf3; border: 1px solid #30363d;
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: none;
+">
+  <div id="updater-toast-title" style="font-weight: 600; margin-bottom: 4px; color: #58a6ff;"></div>
+  <div id="updater-toast-body" style="color: #8b949e; margin-bottom: 10px;"></div>
+  <div id="updater-toast-progress" style="height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; margin-bottom: 10px; display: none;">
+    <div id="updater-toast-bar" style="height: 100%; background: #3fb950; width: 0%; transition: width 200ms linear;"></div>
+  </div>
+  <div style="display: flex; gap: 8px; justify-content: flex-end;">
+    <button type="button" id="updater-toast-primary" style="
+      padding: 4px 12px; background: #238636; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;
+      display: none;
+    "></button>
+    <button type="button" id="updater-toast-dismiss" style="
+      padding: 4px 12px; background: transparent; color: #8b949e; border: 1px solid #30363d;
+      border-radius: 4px; cursor: pointer; font-size: 12px;
+    ">Dismiss</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var api = window.electronAPI && window.electronAPI.updater;
+  if (!api) return; // Running in a non-Electron context (browser dev preview); no wire to show.
+  var toast = document.getElementById('updater-toast');
+  var title = document.getElementById('updater-toast-title');
+  var body = document.getElementById('updater-toast-body');
+  var progress = document.getElementById('updater-toast-progress');
+  var bar = document.getElementById('updater-toast-bar');
+  var primary = document.getElementById('updater-toast-primary');
+  var dismiss = document.getElementById('updater-toast-dismiss');
+  var dismissed = false;
+
+  function hide() { toast.style.display = 'none'; }
+  function show() { if (!dismissed) toast.style.display = 'block'; }
+
+  dismiss.addEventListener('click', function () { dismissed = true; hide(); });
+
+  api.onStatusChange(function (payload) {
+    var state = payload && payload.state;
+    // Reset any per-state style not needed.
+    progress.style.display = 'none';
+    primary.style.display = 'none';
+    if (state === 'available') {
+      title.textContent = 'Update available';
+      body.textContent = 'LutherManager ' + (payload.info && payload.info.version || '(newer)') + ' is available.';
+      primary.textContent = 'Download';
+      primary.style.display = 'inline-block';
+      primary.onclick = function () {
+        primary.disabled = true;
+        api.downloadNow();
+      };
+      dismissed = false;
+      show();
+    } else if (state === 'downloading') {
+      title.textContent = 'Downloading update';
+      var pct = Math.round((payload.info && payload.info.percent) || 0);
+      body.textContent = pct + '% — ' + fmtBytes(payload.info && payload.info.transferred) + ' / ' + fmtBytes(payload.info && payload.info.total);
+      progress.style.display = 'block';
+      bar.style.width = pct + '%';
+      show();
+    } else if (state === 'downloaded') {
+      title.textContent = 'Ready to install';
+      body.textContent = 'LutherManager ' + (payload.info && payload.info.version || '') + ' downloaded. Restart to apply.';
+      primary.textContent = 'Restart & install';
+      primary.style.display = 'inline-block';
+      primary.disabled = false;
+      primary.onclick = function () { api.installNow(); };
+      dismissed = false;
+      show();
+    } else if (state === 'error') {
+      title.textContent = 'Update error';
+      title.style.color = '#f85149';
+      body.textContent = (payload.info && payload.info.message) || 'Unknown updater error.';
+      show();
+    } else {
+      // 'checking' / 'idle' / 'disabled' — don't surface unless something interesting happens.
+      hide();
+    }
+  });
+
+  function fmtBytes(n) {
+    if (!n || !isFinite(n)) return '?';
+    if (n < 1024) return n + 'B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + 'KB';
+    return (n / 1024 / 1024).toFixed(1) + 'MB';
+  }
+})();
+</script>
 </body>
 </html>

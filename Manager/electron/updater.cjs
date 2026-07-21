@@ -39,9 +39,24 @@ function loadUpdateToken() {
 }
 
 function createUpdater({ isPackaged }) {
+  // The API is uniform whether or not the updater is actually wired: the returned object
+  // always exposes {scheduleBackgroundUpdateChecks, getStatus, checkNow, downloadNow, installNow}.
+  // Disabled paths short-circuit to a static status; renderer / IPC don't need to special-case.
+  const disabled = (reason) => {
+    console.log('[updater]', reason);
+    const status = { state: 'disabled', info: { reason } };
+    return {
+      scheduleBackgroundUpdateChecks() {},
+      getStatus() { return status; },
+      checkNow() { return Promise.resolve(status); },
+      downloadNow() { return Promise.resolve(status); },
+      installNow() {},
+      onStatusChange() { return () => {}; },
+    };
+  };
+
   if (!isPackaged) {
-    console.log('[updater] dev build: auto-updates disabled.');
-    return null;
+    return disabled('dev build: auto-updates disabled.');
   }
 
   const cred = loadUpdateToken();
@@ -49,7 +64,7 @@ function createUpdater({ isPackaged }) {
     console.log('[updater] no update-token found; auto-updates disabled.');
     console.log('[updater] mint one at https://luther-rotmg.com/payment after checkout,');
     console.log('[updater] then save the token to %USERPROFILE%\\Documents\\LutherManager\\update-token');
-    return null;
+    return disabled('no update-token found.');
   }
   console.log('[updater] loaded update token from', cred.path);
 
@@ -58,7 +73,7 @@ function createUpdater({ isPackaged }) {
     ({ NsisUpdater } = require('electron-updater'));
   } catch (err) {
     console.error('[updater] electron-updater not available:', err && (err.message || err));
-    return null;
+    return disabled('electron-updater dep missing.');
   }
 
   const updater = new NsisUpdater({
@@ -68,16 +83,45 @@ function createUpdater({ isPackaged }) {
   updater.autoInstallOnAppQuit = true;
   updater.addAuthHeader('Bearer ' + cred.token);
 
-  updater.on('error', (err) => console.error('[updater] error:', err && (err.message || err)));
-  updater.on('checking-for-update', () => console.log('[updater] checking...'));
-  updater.on('update-not-available', () => console.log('[updater] already on latest.'));
-  updater.on('download-progress', (p) => console.log('[updater] download', Math.round(p.percent) + '%'));
-  updater.on('update-downloaded', (info) => console.log('[updater] downloaded ' + (info && info.version) + '; will install on quit.'));
+  // Latest status snapshot + subscriber list. Renderer subscribes via IPC (main.cjs wires
+  // it up); other callers (e.g. system tray) can also subscribe directly if we add them.
+  let status = { state: 'checking' };
+  const subscribers = new Set();
+  const setStatus = (next) => {
+    status = next;
+    for (const cb of subscribers) {
+      try { cb(status); } catch (err) { console.error('[updater] subscriber failed:', err && (err.message || err)); }
+    }
+  };
+
+  updater.on('error', (err) => {
+    console.error('[updater] error:', err && (err.message || err));
+    setStatus({ state: 'error', info: { message: err && (err.message || String(err)) } });
+  });
+  updater.on('checking-for-update', () => {
+    console.log('[updater] checking...');
+    setStatus({ state: 'checking' });
+  });
+  updater.on('update-not-available', () => {
+    console.log('[updater] already on latest.');
+    setStatus({ state: 'idle' });
+  });
+  updater.on('update-available', (info) => {
+    console.log('[updater] update available:', info && info.version);
+    setStatus({ state: 'available', info: { version: info && info.version } });
+  });
+  updater.on('download-progress', (p) => {
+    console.log('[updater] download', Math.round(p.percent) + '%');
+    setStatus({ state: 'downloading', info: { percent: p.percent, transferred: p.transferred, total: p.total } });
+  });
+  updater.on('update-downloaded', (info) => {
+    console.log('[updater] downloaded ' + (info && info.version) + '; will install on quit.');
+    setStatus({ state: 'downloaded', info: { version: info && info.version } });
+  });
 
   return {
     scheduleBackgroundUpdateChecks({ app: appInstance, dialog, getWindow }) {
       updater.on('update-available', (info) => {
-        console.log('[updater] update available:', info && info.version);
         const win = getWindow && getWindow();
         if (!win || !dialog || !appInstance) return;
         dialog.showMessageBox(win, {
@@ -99,6 +143,33 @@ function createUpdater({ isPackaged }) {
       setInterval(() => {
         updater.checkForUpdates().catch((err) => console.error('[updater] scheduled check failed:', err && (err.message || err)));
       }, CHECK_INTERVAL_MS);
+    },
+    getStatus() { return status; },
+    checkNow() {
+      return updater.checkForUpdates()
+        .then(() => status)
+        .catch((err) => {
+          const failure = { state: 'error', info: { message: err && (err.message || String(err)) } };
+          setStatus(failure);
+          return failure;
+        });
+    },
+    downloadNow() {
+      if (status.state !== 'available') return Promise.resolve(status);
+      return updater.downloadUpdate()
+        .then(() => status)
+        .catch((err) => {
+          const failure = { state: 'error', info: { message: err && (err.message || String(err)) } };
+          setStatus(failure);
+          return failure;
+        });
+    },
+    installNow() { updater.quitAndInstall(false, true); },
+    onStatusChange(cb) {
+      subscribers.add(cb);
+      // Fire once with the current snapshot so late subscribers see state without waiting.
+      try { cb(status); } catch (err) { console.error('[updater] initial-fire failed:', err && (err.message || err)); }
+      return () => subscribers.delete(cb);
     },
   };
 }

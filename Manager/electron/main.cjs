@@ -473,6 +473,28 @@ app.whenReady().then(async () => {
     console.error('[updater] background checks failed (ignored):', err && (err.message || err));
   }
 
+  // Renderer-facing updater IPC. preload.cjs exposes window.electronAPI.updater.
+  // Broadcast every state change to the main window's webContents; renderer subscribes.
+  if (updaterApi) {
+    try {
+      updaterApi.onStatusChange((payload) => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater:status', payload);
+          }
+        } catch (err) {
+          console.error('[updater] status broadcast failed:', err && (err.message || err));
+        }
+      });
+      ipcMain.handle('updater:getStatus', () => updaterApi.getStatus());
+      ipcMain.handle('updater:checkNow', () => updaterApi.checkNow());
+      ipcMain.handle('updater:downloadNow', () => updaterApi.downloadNow());
+      ipcMain.on('updater:installNow', () => updaterApi.installNow());
+    } catch (err) {
+      console.error('[updater] IPC wiring failed (ignored):', err && (err.message || err));
+    }
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
