@@ -10,7 +10,7 @@ import { createStaticPassabilityStore } from './static-passability-store';
 export { ENEMY_AVOID_RADIUS, ENEMY_SOFT_AVOID_RADIUS } from './enemy-clearance-overlay';
 
 interface DodgeObjectRecord {
-  key: string;
+  key: number;
   x: number;
   y: number;
   occupySquare: boolean;
@@ -108,9 +108,9 @@ export class DodgeCollisionWorld {
   private readonly staticPassability: StaticPassabilityStore;
   private readonly ownsStaticPassability: boolean;
   private readonly objects = new Map<number, DodgeObjectRecord>();
-  private readonly enemyOccupyCounts = new Map<string, number>();
+  private readonly enemyOccupyCounts = new Map<number, number>();
   /** OccupySquare cover for projectiles, including damageable enemy walls. */
-  private readonly projectileCoverCounts = new Map<string, number>();
+  private readonly projectileCoverCounts = new Map<number, number>();
   private readonly confirmedCombatEnemies = new Set<number>();
   private readonly enemyOverlay = new EnemyClearanceOverlay();
   private revision = 0;
@@ -411,7 +411,7 @@ export class DodgeCollisionWorld {
     return projectile.definition.passesCover || !hasCover;
   }
 
-  private adjust(counts: Map<string, number>, key: string, delta: number): void {
+  private adjust(counts: Map<number, number>, key: number, delta: number): void {
     if (delta === 0) return;
     const count = (counts.get(key) ?? 0) + delta;
     if (count > 0) counts.set(key, count);
@@ -450,6 +450,13 @@ function sameOptionalPosition(
     : first.x === second.x && first.y === second.y;
 }
 
-function tileKey(x: number, y: number): string {
-  return `${x},${y}`;
+/**
+ * Packed 32-bit tile-key for Map<number, ...> lookups.
+ * Assumes integer x, y in [-0x8000, 0x8000) — a RotMG map is 0-2048 tiles
+ * so the range is comfortable. Squashes both coordinates into one integer to
+ * skip string alloc + Map<string,_> hash-of-string overhead in hot paths.
+ * P9 audit item tileKey-template-string-per-sample.
+ */
+function tileKey(x: number, y: number): number {
+  return ((x + 0x8000) << 16) | ((y + 0x8000) & 0xffff);
 }
