@@ -406,6 +406,18 @@ export class SpaceTimeDodgePlanner {
   private coalescedProjectileUpdates = 0;
   private lastCounters = emptyCounters();
 
+  // Wave 3 audit item beam-candidate-alloc-per-edge (partial):
+  // Reused across plan() invocations to cut the allocation churn from the
+  // beam-search inner loop. The Map is `.clear()`d at each layer boundary
+  // (bucket arrays inside get GC'd — pooling those is a follow-up).
+  // The three scratch points are safe to reuse because evaluateEdge and
+  // transitionCost read x/y synchronously and do not retain the passed
+  // reference beyond the call.
+  private readonly nextByBucketScratch = new Map<number, CandidateState[]>();
+  private readonly toScratch = { x: 0, y: 0 };
+  private readonly velocityScratch = { x: 0, y: 0 };
+  private readonly previousVelocityScratch = { x: 0, y: 0 };
+
   constructor(options: DodgePlannerOptions = {}) {
     const timeLayers = normalizeTimeLayers(options.timeLayersMs ?? DEFAULT_TIME_LAYERS_MS);
     this.config = {
@@ -813,7 +825,8 @@ export class SpaceTimeDodgePlanner {
       const startMs = this.config.timeLayersMs[layer - 1]!;
       const endMs = this.config.timeLayersMs[layer]!;
       const durationMs = endMs - startMs;
-      const nextByBucket = new Map<number, CandidateState[]>();
+      const nextByBucket = this.nextByBucketScratch;
+      nextByBucket.clear();
 
       for (const state of frontier) {
         // Hoist per-state distances out of the 17-control loop — Wave 2 audit
@@ -862,10 +875,12 @@ export class SpaceTimeDodgePlanner {
             context.counters.statesMerged++;
             continue;
           }
+          this.toScratch.x = nextX;
+          this.toScratch.y = nextY;
           const safety = this.evaluateEdge(
             context,
             state,
-            { x: nextX, y: nextY },
+            this.toScratch,
             startMs,
             endMs,
             false,
@@ -873,11 +888,15 @@ export class SpaceTimeDodgePlanner {
             stateCombatDistance,
           );
           if (!safety) continue;
+          this.velocityScratch.x = velocityX;
+          this.velocityScratch.y = velocityY;
+          this.previousVelocityScratch.x = state.velocityX;
+          this.previousVelocityScratch.y = state.velocityY;
           const transitionCost = this.transitionCost(
             context,
             state,
-            { x: velocityX, y: velocityY },
-            { x: state.velocityX, y: state.velocityY },
+            this.velocityScratch,
+            this.previousVelocityScratch,
             durationMs,
             safety,
             endMs,
