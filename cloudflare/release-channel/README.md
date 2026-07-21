@@ -17,12 +17,20 @@ curl -H "Authorization: Bearer <token>" https://luther-rotmg.com/api/releases/he
 
 ## Mint a new install token
 
+Preferred:
 ```
-# Pick a token (random 32 bytes base64url, or any unique string).
+node scripts/mint-token.mjs --email champion@example.com --note "champion-dev-machine"
+```
+
+The script generates a token, writes it to the TOKENS KV via wrangler, prints
+the file path where the subscriber pastes it, and prints the exact revocation
+command. Add `--dry-run` to preview without touching KV.
+
+Manual fallback (if wrangler isn't on PATH):
+```
 TOKEN=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")
-# Register it.
 wrangler kv key put --binding=TOKENS "$TOKEN" '{"revoked":false,"email":"champion@example.com","install_date":"2026-07-20"}' --remote
-echo "Bake this into the packaged app: $TOKEN"
+echo "Paste into %USERPROFILE%\\Documents\\LutherManager\\update-token: $TOKEN"
 ```
 
 ## Revoke
