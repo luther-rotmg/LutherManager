@@ -425,6 +425,13 @@ export class SpaceTimeDodgePlanner {
   private readonly toScratch = { x: 0, y: 0 };
   private readonly velocityScratch = { x: 0, y: 0 };
   private readonly previousVelocityScratch = { x: 0, y: 0 };
+  // CandidateState + SearchState pools reset per plan (in search()) rather than per layer,
+  // because both survive across layer boundaries via `retained` / `frontier` / `allStates`.
+  // Growing monotonically; steady-state allocation drops to zero after the first few plans.
+  private readonly candidatePool: CandidateState[] = [];
+  private candidatePoolCursor = 0;
+  private readonly searchStatePool: SearchState[] = [];
+  private searchStatePoolCursor = 0;
 
   /** Take the next reusable bucket array from the pool, or grow the pool by one. */
   private nextBucketArray(): CandidateState[] {
@@ -437,6 +444,71 @@ export class SpaceTimeDodgePlanner {
     const arr: CandidateState[] = [];
     this.bucketArrayPool.push(arr);
     return arr;
+  }
+
+  /** Fetch (or grow) a CandidateState from the pool, populating every field. */
+  private nextCandidate(
+    layer: number, x: number, y: number, cumulativeCost: number,
+    parentIndex: number, velocityX: number, velocityY: number,
+    controlKey: number, controlRunLength: number, directionBucket: number,
+    order: number, minimumProjectileClearance: number,
+    minimumEnemyClearance: number, rankScore: number,
+  ): CandidateState {
+    let c: CandidateState;
+    if (this.candidatePoolCursor < this.candidatePool.length) {
+      c = this.candidatePool[this.candidatePoolCursor]!;
+    } else {
+      c = {
+        layer, x, y, cumulativeCost, parentIndex, velocityX, velocityY,
+        controlKey, controlRunLength, directionBucket, order,
+        minimumProjectileClearance, minimumEnemyClearance, rankScore,
+      };
+      this.candidatePool.push(c);
+    }
+    this.candidatePoolCursor++;
+    c.layer = layer; c.x = x; c.y = y; c.cumulativeCost = cumulativeCost;
+    c.parentIndex = parentIndex; c.velocityX = velocityX; c.velocityY = velocityY;
+    c.controlKey = controlKey; c.controlRunLength = controlRunLength;
+    c.directionBucket = directionBucket; c.order = order;
+    c.minimumProjectileClearance = minimumProjectileClearance;
+    c.minimumEnemyClearance = minimumEnemyClearance;
+    c.rankScore = rankScore;
+    return c;
+  }
+
+  /** Fetch (or grow) a SearchState from the pool, copying every field from a CandidateState + adding index. */
+  private nextSearchStateFromCandidate(candidate: CandidateState, index: number): SearchState {
+    let s: SearchState;
+    if (this.searchStatePoolCursor < this.searchStatePool.length) {
+      s = this.searchStatePool[this.searchStatePoolCursor]!;
+    } else {
+      s = {
+        index, layer: candidate.layer, x: candidate.x, y: candidate.y,
+        cumulativeCost: candidate.cumulativeCost, parentIndex: candidate.parentIndex,
+        velocityX: candidate.velocityX, velocityY: candidate.velocityY,
+        controlKey: candidate.controlKey, controlRunLength: candidate.controlRunLength,
+        directionBucket: candidate.directionBucket, order: candidate.order,
+        minimumProjectileClearance: candidate.minimumProjectileClearance,
+        minimumEnemyClearance: candidate.minimumEnemyClearance,
+      };
+      this.searchStatePool.push(s);
+    }
+    this.searchStatePoolCursor++;
+    s.index = index;
+    s.layer = candidate.layer;
+    s.x = candidate.x;
+    s.y = candidate.y;
+    s.cumulativeCost = candidate.cumulativeCost;
+    s.parentIndex = candidate.parentIndex;
+    s.velocityX = candidate.velocityX;
+    s.velocityY = candidate.velocityY;
+    s.controlKey = candidate.controlKey;
+    s.controlRunLength = candidate.controlRunLength;
+    s.directionBucket = candidate.directionBucket;
+    s.order = candidate.order;
+    s.minimumProjectileClearance = candidate.minimumProjectileClearance;
+    s.minimumEnemyClearance = candidate.minimumEnemyClearance;
+    return s;
   }
 
   constructor(options: DodgePlannerOptions = {}) {
@@ -817,6 +889,9 @@ export class SpaceTimeDodgePlanner {
 
   private search(context: PlannerContext): DodgePlanningResult {
     const { input } = context;
+    // Reset per-plan object pools before any candidate/state creation.
+    this.candidatePoolCursor = 0;
+    this.searchStatePoolCursor = 0;
     const allStates: SearchState[] = [{
       index: 0,
       layer: 0,
@@ -924,28 +999,22 @@ export class SpaceTimeDodgePlanner {
             endMs,
           );
           const cumulativeCost = state.cumulativeCost + transitionCost;
-          const candidate: CandidateState = {
+          const candidate = this.nextCandidate(
             layer,
-            x: nextX,
-            y: nextY,
+            nextX,
+            nextY,
             cumulativeCost,
-            parentIndex: state.index,
+            state.index,
             velocityX,
             velocityY,
-            controlKey: control.key,
-            controlRunLength: state.controlKey === control.key ? state.controlRunLength + 1 : 1,
-            directionBucket: control.directionBucket,
-            order: order++,
-            minimumProjectileClearance: Math.min(
-              state.minimumProjectileClearance,
-              safety.minimumProjectileClearance,
-            ),
-            minimumEnemyClearance: Math.min(
-              state.minimumEnemyClearance,
-              safety.minimumEnemyClearance,
-            ),
-            rankScore: cumulativeCost + partialRank,
-          };
+            control.key,
+            state.controlKey === control.key ? state.controlRunLength + 1 : 1,
+            control.directionBucket,
+            order++,
+            Math.min(state.minimumProjectileClearance, safety.minimumProjectileClearance),
+            Math.min(state.minimumEnemyClearance, safety.minimumEnemyClearance),
+            cumulativeCost + partialRank,
+          );
           if (!existing) {
             const bucket = this.nextBucketArray();
             bucket.push(candidate);
@@ -969,7 +1038,7 @@ export class SpaceTimeDodgePlanner {
       if (retained.length === 0) break;
 
       frontier = retained.map((candidate) => {
-        const state: SearchState = { ...candidate, index: allStates.length };
+        const state = this.nextSearchStateFromCandidate(candidate, allStates.length);
         allStates.push(state);
         return state;
       });
