@@ -1206,8 +1206,8 @@ export class SpaceTimeDodgePlanner {
     }
 
     cost += this.calculateIntentTransitionCost(context, from, velocity, durationMs, endMs);
-    const desired = desiredDirectionAt(context, from, endMs - durationMs);
-    const desiredScale = desiredDirectionCostScaleAt(context, from, endMs - durationMs);
+    // Fused lookup — one writeCombatTargetAt + one distance() call for combat_range instead of two.
+    const { direction: desired, scale: desiredScale } = desiredDirectionAndScaleAt(context, from, endMs - durationMs);
     const desiredActive = !!desired && desiredScale > 1e-9;
     if (speed <= 1e-9 && desiredActive) {
       cost += this.weights.unnecessaryWaitPerSecond * durationSeconds * desiredScale;
@@ -1915,36 +1915,64 @@ function desiredDirectionFromInput(
   return { x: dx / length, y: dy / length };
 }
 
-function desiredDirectionAt(
+/**
+ * Fused desired-direction + cost-scale lookup. The two used to be separate helpers, but both
+ * called `writeCombatTargetAt(...) + distance(...)` on the combat_range path AND both were
+ * evaluated back-to-back in transitionCost's per-edge inner loop (~13k times per plan).
+ * Fusing eliminates the double target-write and lets V8 keep the destructured return in
+ * registers at the call site.
+ */
+function desiredDirectionAndScaleAt(
   context: PlannerContext,
   position: { x: number; y: number },
   timeOffsetMs: number,
-): { x: number; y: number } | undefined {
+): { direction: { x: number; y: number } | undefined; scale: number } {
   const intent = context.intent;
   if (intent?.mode === 'combat_range') {
     const target = context.combatTargetScratch;
     writeCombatTargetAt(context, timeOffsetMs, target);
     const targetDistance = distance(position, target);
     if (targetDistance >= intent.preferredMinimumRange
-      && targetDistance <= intent.preferredMaximumRange) return undefined;
-    const destination = targetDistance < intent.preferredMinimumRange
-      ? { x: position.x * 2 - target.x, y: position.y * 2 - target.y }
-      : context.routeWaypoint ?? target;
-    return unitVector(position, destination);
+      && targetDistance <= intent.preferredMaximumRange) {
+      return { direction: undefined, scale: 0 };
+    }
+    if (targetDistance < intent.preferredMinimumRange) {
+      const destination = { x: position.x * 2 - target.x, y: position.y * 2 - target.y };
+      return { direction: unitVector(position, destination), scale: 1 };
+    }
+    // targetDistance > preferredMaximumRange
+    return {
+      direction: unitVector(position, context.routeWaypoint ?? target),
+      scale: context.retreatPenaltyScale,
+    };
   }
   if (intent?.mode === 'goal') {
     if (distanceSquared(position.x, position.y, intent.goalX, intent.goalY)
-      <= Math.max(0, intent.arriveThreshold ?? 0) ** 2) return undefined;
-    return unitVector(
+      <= Math.max(0, intent.arriveThreshold ?? 0) ** 2) return { direction: undefined, scale: 0 };
+    const direction = unitVector(
       position,
       context.routeWaypoint ?? { x: intent.goalX, y: intent.goalY },
     );
+    return { direction, scale: direction ? 1 : 0 };
   }
-  if (context.routeWaypoint) return unitVector(position, context.routeWaypoint);
+  if (context.routeWaypoint) {
+    const direction = unitVector(position, context.routeWaypoint);
+    return { direction, scale: direction ? 1 : 0 };
+  }
   if (context.input.preferredDirection) {
-    return unitVector({ x: 0, y: 0 }, context.input.preferredDirection);
+    const direction = unitVector({ x: 0, y: 0 }, context.input.preferredDirection);
+    return { direction, scale: direction ? 1 : 0 };
   }
-  return unitVector({ x: 0, y: 0 }, context.input.intentVelocity);
+  const direction = unitVector({ x: 0, y: 0 }, context.input.intentVelocity);
+  return { direction, scale: direction ? 1 : 0 };
+}
+
+function desiredDirectionAt(
+  context: PlannerContext,
+  position: { x: number; y: number },
+  timeOffsetMs: number,
+): { x: number; y: number } | undefined {
+  return desiredDirectionAndScaleAt(context, position, timeOffsetMs).direction;
 }
 
 function desiredDirectionCostScaleAt(
@@ -1952,16 +1980,7 @@ function desiredDirectionCostScaleAt(
   position: { x: number; y: number },
   timeOffsetMs: number,
 ): number {
-  const intent = context.intent;
-  if (intent?.mode !== 'combat_range') {
-    return desiredDirectionAt(context, position, timeOffsetMs) ? 1 : 0;
-  }
-  const target = context.combatTargetScratch;
-  writeCombatTargetAt(context, timeOffsetMs, target);
-  const targetDistance = distance(position, target);
-  if (targetDistance < intent.preferredMinimumRange) return 1;
-  if (targetDistance > intent.preferredMaximumRange) return context.retreatPenaltyScale;
-  return 0;
+  return desiredDirectionAndScaleAt(context, position, timeOffsetMs).scale;
 }
 
 function reconstructTrajectory(
