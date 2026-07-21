@@ -1597,7 +1597,7 @@ export class SpaceTimeDodgePlanner {
         const ratio = (landingMs - startMs) / durationMs;
         const x = current.x + (next.x - current.x) * ratio;
         const y = current.y + (next.y - current.y) * ratio;
-        if (Math.sqrt((x - aoe.x) * (x - aoe.x) + (y - aoe.y) * (y - aoe.y)) <= aoe.radius + AOE_SAFETY_MARGIN) {
+        if (distanceSquared(x, y, aoe.x, aoe.y) <= (aoe.radius + AOE_SAFETY_MARGIN) ** 2) {
           earliest = Math.min(earliest, landingMs);
         }
       }
@@ -1899,8 +1899,8 @@ function desiredDirectionFromInput(
       return undefined;
     }
   } else if (intent?.mode === 'goal') {
-    if (Math.sqrt((position.x - intent.goalX) * (position.x - intent.goalX) + (position.y - intent.goalY) * (position.y - intent.goalY))
-      <= Math.max(0, intent.arriveThreshold ?? 0)) return undefined;
+    if (distanceSquared(position.x, position.y, intent.goalX, intent.goalY)
+      <= Math.max(0, intent.arriveThreshold ?? 0) ** 2) return undefined;
     dx = route ? route.x - position.x : intent.goalX - position.x;
     dy = route ? route.y - position.y : intent.goalY - position.y;
   } else if (input.preferredDirection) {
@@ -1933,8 +1933,8 @@ function desiredDirectionAt(
     return unitVector(position, destination);
   }
   if (intent?.mode === 'goal') {
-    if (Math.sqrt((position.x - intent.goalX) * (position.x - intent.goalX) + (position.y - intent.goalY) * (position.y - intent.goalY))
-      <= Math.max(0, intent.arriveThreshold ?? 0)) return undefined;
+    if (distanceSquared(position.x, position.y, intent.goalX, intent.goalY)
+      <= Math.max(0, intent.arriveThreshold ?? 0) ** 2) return undefined;
     return unitVector(
       position,
       context.routeWaypoint ?? { x: intent.goalX, y: intent.goalY },
@@ -2102,7 +2102,7 @@ function segmentNearPoint(
         0,
         1,
       );
-  return Math.sqrt((segment.startX + dx * ratio - point.x) * (segment.startX + dx * ratio - point.x) + (segment.startY + dy * ratio - point.y) * (segment.startY + dy * ratio - point.y)) <= radius;
+  return distanceSquared(segment.startX + dx * ratio, segment.startY + dy * ratio, point.x, point.y) <= radius * radius;
 }
 
 function closestFixedControl(
@@ -2129,7 +2129,8 @@ function closestFixedControl(
 }
 
 function velocityDirectionBucket(velocity: { x: number; y: number }): number {
-  return Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y)) <= 1e-9
+  // Squared-compare avoids sqrt on the near-zero-velocity guard; 1e-9 -> 1e-18 squared.
+  return velocity.x * velocity.x + velocity.y * velocity.y <= 1e-18
     ? 0
     : angleBucket(velocity.x, velocity.y) + 1;
 }
@@ -2303,7 +2304,7 @@ function goalScoringPoint(
 ): { x: number; y: number; threshold: number } | undefined {
   if (context.intent?.mode === 'goal') {
     const arriveThreshold = Math.max(0, context.intent.arriveThreshold ?? 0);
-    if (Math.sqrt((context.input.position.x - context.intent.goalX) * (context.input.position.x - context.intent.goalX) + (context.input.position.y - context.intent.goalY) * (context.input.position.y - context.intent.goalY)) <= arriveThreshold) {
+    if (distanceSquared(context.input.position.x, context.input.position.y, context.intent.goalX, context.intent.goalY) <= arriveThreshold * arriveThreshold) {
       return { x: context.intent.goalX, y: context.intent.goalY, threshold: arriveThreshold };
     }
     return context.routeWaypoint ?? {
@@ -2333,6 +2334,13 @@ function validGoal(
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+}
+
+/** Squared distance between two 2D coordinate pairs — skips the sqrt when callers only need a threshold-compare. */
+function distanceSquared(ax: number, ay: number, bx: number, by: number): number {
+  const dx = ax - bx;
+  const dy = ay - by;
+  return dx * dx + dy * dy;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
