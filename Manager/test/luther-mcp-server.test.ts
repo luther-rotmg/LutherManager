@@ -189,6 +189,67 @@ test('luther_execute rate-limits repeated calls per MCP session (6th call flips 
   }
 });
 
+test('hive_* deprecated aliases log a migration warning exactly once per session', async () => {
+  const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-deprecation-'));
+  const fleet = new FakeFleet();
+  const scriptHost = {
+    list: () => [],
+    start: async () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+  } as unknown as ScriptHost;
+  const gameData = {} as GameDataLoader;
+  const server = new LutherMcpServer({
+    fleet: fleet as unknown as HeadlessFleet,
+    gameData,
+    scriptHost,
+    preferredPort: await availablePort(),
+    configDir,
+  });
+  let client: McpClient | undefined;
+
+  try {
+    const started = await server.start();
+    const config = JSON.parse(readFileSync(join(configDir, 'mcp.json'), 'utf8')) as { endpoint: string; token: string };
+
+    client = new McpClient({ name: 'hive-mcp-deprecation-test', version: '1.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL(started.endpoint), {
+      requestInit: { headers: { Authorization: `Bearer ${config.token}` } },
+    });
+    await client.connect(transport);
+
+    // Two calls to the SAME deprecated alias in one session — the warning should fire on the first
+    // and be suppressed on the second (dedup via warnedAliases Set in createProtocolServer).
+    await client.callTool({ name: 'hive_list_accounts', arguments: {} });
+    await client.callTool({ name: 'hive_list_accounts', arguments: {} });
+    // Different alias — should fire its own separate warning.
+    await client.callTool({ name: 'hive_list_methods', arguments: {} });
+
+    // Read the diagnostic ring via the canonical tool.
+    const logsResult = await client.callTool({ name: 'luther_get_logs', arguments: { limit: 200 } });
+    const first = logsResult.content[0];
+    assert.equal(first?.type, 'text');
+    const raw = first.type === 'text' ? first.text : '[]';
+    const entries = JSON.parse(raw) as Array<{ message?: string }>;
+
+    const listAccountsWarnings = entries.filter((entry) =>
+      entry.message?.includes('hive_list_accounts')
+      && entry.message?.includes('Deprecated MCP name')
+    );
+    const listMethodsWarnings = entries.filter((entry) =>
+      entry.message?.includes('hive_list_methods')
+      && entry.message?.includes('Deprecated MCP name')
+    );
+    assert.equal(listAccountsWarnings.length, 1, `expected exactly 1 dedup'd hive_list_accounts warning; got ${listAccountsWarnings.length}`);
+    assert.equal(listMethodsWarnings.length, 1, `expected exactly 1 hive_list_methods warning; got ${listMethodsWarnings.length}`);
+    // Migration hint should include the canonical target name.
+    assert.ok(listAccountsWarnings[0]!.message!.includes('luther_list_accounts'), 'warning should name the canonical replacement');
+  } finally {
+    await client?.close().catch(() => {});
+    await server.stop();
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
 test('luther_execute is gate-refused when allowExecuteTool is explicitly false', async () => {
   const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-gate-'));
   const fleet = new FakeFleet();

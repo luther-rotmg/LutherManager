@@ -479,6 +479,27 @@ export class LutherMcpServer {
     );
 
     // Register canonical luther_* tools and deprecated hive_* aliases that share the same handler.
+    // Alias handlers wrap the canonical handler with a once-per-session deprecation warning
+    // logged to RuntimeDiagnostics (visible via luther_get_logs) — signaling migration to
+    // clients without spamming the log for repeat callers of the same alias.
+    const warnedAliases = new Set<string>();
+    const warnAliasUse = (aliasName: string, canonicalName: string): void => {
+      if (warnedAliases.has(aliasName)) return;
+      warnedAliases.add(aliasName);
+      Logger.warn('MCP', `Deprecated MCP name "${aliasName}" invoked; migrate to "${canonicalName}". This alias will be removed in a future release.`);
+    };
+    const wrapAliasHandler = <H extends (...args: unknown[]) => unknown>(
+      canonicalName: string,
+      aliasName: string,
+      handler: H,
+    ): H => {
+      const wrapped = ((...args: unknown[]) => {
+        warnAliasUse(aliasName, canonicalName);
+        return handler(...args);
+      }) as H;
+      return wrapped;
+    };
+
     const registerAliasedTool = <Config extends { description?: string }, Handler>(
       canonicalName: string,
       config: Config,
@@ -490,7 +511,9 @@ export class LutherMcpServer {
         const aliasName = `hive_${canonicalName.slice('luther_'.length)}`;
         const aliasConfig = { ...config, description: `[Deprecated alias for ${canonicalName}] ${config.description ?? ''}` };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (server.registerTool as any)(aliasName, aliasConfig, handler);
+        const aliasHandler = wrapAliasHandler(canonicalName, aliasName, handler as any);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (server.registerTool as any)(aliasName, aliasConfig, aliasHandler);
       }
     };
     const registerAliasedResource = <Config extends { description?: string }, Handler>(
@@ -506,7 +529,9 @@ export class LutherMcpServer {
         const aliasUri = `hive://${canonicalUri.slice('luther://'.length)}`;
         const aliasConfig = { ...config, description: `[Deprecated alias for ${canonicalName}] ${config.description ?? ''}` };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (server.registerResource as any)(aliasName, aliasUri, aliasConfig, handler);
+        const aliasHandler = wrapAliasHandler(canonicalName, aliasName, handler as any);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (server.registerResource as any)(aliasName, aliasUri, aliasConfig, aliasHandler);
       }
     };
     const registerAliasedPrompt = <Config extends { description?: string }, Handler>(
@@ -521,7 +546,9 @@ export class LutherMcpServer {
       if (aliasName) {
         const aliasConfig = { ...config, description: `[Deprecated alias for ${canonicalName}] ${config.description ?? ''}` };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (server.registerPrompt as any)(aliasName, aliasConfig, handler);
+        const aliasHandler = wrapAliasHandler(canonicalName, aliasName, handler as any);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (server.registerPrompt as any)(aliasName, aliasConfig, aliasHandler);
       }
     };
 
