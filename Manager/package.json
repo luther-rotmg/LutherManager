@@ -18,6 +18,7 @@
     "dist:installer": "npm run build:prod && electron-builder --win nsis",
     "dist:portable": "npm run build:prod && electron-builder --win portable",
     "dist:admin": "npm run build:admin && electron-builder --win portable",
+    "release:portable": "npm run dist:portable && node scripts/write-latest.mjs",
     "installer:desktop": "bash scripts/installer-to-desktop.sh",
     "installer:desktop:portable": "bash scripts/installer-to-desktop.sh portable"
   },
