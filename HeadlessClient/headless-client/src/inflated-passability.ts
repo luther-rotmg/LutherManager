@@ -26,15 +26,20 @@ export const INFLATION_DIRTY_REGION_RADIUS = Math.max(
   INFLATED_PLAYER_RADIUS + FULL_OCCUPY_INFLATION_CLEARANCE,
 );
 
-export function formatTileKey(tileX: number, tileY: number): string {
-  return `${tileX},${tileY}`;
+/**
+ * Packed 32-bit tile-key for Set<number> membership queries.
+ * Assumes integer tileX, tileY in [-0x8000, 0x8000). Matches dodge-collision-world.ts
+ * + static-passability-store.ts's tileKey encoding so keys are interchangeable across
+ * modules. P9 audit item tileKey-template-string-per-sample.
+ */
+export function formatTileKey(tileX: number, tileY: number): number {
+  return ((tileX + 0x8000) << 16) | ((tileY + 0x8000) & 0xffff);
 }
 
-function parseTileKey(key: string): { x: number; y: number } {
-  const comma = key.indexOf(',');
+function parseTileKey(key: number): { x: number; y: number } {
   return {
-    x: Number(key.slice(0, comma)),
-    y: Number(key.slice(comma + 1)),
+    x: (key >>> 16) - 0x8000,
+    y: (key & 0xffff) - 0x8000,
   };
 }
 
@@ -53,7 +58,7 @@ export function chebyshevDistancePointToTile(
 export function isBlockedByObstacleInflation(
   px: number,
   py: number,
-  obstacleTiles: ReadonlySet<string>,
+  obstacleTiles: ReadonlySet<number>,
   radius = INFLATED_PLAYER_RADIUS,
 ): boolean {
   for (const key of obstacleTiles) {
@@ -70,7 +75,7 @@ export function isBlockedByObstacleInflation(
 export function isBlockedByFullOccupyInflation(
   px: number,
   py: number,
-  fullOccupyTiles: ReadonlySet<string>,
+  fullOccupyTiles: ReadonlySet<number>,
   playerRadius = INFLATED_PLAYER_RADIUS,
   clearance = FULL_OCCUPY_INFLATION_CLEARANCE,
 ): boolean {
@@ -86,8 +91,8 @@ export function isBlockedByFullOccupyInflation(
 export function isBlockedByInflatedPassability(
   px: number,
   py: number,
-  obstacleTiles: ReadonlySet<string>,
-  fullOccupyTiles: ReadonlySet<string>,
+  obstacleTiles: ReadonlySet<number>,
+  fullOccupyTiles: ReadonlySet<number>,
 ): boolean {
   return isBlockedByObstacleInflation(px, py, obstacleTiles)
     || isBlockedByFullOccupyInflation(px, py, fullOccupyTiles);
@@ -106,11 +111,11 @@ function inGridBounds(
 
 /** Integer tiles whose centers are obstacle-inflated blocked (Step 5.2). */
 export function buildDilatedObstacleTiles(
-  obstacleSources: ReadonlySet<string>,
+  obstacleSources: ReadonlySet<number>,
   width: number,
   height: number,
-): Set<string> {
-  const dilated = new Set<string>();
+): Set<number> {
+  const dilated = new Set<number>();
   if (width <= 0 || height <= 0) return dilated;
   for (let tileY = 0; tileY < height; tileY++) {
     for (let tileX = 0; tileX < width; tileX++) {
@@ -124,11 +129,11 @@ export function buildDilatedObstacleTiles(
 
 /** Integer tiles whose centers are fullOccupy-inflated blocked (Step 5.2). */
 export function buildDilatedFullOccupyTiles(
-  fullOccupySources: ReadonlySet<string>,
+  fullOccupySources: ReadonlySet<number>,
   width: number,
   height: number,
-): Set<string> {
-  const dilated = new Set<string>();
+): Set<number> {
+  const dilated = new Set<number>();
   if (width <= 0 || height <= 0) return dilated;
   for (let tileY = 0; tileY < height; tileY++) {
     for (let tileX = 0; tileX < width; tileX++) {
@@ -145,8 +150,8 @@ export function buildDilatedFullOccupyTiles(
  * Only cells within INFLATION_DIRTY_REGION_RADIUS Chebyshev tiles are touched.
  */
 export function updateDilatedObstacleDirtyRegion(
-  dilated: Set<string>,
-  obstacleSources: ReadonlySet<string>,
+  dilated: Set<number>,
+  obstacleSources: ReadonlySet<number>,
   originTileX: number,
   originTileY: number,
   width: number,

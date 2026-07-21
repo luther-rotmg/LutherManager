@@ -4,6 +4,7 @@ import { DodgeCollisionWorld } from '../src/dodge-collision-world';
 import { ExplorativePathfinder } from '../src/explorative-pathfinder';
 import { createStaticPassabilityStore, StaticPassabilityStoreImpl } from '../src/static-passability-store';
 import {
+  formatTileKey,
   FULL_OCCUPY_INFLATION_CLEARANCE,
   INFLATED_PLAYER_RADIUS,
 } from '../src/inflated-passability';
@@ -444,13 +445,13 @@ test('terrain and object mutators fully rebuild inflated cache for new revision'
   store.observeTile(5, 2, PATHFINDING_MAP_TERRAIN.BLOCKING);
   assert.equal(store.getRevision(), revisionAfterTerrain + 1);
   assert.equal(impl.getInflatedCacheRevisionForTest(), store.getRevision());
-  assert.equal(impl.getDilatedObstacleTilesForTest().has('4,2'), true);
+  assert.equal(impl.getDilatedObstacleTilesForTest().has(formatTileKey(4, 2)), true);
 
   store.upsertObject(1, 999, 4.5, 4.5, { occupySquare: false, fullOccupy: true });
   assert.equal(impl.getInflatedCacheRevisionForTest(), store.getRevision());
-  assert.equal(impl.getDilatedFullOccupyTilesForTest().has('3,4'), true);
+  assert.equal(impl.getDilatedFullOccupyTilesForTest().has(formatTileKey(3, 4)), true);
 
   store.setExplorativeUnknown(true);
   assert.equal(impl.getInflatedCacheRevisionForTest(), store.getRevision());
-  assert.equal(impl.getDilatedFullOccupyTilesForTest().has('3,4'), true);
+  assert.equal(impl.getDilatedFullOccupyTilesForTest().has(formatTileKey(3, 4)), true);
 });

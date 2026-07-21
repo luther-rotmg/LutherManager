@@ -17,16 +17,21 @@ import type {
 const INVALID_TILE_TYPE = 0xffff;
 
 interface StoredObjectRecord {
-  key: string;
+  key: number;
   occupySquare: boolean;
   fullOccupy: boolean;
 }
 
-function tileKey(x: number, y: number): string {
-  return `${x},${y}`;
+/**
+ * Packed 32-bit tile-key for Map<number, ...> / Set<number> lookups.
+ * Matches dodge-collision-world.ts + inflated-passability.ts encoding so keys are
+ * interchangeable across modules. P9 audit item tileKey-template-string-per-sample.
+ */
+function tileKey(x: number, y: number): number {
+  return ((x + 0x8000) << 16) | ((y + 0x8000) & 0xffff);
 }
 
-function addToSet(values: Set<string>, value: string): boolean {
+function addToSet(values: Set<number>, value: number): boolean {
   if (values.has(value)) return false;
   values.add(value);
   return true;
@@ -49,19 +54,19 @@ export class StaticPassabilityStoreImpl implements StaticPassabilityStore {
   private explorativeUnknown = false;
   private readonly useInflatedPassability: boolean;
   /** Pathfinding: observed blocking terrain (unknown cells are absent). */
-  private readonly blockedTerrain = new Set<string>();
+  private readonly blockedTerrain = new Set<number>();
   /** Dodge: observed tile types for unresolved-tile handling. */
-  private readonly tileTypes = new Map<string, number>();
-  private readonly learnedBlocked = new Set<string>();
+  private readonly tileTypes = new Map<number, number>();
+  private readonly learnedBlocked = new Set<number>();
   private readonly objectTiles = new Map<number, StoredObjectRecord>();
-  private readonly occupyCounts = new Map<string, number>();
-  private readonly fullOccupyCounts = new Map<string, number>();
+  private readonly occupyCounts = new Map<number, number>();
+  private readonly fullOccupyCounts = new Map<number, number>();
   /** Rebuilt on each geometry change when inflated passability is enabled (Step 5.2). */
-  private obstacleSources = new Set<string>();
-  private fullOccupySources = new Set<string>();
+  private obstacleSources = new Set<number>();
+  private fullOccupySources = new Set<number>();
   /** Dilated integer-tile grids cached for the current revision. */
-  private dilatedObstacleTiles = new Set<string>();
-  private dilatedFullOccupyTiles = new Set<string>();
+  private dilatedObstacleTiles = new Set<number>();
+  private dilatedFullOccupyTiles = new Set<number>();
   /** Revision that dilatedObstacleTiles/dilatedFullOccupyTiles were built for. */
   private inflatedCacheRevision = -1;
 
@@ -206,8 +211,8 @@ export class StaticPassabilityStoreImpl implements StaticPassabilityStore {
     this.rebuildInflatedPassabilityFull();
   }
 
-  private collectObstacleTiles(): Set<string> {
-    const obstacles = new Set<string>();
+  private collectObstacleTiles(): Set<number> {
+    const obstacles = new Set<number>();
     for (const key of this.blockedTerrain) obstacles.add(key);
     for (const key of this.learnedBlocked) obstacles.add(key);
     for (const [key, count] of this.occupyCounts) {
@@ -216,8 +221,8 @@ export class StaticPassabilityStoreImpl implements StaticPassabilityStore {
     return obstacles;
   }
 
-  private collectFullOccupyTiles(): Set<string> {
-    const fullOccupy = new Set<string>();
+  private collectFullOccupyTiles(): Set<number> {
+    const fullOccupy = new Set<number>();
     for (const [key, count] of this.fullOccupyCounts) {
       if (count > 0) fullOccupy.add(key);
     }
@@ -431,7 +436,7 @@ export class StaticPassabilityStoreImpl implements StaticPassabilityStore {
     return true;
   }
 
-  private adjustCount(counts: Map<string, number>, key: string, delta: number): void {
+  private adjustCount(counts: Map<number, number>, key: number, delta: number): void {
     if (delta === 0) return;
     const count = (counts.get(key) ?? 0) + delta;
     if (count > 0) counts.set(key, count);
@@ -444,12 +449,12 @@ export class StaticPassabilityStoreImpl implements StaticPassabilityStore {
   }
 
   /** @internal Step 5.2 test helper — copy of dilated obstacle tile keys. */
-  getDilatedObstacleTilesForTest(): ReadonlySet<string> {
+  getDilatedObstacleTilesForTest(): ReadonlySet<number> {
     return this.dilatedObstacleTiles;
   }
 
   /** @internal Step 5.2 test helper — copy of dilated fullOccupy tile keys. */
-  getDilatedFullOccupyTilesForTest(): ReadonlySet<string> {
+  getDilatedFullOccupyTilesForTest(): ReadonlySet<number> {
     return this.dilatedFullOccupyTiles;
   }
 }
