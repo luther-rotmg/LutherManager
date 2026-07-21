@@ -371,10 +371,7 @@ export function sweptRelativeMotion(
       );
   return {
     closestTimeMs,
-    minimumDistance: Math.hypot(
-      relativeX + velocityX * closestTimeMs,
-      relativeY + velocityY * closestTimeMs,
-    ),
+    minimumDistance: Math.sqrt((relativeX + velocityX * closestTimeMs) * (relativeX + velocityX * closestTimeMs) + (relativeY + velocityY * closestTimeMs) * (relativeY + velocityY * closestTimeMs)),
   };
 }
 
@@ -736,7 +733,7 @@ export class SpaceTimeDodgePlanner {
         timeOffsetMs: endMs,
         x: next.x,
         y: next.y,
-        speed: Math.hypot(velocity.x, velocity.y) * 1000,
+        speed: Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y)) * 1000,
       });
       current = next;
       previousVelocity = velocity;
@@ -1018,7 +1015,7 @@ export class SpaceTimeDodgePlanner {
     if (durationMs <= 0) return undefined;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    const travel = Math.hypot(dx, dy);
+    const travel = Math.sqrt((dx) * (dx) + (dy) * (dy));
     if (!Number.isFinite(travel)
       || travel > context.input.moveSpeed * durationMs + 1e-8) {
       context.counters.candidatesRejectedByGeometry++;
@@ -1030,7 +1027,7 @@ export class SpaceTimeDodgePlanner {
     const combatTarget = context.combatTargetScratch;
     if (combatIntent) writeCombatTargetAt(context, startMs, combatTarget);
     const combatStartDistance = combatIntent
-      ? Math.hypot(from.x - combatTarget.x, from.y - combatTarget.y)
+      ? Math.sqrt((from.x - combatTarget.x) * (from.x - combatTarget.x) + (from.y - combatTarget.y) * (from.y - combatTarget.y))
       : Infinity;
     let priorCombatDistance = combatStartDistance;
     let priorEnemyDistance = startEnemyDistance;
@@ -1063,7 +1060,7 @@ export class SpaceTimeDodgePlanner {
       minimumEnemyDistance = Math.min(minimumEnemyDistance, enemyDistance);
       if (combatIntent) {
         writeCombatTargetAt(context, startMs + durationMs * ratio, combatTarget);
-        const targetDistance = Math.hypot(x - combatTarget.x, y - combatTarget.y);
+        const targetDistance = Math.sqrt((x - combatTarget.x) * (x - combatTarget.x) + (y - combatTarget.y) * (y - combatTarget.y));
         const hardMinimum = Math.max(ENEMY_AVOID_RADIUS, combatIntent.hardMinimumRange);
         if (combatStartDistance >= hardMinimum - DISTANCE_EPSILON) {
           if (targetDistance < hardMinimum - DISTANCE_EPSILON) {
@@ -1149,7 +1146,7 @@ export class SpaceTimeDodgePlanner {
       const ratio = clamp((landingMs - startMs) / durationMs, 0, 1);
       const x = from.x + dx * ratio;
       const y = from.y + dy * ratio;
-      const clearance = Math.hypot(x - aoe.x, y - aoe.y)
+      const clearance = Math.sqrt((x - aoe.x) * (x - aoe.x) + (y - aoe.y) * (y - aoe.y))
         - Math.max(0, aoe.radius) - AOE_SAFETY_MARGIN;
       minimumProjectileClearance = Math.min(minimumProjectileClearance, clearance);
       if (clearance <= 0) {
@@ -1189,8 +1186,8 @@ export class SpaceTimeDodgePlanner {
     endMs: number,
   ): number {
     const durationSeconds = durationMs / 1000;
-    const speed = Math.hypot(velocity.x, velocity.y);
-    const previousSpeed = Math.hypot(previousVelocity.x, previousVelocity.y);
+    const speed = Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y));
+    const previousSpeed = Math.sqrt((previousVelocity.x) * (previousVelocity.x) + (previousVelocity.y) * (previousVelocity.y));
     let cost = safety.softCost + this.weights.basePerSecond * durationSeconds;
     if (speed > 1e-9 && previousSpeed > 1e-9) {
       const dot = clamp(
@@ -1299,11 +1296,11 @@ export class SpaceTimeDodgePlanner {
     if (goal) {
       const remaining = Math.max(0, distance(position, goal) - goal.threshold);
       cost += this.weights.terminalGoalDistance * remaining;
-      const speed = Math.hypot(velocity.x, velocity.y);
+      const speed = Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y));
       if (speed > 1e-9 && remaining > 1e-9) {
         const dx = goal.x - position.x;
         const dy = goal.y - position.y;
-        const alignment = clamp((velocity.x * dx + velocity.y * dy) / (speed * Math.hypot(dx, dy)), -1, 1);
+        const alignment = clamp((velocity.x * dx + velocity.y * dy) / (speed * Math.sqrt((dx) * (dx) + (dy) * (dy))), -1, 1);
         cost += this.weights.terminalHeadingMismatch * (1 - alignment) * 0.5;
       }
     }
@@ -1316,7 +1313,7 @@ export class SpaceTimeDodgePlanner {
         this.weights.terminalCombatTooFar * context.retreatPenaltyScale,
       );
     }
-    const terminalSpeed = Math.hypot(velocity.x, velocity.y);
+    const terminalSpeed = Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y));
     if (desiredDirectionCostScaleAt(context, position, safeThroughMs) <= 1e-9
       && terminalSpeed > 1e-9 && context.input.moveSpeed > 1e-9) {
       cost += this.weights.terminalUnnecessarySpeed
@@ -1385,7 +1382,7 @@ export class SpaceTimeDodgePlanner {
       }
       const dx = candidate.x - context.input.position.x;
       const dy = candidate.y - context.input.position.y;
-      const radius = Math.hypot(dx, dy);
+      const radius = Math.sqrt((dx) * (dx) + (dy) * (dy));
       const radialBand = Math.min(3, Math.floor(radius / 1.25));
       const angle = Math.atan2(dy, dx);
       const sector = Math.floor((angle + Math.PI) / (Math.PI * 2) * 16) & 15;
@@ -1600,7 +1597,7 @@ export class SpaceTimeDodgePlanner {
         const ratio = (landingMs - startMs) / durationMs;
         const x = current.x + (next.x - current.x) * ratio;
         const y = current.y + (next.y - current.y) * ratio;
-        if (Math.hypot(x - aoe.x, y - aoe.y) <= aoe.radius + AOE_SAFETY_MARGIN) {
+        if (Math.sqrt((x - aoe.x) * (x - aoe.x) + (y - aoe.y) * (y - aoe.y)) <= aoe.radius + AOE_SAFETY_MARGIN) {
           earliest = Math.min(earliest, landingMs);
         }
       }
@@ -1801,7 +1798,7 @@ function createPlanningControls(
   let nearest: ProjectileSegment | undefined;
   let nearestDistance = Infinity;
   for (const segment of segments) {
-    const distance = Math.hypot(segment.startX - input.position.x, segment.startY - input.position.y);
+    const distance = Math.sqrt((segment.startX - input.position.x) * (segment.startX - input.position.x) + (segment.startY - input.position.y) * (segment.startY - input.position.y));
     if (distance < nearestDistance) {
       nearestDistance = distance;
       nearest = segment;
@@ -1810,7 +1807,7 @@ function createPlanningControls(
   if (nearest) {
     const awayX = input.position.x - nearest.startX;
     const awayY = input.position.y - nearest.startY;
-    const awayLength = Math.hypot(awayX, awayY);
+    const awayLength = Math.sqrt((awayX) * (awayX) + (awayY) * (awayY));
     if (awayLength > 1e-9) {
       const away = { x: awayX / awayLength, y: awayY / awayLength };
       adaptiveDirections.push(away, { x: -away.y, y: away.x }, { x: away.y, y: -away.x });
@@ -1891,7 +1888,7 @@ function desiredDirectionFromInput(
   let dx: number;
   let dy: number;
   if (intent?.mode === 'combat_range') {
-    const targetDistance = Math.hypot(position.x - intent.targetX, position.y - intent.targetY);
+    const targetDistance = Math.sqrt((position.x - intent.targetX) * (position.x - intent.targetX) + (position.y - intent.targetY) * (position.y - intent.targetY));
     if (targetDistance < intent.preferredMinimumRange) {
       dx = position.x - intent.targetX;
       dy = position.y - intent.targetY;
@@ -1902,7 +1899,7 @@ function desiredDirectionFromInput(
       return undefined;
     }
   } else if (intent?.mode === 'goal') {
-    if (Math.hypot(position.x - intent.goalX, position.y - intent.goalY)
+    if (Math.sqrt((position.x - intent.goalX) * (position.x - intent.goalX) + (position.y - intent.goalY) * (position.y - intent.goalY))
       <= Math.max(0, intent.arriveThreshold ?? 0)) return undefined;
     dx = route ? route.x - position.x : intent.goalX - position.x;
     dy = route ? route.y - position.y : intent.goalY - position.y;
@@ -1913,7 +1910,7 @@ function desiredDirectionFromInput(
     dx = input.intentVelocity.x;
     dy = input.intentVelocity.y;
   }
-  const length = Math.hypot(dx, dy);
+  const length = Math.sqrt((dx) * (dx) + (dy) * (dy));
   if (length <= 1e-9) return undefined;
   return { x: dx / length, y: dy / length };
 }
@@ -1936,7 +1933,7 @@ function desiredDirectionAt(
     return unitVector(position, destination);
   }
   if (intent?.mode === 'goal') {
-    if (Math.hypot(position.x - intent.goalX, position.y - intent.goalY)
+    if (Math.sqrt((position.x - intent.goalX) * (position.x - intent.goalX) + (position.y - intent.goalY) * (position.y - intent.goalY))
       <= Math.max(0, intent.arriveThreshold ?? 0)) return undefined;
     return unitVector(
       position,
@@ -1983,7 +1980,7 @@ function reconstructTrajectory(
     timeOffsetMs: timeLayersMs[state.layer]!,
     x: state.x,
     y: state.y,
-    speed: Math.hypot(state.velocityX, state.velocityY) * 1000,
+    speed: Math.sqrt((state.velocityX) * (state.velocityX) + (state.velocityY) * (state.velocityY)) * 1000,
   }));
 }
 
@@ -2105,10 +2102,7 @@ function segmentNearPoint(
         0,
         1,
       );
-  return Math.hypot(
-    segment.startX + dx * ratio - point.x,
-    segment.startY + dy * ratio - point.y,
-  ) <= radius;
+  return Math.sqrt((segment.startX + dx * ratio - point.x) * (segment.startX + dx * ratio - point.x) + (segment.startY + dy * ratio - point.y) * (segment.startY + dy * ratio - point.y)) <= radius;
 }
 
 function closestFixedControl(
@@ -2119,7 +2113,7 @@ function closestFixedControl(
   if (!waypoint || durationMs <= 0) return 0;
   const velocityX = (waypoint.x - start.x) / durationMs;
   const velocityY = (waypoint.y - start.y) / durationMs;
-  const speed = Math.hypot(velocityX, velocityY);
+  const speed = Math.sqrt((velocityX) * (velocityX) + (velocityY) * (velocityY));
   if (speed <= 1e-9) return 0;
   let best = 1;
   let bestDot = -Infinity;
@@ -2135,7 +2129,7 @@ function closestFixedControl(
 }
 
 function velocityDirectionBucket(velocity: { x: number; y: number }): number {
-  return Math.hypot(velocity.x, velocity.y) <= 1e-9
+  return Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y)) <= 1e-9
     ? 0
     : angleBucket(velocity.x, velocity.y) + 1;
 }
@@ -2309,10 +2303,7 @@ function goalScoringPoint(
 ): { x: number; y: number; threshold: number } | undefined {
   if (context.intent?.mode === 'goal') {
     const arriveThreshold = Math.max(0, context.intent.arriveThreshold ?? 0);
-    if (Math.hypot(
-      context.input.position.x - context.intent.goalX,
-      context.input.position.y - context.intent.goalY,
-    ) <= arriveThreshold) {
+    if (Math.sqrt((context.input.position.x - context.intent.goalX) * (context.input.position.x - context.intent.goalX) + (context.input.position.y - context.intent.goalY) * (context.input.position.y - context.intent.goalY)) <= arriveThreshold) {
       return { x: context.intent.goalX, y: context.intent.goalY, threshold: arriveThreshold };
     }
     return context.routeWaypoint ?? {
@@ -2330,7 +2321,7 @@ function unitVector(
 ): { x: number; y: number } | undefined {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  const length = Math.hypot(dx, dy);
+  const length = Math.sqrt((dx) * (dx) + (dy) * (dy));
   return length > 1e-9 ? { x: dx / length, y: dy / length } : undefined;
 }
 
@@ -2341,7 +2332,7 @@ function validGoal(
 }
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
