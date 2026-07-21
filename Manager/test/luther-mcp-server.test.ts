@@ -131,3 +131,56 @@ test('Luther MCP authenticates, exposes tools, and streams logs', async () => {
     rmSync(configDir, { recursive: true, force: true });
   }
 });
+
+test('luther_execute is gate-refused when allowExecuteTool is explicitly false', async () => {
+  const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-gate-'));
+  const fleet = new FakeFleet();
+  const scriptHost = {
+    list: () => [],
+    start: async () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+  } as unknown as ScriptHost;
+  const gameData = {} as GameDataLoader;
+  const server = new LutherMcpServer({
+    fleet: fleet as unknown as HeadlessFleet,
+    gameData,
+    scriptHost,
+    preferredPort: await availablePort(),
+    configDir,
+    allowExecuteTool: false,
+  });
+  let client: McpClient | undefined;
+
+  try {
+    const started = await server.start();
+    const config = JSON.parse(readFileSync(join(configDir, 'mcp.json'), 'utf8')) as { endpoint: string; token: string };
+
+    client = new McpClient({ name: 'hive-mcp-gate-test', version: '1.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL(started.endpoint), {
+      requestInit: { headers: { Authorization: `Bearer ${config.token}` } },
+    });
+    await client.connect(transport);
+
+    // Gate check fires BEFORE the client-lookup, so a fake account id is fine.
+    const result = await client.callTool({
+      name: 'luther_execute',
+      arguments: { accountId: 'account-1', code: '1 + 1', mode: 'expression' },
+    });
+    assert.equal(result.isError, true, 'gate-closed luther_execute must return an error');
+    const first = result.content[0];
+    assert.equal(first?.type, 'text');
+    const text = first.type === 'text' ? first.text : '';
+    assert.ok(
+      text.includes('LUTHER_MCP_ALLOW_EXECUTE'),
+      `error should mention the override env var; got: ${text}`,
+    );
+    assert.ok(
+      text.includes('disabled'),
+      `error should mention that the tool is disabled; got: ${text}`,
+    );
+  } finally {
+    await client?.close().catch(() => {});
+    await server.stop();
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});

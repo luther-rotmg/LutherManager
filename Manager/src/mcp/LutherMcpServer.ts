@@ -47,6 +47,18 @@ interface LutherMcpServerDeps {
   scriptHost: ScriptHost;
   preferredPort?: number;
   configDir?: string;
+  /**
+   * Whether the `luther_execute` tool (arbitrary JavaScript execution with `Luther` bound) is
+   * allowed to run. Defaults:
+   *   undefined -> auto-detect: allowed unless LUTHER_PROD=1 or NODE_ENV=production; env-var
+   *                override `LUTHER_MCP_ALLOW_EXECUTE=1` force-enables even in prod.
+   *   true      -> always allowed.
+   *   false     -> always denied (calls return a descriptive error).
+   *
+   * Every allowed call is audit-logged to the runtime diagnostics ring (visible via
+   * `luther_get_logs`) with the session id, code length, and mode.
+   */
+  allowExecuteTool?: boolean;
 }
 
 interface McpSession {
@@ -152,6 +164,17 @@ function normalizeLutherPath(path: string): string[] {
   return segments;
 }
 
+function resolveExecuteToolAllowed(explicit?: boolean): boolean {
+  // Explicit deps override wins.
+  if (explicit !== undefined) return explicit;
+  // Env-var force-enable wins over the isProd heuristic.
+  if (process.env.LUTHER_MCP_ALLOW_EXECUTE === '1') return true;
+  const isProd = process.env.LUTHER_PROD === '1'
+    || process.env.HIVE_PROD === '1'
+    || process.env.NODE_ENV === 'production';
+  return !isProd;
+}
+
 function resolveDefaultConfigDir(): string {
   // Config-dir fallback (matches updater.cjs; formal shared helper pending P1 Phase 5 spec).
   // Prefer LutherManager/ if it already exists; fall back to Hive/ so existing installs keep working;
@@ -248,6 +271,7 @@ export class LutherMcpServer {
   private readonly configPath: string;
   private readonly lutherMethods = discoverLutherMethods();
   private readonly preferredPort: number;
+  private readonly executeToolAllowed: boolean;
   private token = '';
   private endpoint = '';
   private httpServer?: HttpServer;
@@ -262,6 +286,7 @@ export class LutherMcpServer {
     this.preferredPort = validPort(deps.preferredPort);
     this.configDir = deps.configDir ?? resolveDefaultConfigDir();
     this.configPath = join(this.configDir, 'mcp.json');
+    this.executeToolAllowed = resolveExecuteToolAllowed(deps.allowExecuteTool);
   }
 
   async start(): Promise<{ endpoint: string; configPath: string }> {
@@ -278,6 +303,7 @@ export class LutherMcpServer {
       this.writeConfig(port);
       this.started = true;
       Logger.log('MCP', `Luther MCP listening at ${this.endpoint}; credentials: ${this.configPath}`);
+      Logger.log('MCP', `luther_execute tool: ${this.executeToolAllowed ? 'ALLOWED' : 'DENIED'} (arbitrary JS execution gate; every call is audit-logged)`);
       return { endpoint: this.endpoint, configPath: this.configPath };
     } catch (error) {
       this.deps.fleet.off('packet', this.packetListener);
@@ -537,7 +563,7 @@ export class LutherMcpServer {
 
     registerAliasedTool('luther_execute', {
       title: 'Execute Luther debugging code',
-      description: 'Execute trusted JavaScript with Luther available on a selected account. Expression mode returns one expression; script mode supports statements and explicit return. Intended for temporary diagnostics and script prototyping.',
+      description: 'Execute trusted JavaScript with Luther available on a selected account. Expression mode returns one expression; script mode supports statements and explicit return. Intended for temporary diagnostics and script prototyping. GATE: disabled by default in production builds (LUTHER_PROD=1 or NODE_ENV=production); set LUTHER_MCP_ALLOW_EXECUTE=1 to force-enable. Every call is audit-logged with session id, mode, and code length.',
       inputSchema: {
         accountId: z.string().min(1),
         code: z.string().min(1).max(20_000),
@@ -545,6 +571,12 @@ export class LutherMcpServer {
       },
       annotations: { destructiveHint: true, openWorldHint: false },
     }, async ({ accountId, code, mode }: { accountId: string; code: string; mode: 'expression' | 'script' }, extra: { sessionId?: string }) => this.withToolErrors(async () => {
+      const sessionId = extra.sessionId || 'session';
+      // Audit-log BEFORE gate check so blocked attempts also surface in luther_get_logs.
+      Logger.warn('MCP', `luther_execute: session=${sessionId} account=${accountId} mode=${mode} codeLen=${code.length} allowed=${this.executeToolAllowed}`);
+      if (!this.executeToolAllowed) {
+        throw new Error('luther_execute is disabled on this LutherManager server. Set LUTHER_MCP_ALLOW_EXECUTE=1 in the Manager environment to force-enable (not recommended for remote-reachable deployments). Prefer luther_call with a specific SDK method for automation.');
+      }
       this.requireClient(accountId);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...values: unknown[]) => Promise<unknown>;
       const body = mode === 'expression'
@@ -552,7 +584,7 @@ export class LutherMcpServer {
         : `"use strict"; ${code}\n//# sourceURL=luther-mcp-script.js`;
       const execute = new AsyncFunction('Luther', body);
       const result = await runWithScriptExecutionSession(
-        { scriptId: `mcp:${extra.sessionId || 'session'}`, accountId },
+        { scriptId: `mcp:${sessionId}`, accountId },
         () => execute(Luther),
       );
       return { mode, result };
