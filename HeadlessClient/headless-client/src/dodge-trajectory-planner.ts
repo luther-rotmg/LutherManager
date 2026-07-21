@@ -799,6 +799,19 @@ export class SpaceTimeDodgePlanner {
       const nextByBucket = new Map<number, CandidateState[]>();
 
       for (const state of frontier) {
+        // Hoist per-state distances out of the 17-control loop — Wave 2 audit
+        // start-enemy-distance-per-control-recompute.
+        const stateEnemyDistance = context.collision.enemyDistance(state.x, state.y);
+        let stateCombatDistance: number;
+        if (context.intent?.mode === 'combat_range') {
+          const target = context.combatTargetScratch;
+          writeCombatTargetAt(context, startMs, target);
+          const cdx = state.x - target.x;
+          const cdy = state.y - target.y;
+          stateCombatDistance = Math.sqrt(cdx * cdx + cdy * cdy);
+        } else {
+          stateCombatDistance = Infinity;
+        }
         for (const control of context.controls) {
           context.counters.candidatesGenerated++;
           const velocityX = control.x * input.moveSpeed * control.speedFraction;
@@ -839,6 +852,8 @@ export class SpaceTimeDodgePlanner {
             startMs,
             endMs,
             false,
+            stateEnemyDistance,
+            stateCombatDistance,
           );
           if (!safety) continue;
           const transitionCost = this.transitionCost(
@@ -1010,6 +1025,13 @@ export class SpaceTimeDodgePlanner {
     startMs: number,
     endMs: number,
     allowProjectileCollision: boolean,
+    // Optional precomputed distances: when the caller iterates a fixed `from` across many
+    // controls (beam search's inner loop), it can hoist these outside the loop and pass
+    // them in — cuts one enemyDistance grid lookup + one writeCombatTargetAt+distance
+    // per candidate. When omitted, computed here on demand for one-off callers
+    // (assessTrajectory, directPlan, initial-state safety).
+    fromEnemyDistance?: number,
+    fromCombatDistance?: number,
   ): EdgeSafety | undefined {
     const durationMs = endMs - startMs;
     if (durationMs <= 0) return undefined;
@@ -1022,13 +1044,19 @@ export class SpaceTimeDodgePlanner {
       return undefined;
     }
 
-    const startEnemyDistance = context.collision.enemyDistance(from.x, from.y);
+    const startEnemyDistance = fromEnemyDistance ?? context.collision.enemyDistance(from.x, from.y);
     const combatIntent = context.intent?.mode === 'combat_range' ? context.intent : undefined;
     const combatTarget = context.combatTargetScratch;
-    if (combatIntent) writeCombatTargetAt(context, startMs, combatTarget);
-    const combatStartDistance = combatIntent
-      ? Math.sqrt((from.x - combatTarget.x) * (from.x - combatTarget.x) + (from.y - combatTarget.y) * (from.y - combatTarget.y))
-      : Infinity;
+    let combatStartDistance: number;
+    if (fromCombatDistance !== undefined) {
+      combatStartDistance = fromCombatDistance;
+      if (combatIntent) writeCombatTargetAt(context, startMs, combatTarget);
+    } else if (combatIntent) {
+      writeCombatTargetAt(context, startMs, combatTarget);
+      combatStartDistance = Math.sqrt((from.x - combatTarget.x) * (from.x - combatTarget.x) + (from.y - combatTarget.y) * (from.y - combatTarget.y));
+    } else {
+      combatStartDistance = Infinity;
+    }
     let priorCombatDistance = combatStartDistance;
     let priorEnemyDistance = startEnemyDistance;
     let minimumEnemyDistance = Math.min(startEnemyDistance, combatStartDistance);
