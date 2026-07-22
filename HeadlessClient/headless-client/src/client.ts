@@ -320,7 +320,7 @@ export class Client extends EventEmitter {
   private readonly autoNexus: AutoNexusMonitor;
   private readonly combat: CombatTracker | undefined;
   private viewerOtherProjectilesEnabled = false;
-  private readonly viewerOtherProjectiles = new Map<string, ViewerProjectileSnapshot>();
+  private readonly viewerOtherProjectiles = new Map<number, ViewerProjectileSnapshot>();
   private readonly viewerAoes: ViewerAoeSnapshot[] = [];
   private nextViewerAoeId = 1;
   private readonly autoCombat: AutoCombatController | undefined;
@@ -435,9 +435,9 @@ export class Client extends EventEmitter {
   // Navigation / vault state
   private wantVault = false;
   private readonly objects = new Map<number, TrackedObject>();
-  private readonly tiles = new Map<string, TrackedTile>();
+  private readonly tiles = new Map<number, TrackedTile>();
   private readonly recentObjectTypes = new Map<number, number>();
-  private readonly predictedPlayerDamage = new Map<string, number>();
+  private readonly predictedPlayerDamage = new Map<number, number>();
   private vaultPortalId: number | undefined;
   private enteringVault = false;
   private inVault = false;
@@ -1152,7 +1152,7 @@ export class Client extends EventEmitter {
 
   /** Returns one observed tile by integer map coordinate. */
   getTile(x: number, y: number): TrackedTile | undefined {
-    return this.tiles.get(`${Math.trunc(x)},${Math.trunc(y)}`);
+    return this.tiles.get(tileKey(Math.trunc(x), Math.trunc(y)));
   }
 
   /** One currently visible non-player object by object id. */
@@ -3174,7 +3174,7 @@ export class Client extends EventEmitter {
       this.posKnown = true;
     }
     for (const tile of p.tiles) {
-      this.tiles.set(`${tile.x},${tile.y}`, { x: tile.x, y: tile.y, type: tile.type });
+      this.tiles.set(tileKey(tile.x, tile.y), { x: tile.x, y: tile.y, type: tile.type });
       this.pathfinder.observeTile(tile.x, tile.y, tile.type);
       this.dodgeWorld?.observeTile(tile.x, tile.y, tile.type);
     }
@@ -3331,7 +3331,7 @@ export class Client extends EventEmitter {
     const playerPos = this.serverPos ?? this.pos;
     const tileX = Math.floor(playerPos.x);
     const tileY = Math.floor(playerPos.y);
-    const tile = this.tiles.get(`${tileX},${tileY}`);
+    const tile = this.tiles.get(tileKey(tileX, tileY));
     if (!tile) return;
     const damage = data.getTileDamage(tile.type) ?? 0;
     if (damage <= 0) return;
@@ -3559,7 +3559,7 @@ export class Client extends EventEmitter {
   }
 
   private movementSnapshot(): MovementSnapshot {
-    const tile = this.tiles.get(`${Math.floor(this.pos.x)},${Math.floor(this.pos.y)}`);
+    const tile = this.tiles.get(tileKey(Math.floor(this.pos.x), Math.floor(this.pos.y)));
     return {
       localPos: this.pos,
       serverPos: this.serverPos,
@@ -3765,7 +3765,7 @@ export class Client extends EventEmitter {
     for (const [key, at] of this.predictedPlayerDamage) {
       if (now - at > 5000) this.predictedPlayerDamage.delete(key);
     }
-    const key = `${p.objectId}:${p.bulletId}`;
+    const key = projectileKey(p.objectId, p.bulletId);
     if (this.predictedPlayerDamage.has(key)) {
       this.predictedPlayerDamage.delete(key);
       return;
@@ -3811,14 +3811,14 @@ export class Client extends EventEmitter {
         damage: p.damage,
         hitObjects: new Set<number>(),
       };
-      this.viewerOtherProjectiles.set(`${p.ownerId}:${bulletId}`, projectile);
+      this.viewerOtherProjectiles.set(projectileKey(p.ownerId, bulletId), projectile);
     }
   }
 
   /** Tracks the lower-detail ally projectile packet without any protocol response. */
   private handleAllyShoot(p: AllyShootPacket): void {
     if (!this.viewerOtherProjectilesEnabled) return;
-    const key = `${p.ownerId}:${p.bulletId}`;
+    const key = projectileKey(p.ownerId, p.bulletId);
     if (this.viewerOtherProjectiles.has(key)) return;
     const owner = this.objects.get(p.ownerId);
     const definition = this.opts.combatData?.getProjectile(p.containerType, 0);
@@ -3966,7 +3966,7 @@ export class Client extends EventEmitter {
     const damage = Math.max(0, Math.trunc(Number(amount) || 0));
     if (damage <= 0) return false;
     if (source === 'projectile' && projectile) {
-      this.predictedPlayerDamage.set(`${projectile.ownerId}:${projectile.bulletId}`, Date.now());
+      this.predictedPlayerDamage.set(projectileKey(projectile.ownerId, projectile.bulletId), Date.now());
     }
 
     const state = this.autoNexus.getState();
@@ -4261,6 +4261,25 @@ export class Client extends EventEmitter {
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+}
+
+/**
+ * Packed 32-bit tile-key for Map<number, ...> lookups. Same encoding as
+ * dodge-collision-world.ts / static-passability-store.ts / inflated-passability.ts /
+ * combat-tracker.ts so keys are cross-module interchangeable. Assumes integer x, y in
+ * [-0x8000, 0x8000) (RotMG maps are 0-2048 tiles, well in range).
+ */
+function tileKey(x: number, y: number): number {
+  return ((x + 0x8000) << 16) | ((y + 0x8000) & 0xffff);
+}
+
+/**
+ * Packed numeric projectile-key = ownerId * 0x10000 + bulletId. Same encoding as
+ * combat-tracker.ts's projectileKey. Assumes bulletId < 65536 (RotMG bulletId is
+ * always well below).
+ */
+function projectileKey(ownerId: number, bulletId: number): number {
+  return ownerId * 0x10000 + bulletId;
 }
 
 function validMoveTarget(target: { x: number; y: number }, threshold: number): boolean {
