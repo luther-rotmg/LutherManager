@@ -9,7 +9,7 @@ test('the same script package can run independently on two headless accounts', a
   const root = mkdtempSync(join(tmpdir(), 'luther-script-host-'));
   const previousUserProfile = process.env.USERPROFILE;
   process.env.USERPROFILE = root;
-  const scriptRoot = join(root, 'Documents', 'Hive', 'Scripts', 'demo');
+  const scriptRoot = join(root, 'Documents', 'Luther', 'Scripts', 'demo');
   mkdirSync(scriptRoot, { recursive: true });
   writeFileSync(join(scriptRoot, 'hive.script.json'), JSON.stringify({
     name: 'Demo',

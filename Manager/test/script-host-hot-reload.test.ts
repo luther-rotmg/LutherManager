@@ -14,7 +14,7 @@ import { ScriptHost } from '../src/scripts/ScriptHost.js';
 test('local script restart reloads the complete nested module graph', async () => {
   const previousProfile = process.env.USERPROFILE;
   const profile = mkdtempSync(join(tmpdir(), 'luther-script-reload-'));
-  const scriptRoot = join(profile, 'Documents', 'Hive', 'Scripts', 'reload-probe');
+  const scriptRoot = join(profile, 'Documents', 'Luther', 'Scripts', 'reload-probe');
   mkdirSync(scriptRoot, { recursive: true });
   writeFileSync(join(scriptRoot, 'hive.script.json'), JSON.stringify({
     name: 'Reload Probe',
@@ -44,7 +44,7 @@ test('local script restart reloads the complete nested module graph', async () =
     assert.equal((globalThis as { __hiveReloadProbe?: number }).__hiveReloadProbe, 2);
     assert.deepEqual(host.stop('reload-probe'), { ok: true });
 
-    const runtimeBase = join(profile, 'Documents', 'Hive', 'ScriptRuntime');
+    const runtimeBase = join(profile, 'Documents', 'Luther', 'ScriptRuntime');
     assert.deepEqual(readdirSync(runtimeBase), []);
   } finally {
     if (previousProfile === undefined) delete process.env.USERPROFILE;
