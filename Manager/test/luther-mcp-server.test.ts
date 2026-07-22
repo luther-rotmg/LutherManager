@@ -407,6 +407,71 @@ test('rejects request bodies larger than 1 MiB (readJsonBody size guard)', async
   }
 });
 
+test('luther_list_methods returns luther+hive dual keys and filters by query', async () => {
+  const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-listmethods-'));
+  const fleet = new FakeFleet();
+  const scriptHost = {
+    list: () => [],
+    start: async () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+  } as unknown as ScriptHost;
+  const gameData = {} as GameDataLoader;
+  const server = new LutherMcpServer({
+    fleet: fleet as unknown as HeadlessFleet,
+    gameData,
+    scriptHost,
+    preferredPort: await availablePort(),
+    configDir,
+  });
+  let client: McpClient | undefined;
+
+  try {
+    const started = await server.start();
+    const config = JSON.parse(readFileSync(join(configDir, 'mcp.json'), 'utf8')) as { endpoint: string; token: string };
+
+    client = new McpClient({ name: 'hive-mcp-listmethods-test', version: '1.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL(started.endpoint), {
+      requestInit: { headers: { Authorization: `Bearer ${config.token}` } },
+    });
+    await client.connect(transport);
+
+    // Unfiltered: full method list. hive[] and luther[] MUST be equal (same array of paths).
+    // Existing MCP clients key on `hive` for backward-compat — silently dropping it would break them.
+    const unfilteredResult = await client.callTool({ name: 'luther_list_methods', arguments: {} });
+    const rawFirst = unfilteredResult.content[0];
+    assert.equal(rawFirst?.type, 'text');
+    const raw = rawFirst.type === 'text' ? rawFirst.text : '{}';
+    const parsed = JSON.parse(raw) as { luther?: string[]; hive?: string[]; client?: string[] | null };
+    assert.ok(Array.isArray(parsed.luther) && parsed.luther.length > 0, 'luther[] must be non-empty');
+    assert.ok(Array.isArray(parsed.hive), 'hive[] must be present for backwards-compat');
+    assert.deepEqual(parsed.hive, parsed.luther,
+      'hive[] must equal luther[] — same discovered methods, dual key names for BC');
+    // The handler returns `client: undefined` but normalizeForJson (LutherMcpServer.ts:95)
+    // coerces undefined -> null before serialization, so the wire shape is `client: null`.
+    assert.equal(parsed.client, null, 'client-methods opt-in defaults to off (undefined -> null on wire)');
+
+    // Filter narrows the result. Use a substring likely to hit at least one path.
+    const filteredResult = await client.callTool({
+      name: 'luther_list_methods',
+      arguments: { query: 'walk' },
+    });
+    const filteredFirst = filteredResult.content[0];
+    assert.equal(filteredFirst?.type, 'text');
+    const filteredParsed = JSON.parse(filteredFirst.type === 'text' ? filteredFirst.text : '{}') as { luther?: string[] };
+    assert.ok(Array.isArray(filteredParsed.luther), 'filtered luther[] must exist');
+    assert.ok(filteredParsed.luther.length < parsed.luther.length,
+      'filter must return fewer entries than unfiltered');
+    for (const method of filteredParsed.luther) {
+      assert.ok(method.toLowerCase().includes('walk'),
+        `every filtered entry must include the query substring; ${method} did not`);
+    }
+  } finally {
+    await client?.close().catch(() => {});
+    await server.stop();
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
 test('luther_execute is gate-refused when allowExecuteTool is explicitly false', async () => {
   const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-gate-'));
   const fleet = new FakeFleet();
