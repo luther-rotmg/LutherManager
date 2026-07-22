@@ -70,5 +70,5 @@ export function resolveTeleportBeacon(
   }
   return matches
     ?.slice()
-    .sort((a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y))[0];
+    .sort((a, b) => Math.sqrt((a.x - origin.x) * (a.x - origin.x) + (a.y - origin.y) * (a.y - origin.y)) - Math.sqrt((b.x - origin.x) * (b.x - origin.x) + (b.y - origin.y) * (b.y - origin.y)))[0];
 }

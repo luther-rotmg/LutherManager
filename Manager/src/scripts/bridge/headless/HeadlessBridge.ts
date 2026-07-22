@@ -560,7 +560,7 @@ export function installHeadlessBridge(deps: BridgeDeps): void {
         }
         state.objectId = target.objectId;
         const targetMoved = state.lastX === undefined || state.lastY === undefined
-          || Math.hypot(target.x - state.lastX, target.y - state.lastY) >= 0.1;
+          || Math.sqrt((target.x - state.lastX) * (target.x - state.lastX) + (target.y - state.lastY) * (target.y - state.lastY)) >= 0.1;
         if (client.distanceTo(target) > 1.5 && (targetMoved || !client.isMoving())) {
           client.moveToObject(target.objectId, 1.5);
         } else if (client.distanceTo(target) <= 1.5 && client.isMoving()) {

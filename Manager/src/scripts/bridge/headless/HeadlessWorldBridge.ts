@@ -152,7 +152,7 @@ function visible(deps: BridgeDeps): { client: Client; rows: TrackedObject[] } | 
 }
 
 function distance(position: { x: number; y: number }, object: TrackedObject): number {
-  return Math.hypot(object.x - position.x, object.y - position.y);
+  return Math.sqrt((object.x - position.x) * (object.x - position.x) + (object.y - position.y) * (object.y - position.y));
 }
 
 function nearest(rows: TrackedObject[], position: { x: number; y: number }): TrackedObject | undefined {
@@ -261,7 +261,7 @@ export function installHeadlessWorldBridge(deps: BridgeDeps): void {
     const position = client.getPosition();
     const occupied = occupiedTiles(client);
     return client.visibleTiles()
-      .filter((tile) => Math.hypot(tile.x + 0.5 - position.x, tile.y + 0.5 - position.y) <= radius)
+      .filter((tile) => Math.sqrt((tile.x + 0.5 - position.x) * (tile.x + 0.5 - position.x) + (tile.y + 0.5 - position.y) * (tile.y + 0.5 - position.y)) <= radius)
       .filter((tile) => tileMatches(tile, selectedFilter, deps))
       .map((tile) => mapTile(tile, occupied, deps));
   }) as typeof Tiles.getNearby;

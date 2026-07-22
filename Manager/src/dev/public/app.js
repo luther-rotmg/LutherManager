@@ -10090,7 +10090,7 @@
     var x = Number(target.x) + (isTile ? 0.5 : 0);
     var y = Number(target.y) + (isTile ? 0.5 : 0);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    return Math.hypot(x - Number(player.x), y - Number(player.y));
+    return Math.sqrt((x - Number(player.x)) * (x - Number(player.x)) + (y - Number(player.y)) * (y - Number(player.y)));
   }
 
   function loadViewerScripts() {
@@ -10451,7 +10451,7 @@
     var targetY = Number(data && data.y);
     if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return track;
     var current = track ? viewerTrackPosition(track, now) : { x: targetX, y: targetY };
-    var teleport = !track || Math.hypot(targetX - current.x, targetY - current.y) > 4;
+    var teleport = !track || Math.sqrt((targetX - current.x) * (targetX - current.x) + (targetY - current.y) * (targetY - current.y)) > 4;
     var renderData = Object.assign({}, data, teleport ? { x: targetX, y: targetY } : current);
     return {
       fromX: teleport ? targetX : current.x,
@@ -10947,7 +10947,7 @@
     });
     var distance = 0;
     for (var index = 1; index < route.length; index++) {
-      distance += Math.hypot(route[index].x - route[index - 1].x, route[index].y - route[index - 1].y);
+      distance += Math.sqrt((route[index].x - route[index - 1].x) * (route[index].x - route[index - 1].x) + (route[index].y - route[index - 1].y) * (route[index].y - route[index - 1].y));
     }
 
     ctx.save();

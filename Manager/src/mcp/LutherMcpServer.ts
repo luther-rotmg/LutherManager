@@ -778,7 +778,7 @@ export class LutherMcpServer {
         name: object.name || this.deps.gameData.getObject(object.type)?.id || `0x${object.type.toString(16)}`,
         x: object.x,
         y: object.y,
-        distance: Math.hypot(object.x - position.x, object.y - position.y),
+        distance: Math.sqrt((object.x - position.x) * (object.x - position.x) + (object.y - position.y) * (object.y - position.y)),
         hp: object.rawStats?.['0'],
         maxHp: this.deps.gameData.getObject(object.type)?.maxHp,
       }))

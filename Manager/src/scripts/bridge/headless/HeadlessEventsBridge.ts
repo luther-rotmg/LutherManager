@@ -47,7 +47,7 @@ function onClient<E extends ClientEvent>(client: Client, event: E, listener: (..
 
 function distance(client: Client, row: TrackedObject): number {
   const position = client.getPosition();
-  return Math.hypot(row.x - position.x, row.y - position.y);
+  return Math.sqrt((row.x - position.x) * (row.x - position.x) + (row.y - position.y) * (row.y - position.y));
 }
 
 function playerName(row: TrackedObject): string {

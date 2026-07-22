@@ -119,7 +119,7 @@ export class BridgePlayers {
       let bestD = Infinity;
       for (const row of playerRows(deps)) {
         if (row.objectId === self.ownerObjectId) continue;
-        const d = Math.hypot(row.x - mx, row.y - my);
+        const d = Math.sqrt((row.x - mx) * (row.x - mx) + (row.y - my) * (row.y - my));
         if (d < bestD) {
           bestD = d;
           best = row;

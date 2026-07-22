@@ -2911,7 +2911,7 @@ export class DevServer {
         name: object.name || '?',
         x: object.x,
         y: object.y,
-        dist: Math.hypot(object.x - self.x, object.y - self.y),
+        dist: Math.sqrt((object.x - self.x) * (object.x - self.x) + (object.y - self.y) * (object.y - self.y)),
         hp: object.player?.hp ?? 0,
         maxHp: object.player?.maxHP ?? 0,
         mp: object.player?.mp ?? 0,
@@ -2946,7 +2946,7 @@ export class DevServer {
       position: {
         x: object.x,
         y: object.y,
-        dist: Math.hypot(object.x - self.x, object.y - self.y),
+        dist: Math.sqrt((object.x - self.x) * (object.x - self.x) + (object.y - self.y) * (object.y - self.y)),
       },
       vitals: { hp: player.hp, maxHp: player.maxHP, mp: player.mp, maxMp: player.maxMP },
       stats: { atk: player.atk, def: player.def, spd: player.spd, dex: player.dex, vit: player.vit, wis: player.wis },

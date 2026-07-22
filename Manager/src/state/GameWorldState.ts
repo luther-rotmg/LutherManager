@@ -129,7 +129,7 @@ export class GameWorldState {
       : defMaxHp;
     if (!Number.isFinite(maxHp) || maxHp <= 0) maxHp = Math.max(1, hp);
 
-    const dist = Math.hypot(x - origin.x, y - origin.y);
+    const dist = Math.sqrt((x - origin.x) * (x - origin.x) + (y - origin.y) * (y - origin.y));
     return {
       objectId: entity.objectId,
       objectType: entity.objectType,
@@ -325,7 +325,7 @@ export class GameWorldState {
     for (const e of this.entities.values()) {
       if (e.objectType !== objectType) continue;
       if (excludeObjectId != null && e.objectId === excludeObjectId) continue;
-      const dist = Math.hypot(e.pos.x - origin.x, e.pos.y - origin.y);
+      const dist = Math.sqrt((e.pos.x - origin.x) * (e.pos.x - origin.x) + (e.pos.y - origin.y) * (e.pos.y - origin.y));
       if (maxDistance != null && dist > maxDistance) continue;
       if (!best || dist < best.dist) {
         best = { objectId: e.objectId, x: e.pos.x, y: e.pos.y, dist };
@@ -344,7 +344,7 @@ export class GameWorldState {
     for (const e of this.entities.values()) {
       if (e.objectType !== objectType) continue;
       if (excludeObjectId != null && e.objectId === excludeObjectId) continue;
-      const dist = Math.hypot(e.pos.x - origin.x, e.pos.y - origin.y);
+      const dist = Math.sqrt((e.pos.x - origin.x) * (e.pos.x - origin.x) + (e.pos.y - origin.y) * (e.pos.y - origin.y));
       if (maxDistance != null && dist > maxDistance) continue;
       matches.push({ objectId: e.objectId, x: e.pos.x, y: e.pos.y, dist });
     }
@@ -364,7 +364,7 @@ export class GameWorldState {
     for (const e of this.entities.values()) {
       if (!typeSet.has(e.objectType)) continue;
       if (excludeObjectId != null && e.objectId === excludeObjectId) continue;
-      const dist = Math.hypot(e.pos.x - origin.x, e.pos.y - origin.y);
+      const dist = Math.sqrt((e.pos.x - origin.x) * (e.pos.x - origin.x) + (e.pos.y - origin.y) * (e.pos.y - origin.y));
       if (maxDistance != null && dist > maxDistance) continue;
       matches.push({ entity: e, dist });
     }
@@ -395,7 +395,7 @@ export class GameWorldState {
       if (excludeObjectId != null && e.objectId === excludeObjectId) continue;
       if (gameData.getObjectCategory(e.objectType) !== 'Portal') continue;
       if (options?.objectType != null && e.objectType !== options.objectType) continue;
-      const dist = Math.hypot(e.pos.x - origin.x, e.pos.y - origin.y);
+      const dist = Math.sqrt((e.pos.x - origin.x) * (e.pos.x - origin.x) + (e.pos.y - origin.y) * (e.pos.y - origin.y));
       if (options?.maxDistance != null && dist > options.maxDistance) continue;
       if (!best || dist < best.dist) {
         best = { objectId: e.objectId, objectType: e.objectType, x: e.pos.x, y: e.pos.y, dist };
@@ -415,7 +415,7 @@ export class GameWorldState {
       if (excludeObjectId != null && e.objectId === excludeObjectId) continue;
       if (gameData.getObjectCategory(e.objectType) !== 'Portal') continue;
       if (options?.objectType != null && e.objectType !== options.objectType) continue;
-      const dist = Math.hypot(e.pos.x - origin.x, e.pos.y - origin.y);
+      const dist = Math.sqrt((e.pos.x - origin.x) * (e.pos.x - origin.x) + (e.pos.y - origin.y) * (e.pos.y - origin.y));
       if (options?.maxDistance != null && dist > options.maxDistance) continue;
       matches.push({ objectId: e.objectId, objectType: e.objectType, x: e.pos.x, y: e.pos.y, dist });
     }
@@ -553,7 +553,7 @@ export class GameWorldState {
       const maxHpRaw = stats[String(StatType.MaxHP)];
       const hp = Number.isFinite(Number(hpRaw)) ? Number(hpRaw) : 0;
       const maxHp = Number.isFinite(Number(maxHpRaw)) ? Number(maxHpRaw) : 0;
-      const dist = Math.hypot(e.pos.x - origin.x, e.pos.y - origin.y);
+      const dist = Math.sqrt((e.pos.x - origin.x) * (e.pos.x - origin.x) + (e.pos.y - origin.y) * (e.pos.y - origin.y));
       if (options?.maxDistance != null && dist > options.maxDistance) continue;
       matches.push({
         objectId: e.objectId,
@@ -618,7 +618,7 @@ export class GameWorldState {
       for (const packed of this.tileMap.keys()) {
         const x = packed >> 16;
         const y = packed & 0xffff;
-        const dist = Math.hypot(x - center.x, y - center.y);
+        const dist = Math.sqrt((x - center.x) * (x - center.x) + (y - center.y) * (y - center.y));
         if (!nearest || dist < nearest.dist) {
           nearest = { x, y, dist };
         }
@@ -790,7 +790,7 @@ export class GameWorldState {
 
       const x = e.pos?.x ?? 0;
       const y = e.pos?.y ?? 0;
-      const dist = Math.hypot(x - mx, y - my);
+      const dist = Math.sqrt((x - mx) * (x - mx) + (y - my) * (y - my));
 
       const hp = getNum(1, 0);
       const maxHp = getNum(0, 0);
@@ -891,7 +891,7 @@ export class GameWorldState {
     const my = myPos?.y ?? 0;
     const x = e.pos?.x ?? 0;
     const y = e.pos?.y ?? 0;
-    const dist = Math.hypot(x - mx, y - my);
+    const dist = Math.sqrt((x - mx) * (x - mx) + (y - my) * (y - my));
 
     const className = gameData.getObject(e.objectType)?.id ?? `0x${e.objectType.toString(16)}`;
     const name = (getStr(31, '') || '').trim() || '?';

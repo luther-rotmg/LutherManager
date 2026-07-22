@@ -354,7 +354,7 @@ export function install(deps: BridgeDeps): void {
     if (!pd) return currentLegacyBags(deps);
     const { x: px, y: py } = pd.pos;
     return currentLegacyBags(deps).filter(
-      (b) => Math.hypot(b.position.x - px, b.position.y - py) <= radius,
+      (b) => Math.sqrt((b.position.x - px) * (b.position.x - px) + (b.position.y - py) * (b.position.y - py)) <= radius,
     );
   };
 
@@ -438,7 +438,7 @@ export function install(deps: BridgeDeps): void {
     const px = Number(c.playerData.pos?.x ?? 0);
     const py = Number(c.playerData.pos?.y ?? 0);
     const maxDist = opts?.maxDistance ?? 1.0;
-    if (Math.hypot(bx - px, by - py) > maxDist) return -1;
+    if (Math.sqrt((bx - px) * (bx - px) + (by - py) * (by - py)) > maxDist) return -1;
 
     const useBackpack = opts?.useBackpack ?? true;
     const claimedSlots = new Set<number>();

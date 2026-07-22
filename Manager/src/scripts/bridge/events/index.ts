@@ -214,7 +214,7 @@ function checkGuildNearbyWatches(client: ClientConnection, deps: BridgeDeps): vo
       if (row.objectId === selfId) continue;
       const gname = rowGuildName(row);
       if (!guildTagMatches(gname, w.needle, w.match)) continue;
-      const d = Math.hypot(row.x - mx, row.y - my);
+      const d = Math.sqrt((row.x - mx) * (row.x - mx) + (row.y - my) * (row.y - my));
       if (d <= w.radius) {
         inRange.push({
           name: row.name,
@@ -259,7 +259,7 @@ function checkPlayerNearbyWatches(client: ClientConnection, deps: BridgeDeps): v
       if (row.objectId === selfId) continue;
       const key = row.name.trim().toLowerCase();
       if (!w.names.has(key)) continue;
-      const d = Math.hypot(row.x - mx, row.y - my);
+      const d = Math.sqrt((row.x - mx) * (row.x - mx) + (row.y - my) * (row.y - my));
       if (d <= w.radius) {
         inRange.push({
           name: row.name,
