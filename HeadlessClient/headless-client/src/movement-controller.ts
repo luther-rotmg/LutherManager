@@ -85,7 +85,7 @@ export class MovementController {
       ? undefined
       : this.detectStall(snapshot.serverPos, dt);
     const confirmedPos = snapshot.serverPos ?? pos;
-    if (Math.hypot(this.target.x - confirmedPos.x, this.target.y - confirmedPos.y) < this.target.threshold) {
+    if (Math.sqrt((this.target.x - confirmedPos.x) * (this.target.x - confirmedPos.x) + (this.target.y - confirmedPos.y) * (this.target.y - confirmedPos.y)) < this.target.threshold) {
       const reached = { x: this.target.x, y: this.target.y };
       this.clear();
       return { pos, reached, stalled };
@@ -98,7 +98,7 @@ export class MovementController {
     const base = integrateFromLocal ? snapshot.localPos : snapshot.serverPos ?? snapshot.localPos;
     const dx = this.target.x - base.x;
     const dy = this.target.y - base.y;
-    const distance = Math.hypot(dx, dy);
+    const distance = Math.sqrt((dx) * (dx) + (dy) * (dy));
     if (distance === 0) return { x: 0, y: 0 };
     const speed = movementSpeed(snapshot);
     return { x: dx / distance * speed, y: dy / distance * speed };
@@ -114,7 +114,7 @@ export class MovementController {
     const step = movementSpeed(snapshot) * dt;
     const dx = target.x - base.x;
     const dy = target.y - base.y;
-    const dist = Math.hypot(dx, dy);
+    const dist = Math.sqrt((dx) * (dx) + (dy) * (dy));
     if (dist <= step || dist === 0) {
       return { x: target.x, y: target.y };
     }
@@ -135,7 +135,7 @@ export class MovementController {
     if (!this.target || !serverPos) {
       return undefined;
     }
-    const serverDist = Math.hypot(this.target.x - serverPos.x, this.target.y - serverPos.y);
+    const serverDist = Math.sqrt((this.target.x - serverPos.x) * (this.target.x - serverPos.x) + (this.target.y - serverPos.y) * (this.target.y - serverPos.y));
     if (serverDist < this.bestDist - 0.1) {
       this.bestDist = serverDist;
       this.stallMs = 0;

@@ -355,7 +355,7 @@ export class PredictiveAutoDodgeController {
     }
 
     const hasMovementIntent = !!intent
-      || Math.hypot(snapshot.intentVelocity.x, snapshot.intentVelocity.y) > VELOCITY_MATCH_TOLERANCE;
+      || Math.sqrt((snapshot.intentVelocity.x) * (snapshot.intentVelocity.x) + (snapshot.intentVelocity.y) * (snapshot.intentVelocity.y)) > VELOCITY_MATCH_TOLERANCE;
     if (!hasMovementIntent && projectiles.length === 0 && snapshot.aoes.length === 0) {
       this.committed = undefined;
       this.lastCommandVelocity = { x: 0, y: 0 };
@@ -412,7 +412,7 @@ export class PredictiveAutoDodgeController {
       // start position can differ from a later authoritative position without
       // making the unchanged collision snapshot worth searching every frame.
       drifted = this.committed.result.fallback !== 'stop'
-        && Math.hypot(expected.x - snapshot.position.x, expected.y - snapshot.position.y)
+        && Math.sqrt((expected.x - snapshot.position.x) * (expected.x - snapshot.position.x) + (expected.y - snapshot.position.y) * (expected.y - snapshot.position.y))
           > TRAJECTORY_DRIFT_TOLERANCE;
       if (dangerChanged || environmentChanged || drifted) {
         const assessment = this.planner.assessTrajectory(input, this.committed.result.trajectory);
@@ -598,10 +598,7 @@ export class PredictiveAutoDodgeController {
       snapshot.time,
       target,
     );
-    const matchesIntent = Math.hypot(
-      velocity.x - snapshot.intentVelocity.x,
-      velocity.y - snapshot.intentVelocity.y,
-    ) <= VELOCITY_MATCH_TOLERANCE;
+    const matchesIntent = Math.sqrt((velocity.x - snapshot.intentVelocity.x) * (velocity.x - snapshot.intentVelocity.x) + (velocity.y - snapshot.intentVelocity.y) * (velocity.y - snapshot.intentVelocity.y)) <= VELOCITY_MATCH_TOLERANCE;
     const earliestImpactMs = committed.result.earliestIntentCollisionMs ?? null;
     const overrideActive = !!intent || !matchesIntent || earliestImpactMs !== null;
     const commandVelocity = !overrideActive && matchesIntent
@@ -705,7 +702,7 @@ export class PredictiveAutoDodgeController {
       snapshot.position,
       snapshot.intentVelocity,
     );
-    const commandedSpeed = Math.hypot(result.velocity.x, result.velocity.y);
+    const commandedSpeed = Math.sqrt((result.velocity.x) * (result.velocity.x) + (result.velocity.y) * (result.velocity.y));
     this.state = {
       enabled: this.enabled,
       overrideActive: result.overrideActive,
@@ -746,7 +743,7 @@ export class PredictiveAutoDodgeController {
       proposedScore: this.proposedScore,
       comparisonHorizonMs: this.comparisonHorizonMs,
       movementTargetDistance: result.target
-        ? Math.hypot(result.target.x - snapshot.position.x, result.target.y - snapshot.position.y)
+        ? Math.sqrt((result.target.x - snapshot.position.x) * (result.target.x - snapshot.position.x) + (result.target.y - snapshot.position.y) * (result.target.y - snapshot.position.y))
         : 0,
       timeSinceLastMovementCommandMs: this.lastMovementCommandAt === null
         ? null
@@ -855,7 +852,7 @@ export class ThrownAoeTracker {
     for (let index = 0; index < this.throws.length; index++) {
       const thrown = this.throws[index]!;
       if (now < thrown.landingTime - 150 || now > thrown.landingTime + 750) continue;
-      const distance = Math.hypot(position.x - thrown.x, position.y - thrown.y);
+      const distance = Math.sqrt((position.x - thrown.x) * (position.x - thrown.x) + (position.y - thrown.y) * (position.y - thrown.y));
       if (distance > bestDistance) continue;
       bestDistance = distance;
       best = thrown;
@@ -916,7 +913,7 @@ function emptyState(
     earliestImpactMs: null,
     selectedCandidate: 0,
     speedScale: 1,
-    commandedSpeed: Math.hypot(velocity.x, velocity.y),
+    commandedSpeed: Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y)),
     progressSpeed: 0,
     firstControlHeading: null,
     headingChange: null,
@@ -964,7 +961,7 @@ function trajectoryFirstHeading(
   for (const waypoint of trajectory.waypoints) {
     const dx = waypoint.x - previous.x;
     const dy = waypoint.y - previous.y;
-    if (Math.hypot(dx, dy) > 1e-9) return Math.atan2(dy, dx);
+    if (Math.sqrt((dx) * (dx) + (dy) * (dy)) > 1e-9) return Math.atan2(dy, dx);
     previous = waypoint;
   }
   return null;
@@ -992,7 +989,7 @@ function movementIntentSatisfied(
   position: { x: number; y: number },
 ): boolean {
   if (intent?.mode !== 'combat_range') return true;
-  const distance = Math.hypot(position.x - intent.targetX, position.y - intent.targetY);
+  const distance = Math.sqrt((position.x - intent.targetX) * (position.x - intent.targetX) + (position.y - intent.targetY) * (position.y - intent.targetY));
   return distance >= intent.preferredMinimumRange - 1e-6
     && distance <= intent.preferredMaximumRange + 1e-6;
 }
@@ -1069,7 +1066,7 @@ function vectorizedRemainingPath(
   for (const point of points) {
     const dx = point.x - previousPoint.x;
     const dy = point.y - previousPoint.y;
-    const length = Math.hypot(dx, dy);
+    const length = Math.sqrt((dx) * (dx) + (dy) * (dy));
     if (length > 1e-6) {
       const direction = { x: dx / length, y: dy / length };
       if (previousDirection
@@ -1089,7 +1086,7 @@ function appendDistinct(
   point: { x: number; y: number },
 ): void {
   const previous = points[points.length - 1];
-  if (!previous || Math.hypot(previous.x - point.x, previous.y - point.y) > 1e-6) {
+  if (!previous || Math.sqrt((previous.x - point.x) * (previous.x - point.x) + (previous.y - point.y) * (previous.y - point.y)) > 1e-6) {
     points.push({ ...point });
   }
 }
@@ -1128,7 +1125,7 @@ function sameMovementIntent(
     if ((a.goalId !== undefined || b.goalId !== undefined) && a.goalId !== b.goalId) return false;
     if (Math.abs((a.arriveThreshold ?? 0) - (b.arriveThreshold ?? 0))
       > RANGE_CHANGE_TOLERANCE) return false;
-    const destinationChange = Math.hypot(a.goalX - b.goalX, a.goalY - b.goalY);
+    const destinationChange = Math.sqrt((a.goalX - b.goalX) * (a.goalX - b.goalX) + (a.goalY - b.goalY) * (a.goalY - b.goalY));
     if (destinationChange >= GOAL_CHANGE_TOLERANCE) return false;
     const aDirection = unitDirection(position, { x: a.goalX, y: a.goalY });
     const bDirection = unitDirection(position, { x: b.goalX, y: b.goalY });
@@ -1138,7 +1135,7 @@ function sameMovementIntent(
   if (a.mode !== 'combat_range' || b.mode !== 'combat_range') return false;
   const sameTarget = a.targetId > 0 || b.targetId > 0
     ? a.targetId === b.targetId
-    : Math.hypot(a.targetX - b.targetX, a.targetY - b.targetY) < GOAL_CHANGE_TOLERANCE;
+    : Math.sqrt((a.targetX - b.targetX) * (a.targetX - b.targetX) + (a.targetY - b.targetY) * (a.targetY - b.targetY)) < GOAL_CHANGE_TOLERANCE;
   return sameTarget
     && Math.abs(a.hardMinimumRange - b.hardMinimumRange) <= RANGE_CHANGE_TOLERANCE
     && Math.abs(a.preferredMinimumRange - b.preferredMinimumRange) <= RANGE_CHANGE_TOLERANCE
@@ -1151,14 +1148,14 @@ function unitDirection(
 ): { x: number; y: number } | undefined {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  const length = Math.hypot(dx, dy);
+  const length = Math.sqrt((dx) * (dx) + (dy) * (dy));
   return length > 1e-9 ? { x: dx / length, y: dy / length } : undefined;
 }
 
 function normalizedDirection(
   velocity: { x: number; y: number },
 ): { x: number; y: number } | undefined {
-  const speed = Math.hypot(velocity.x, velocity.y);
+  const speed = Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y));
   return speed > 1e-9 ? { x: velocity.x / speed, y: velocity.y / speed } : undefined;
 }
 
@@ -1169,7 +1166,7 @@ function telemetryIntentDirection(
 ): { x: number; y: number } | undefined {
   if (intent?.mode === 'combat_range') {
     const target = { x: intent.targetX, y: intent.targetY };
-    const targetDistance = Math.hypot(target.x - position.x, target.y - position.y);
+    const targetDistance = Math.sqrt((target.x - position.x) * (target.x - position.x) + (target.y - position.y) * (target.y - position.y));
     if (targetDistance < intent.preferredMinimumRange) return unitDirection(target, position);
     if (targetDistance > intent.preferredMaximumRange) return unitDirection(position, target);
     return undefined;
@@ -1187,7 +1184,7 @@ function sameOptionalPoint(
   b: { x: number; y: number } | null,
 ): boolean {
   if (!a || !b) return a === b;
-  return Math.hypot(a.x - b.x, a.y - b.y) <= 1e-6;
+  return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)) <= 1e-6;
 }
 
 function projectileKey(projectile: CombatProjectileSnapshot): string {

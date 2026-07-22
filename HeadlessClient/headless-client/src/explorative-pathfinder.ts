@@ -1193,7 +1193,7 @@ function appendBoundedWaypoints(
 ): void {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  const segmentDistance = Math.hypot(dx, dy);
+  const segmentDistance = Math.sqrt((dx) * (dx) + (dy) * (dy));
   const segmentCount = Math.max(1, Math.ceil(segmentDistance / maximumDistance));
   for (let segment = 1; segment <= segmentCount; segment++) {
     const ratio = segment / segmentCount;
@@ -1303,7 +1303,7 @@ function tileKey(x: number, y: number): string {
 }
 
 function distance(a: PathPoint, b: PathPoint): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
 
 function validCombatRange(range: CombatPathfindingRange): boolean {

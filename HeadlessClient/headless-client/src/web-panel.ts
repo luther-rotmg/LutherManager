@@ -323,7 +323,7 @@ function snapshot(ctx: WebPanelContext, itemCatalog: ItemCatalog): Record<string
     const visibleObjectRows = visibleObjects
       .map((object) => ({
         ...enrichObject(object, itemCatalog),
-        distance: Math.hypot(object.x - origin.x, object.y - origin.y),
+        distance: Math.sqrt((object.x - origin.x) * (object.x - origin.x) + (object.y - origin.y) * (object.y - origin.y)),
       }))
       .sort((a, b) => Number(a.distance) - Number(b.distance))
       .slice(0, 240);
@@ -2263,7 +2263,7 @@ function renderWorldMap(client) {
   const targetMark = target ? \`
     <line class="target-line" x1="\${player.x}" y1="\${player.y}" x2="\${target.x}" y2="\${target.y}" />
     <path class="map-target" d="M \${target.x - .7} \${target.y} H \${target.x + .7} M \${target.x} \${target.y - .7} V \${target.y + .7}" />\` : '';
-  const drift = Math.hypot(Number(local.x) - Number(player.x), Number(local.y) - Number(player.y));
+  const drift = Math.sqrt((Number(local.x) - Number(player.x)) * (Number(local.x) - Number(player.x)) + (Number(local.y) - Number(player.y)) * (Number(local.y) - Number(player.y)));
   return \`
     <section class="panel map-panel">
       <div class="panel-head">

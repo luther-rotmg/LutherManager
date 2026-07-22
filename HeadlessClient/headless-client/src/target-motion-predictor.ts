@@ -373,10 +373,7 @@ function fitHarmonicAt(
   return {
     model,
     rms: Math.sqrt(squaredError / samples.length),
-    amplitude: Math.hypot(
-      Math.hypot(model.x.cosine, model.x.sine),
-      Math.hypot(model.y.cosine, model.y.sine),
-    ),
+    amplitude: Math.sqrt((Math.sqrt((model.x.cosine) * (model.x.cosine) + (model.x.sine) * (model.x.sine))) * (Math.sqrt((model.x.cosine) * (model.x.cosine) + (model.x.sine) * (model.x.sine))) + (Math.sqrt((model.y.cosine) * (model.y.cosine) + (model.y.sine) * (model.y.sine))) * (Math.sqrt((model.y.cosine) * (model.y.cosine) + (model.y.sine) * (model.y.sine)))),
   };
 }
 
@@ -393,11 +390,11 @@ function fitTurnModel(samples: TimedPoint[]): TurnModel | undefined {
       y: (current.y - previous.y) / duration,
       duration,
     };
-    if (Math.hypot(velocity.x, velocity.y) > 0.0001) velocities.push(velocity);
+    if (Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y)) > 0.0001) velocities.push(velocity);
   }
   if (velocities.length < 4) return undefined;
 
-  const speeds = velocities.map((velocity) => Math.hypot(velocity.x, velocity.y));
+  const speeds = velocities.map((velocity) => Math.sqrt((velocity.x) * (velocity.x) + (velocity.y) * (velocity.y)));
   const averageSpeed = average(speeds);
   const speedDeviation = standardDeviation(speeds, averageSpeed);
   if (averageSpeed <= 0 || speedDeviation / averageSpeed > 0.25) return undefined;

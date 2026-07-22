@@ -942,12 +942,12 @@ export class Client extends EventEmitter {
       stalledQueuedPackets: this.stallQueue.length,
       stalledDroppedPackets: this.stallQueueDropped,
       movementTarget: target,
-      movementDistance: target ? Math.hypot(target.x - this.pos.x, target.y - this.pos.y) : undefined,
+      movementDistance: target ? Math.sqrt((target.x - this.pos.x) * (target.x - this.pos.x) + (target.y - this.pos.y) * (target.y - this.pos.y)) : undefined,
       movementWaypoint: waypoint,
       navigationWaypoints: this.pathfinder.getRemainingPath().length,
       localPos: `(${this.pos.x.toFixed(2)}, ${this.pos.y.toFixed(2)})`,
       serverPos: this.serverPos ? `(${this.serverPos.x.toFixed(2)}, ${this.serverPos.y.toFixed(2)})` : 'unknown',
-      positionDrift: this.serverPos ? Math.hypot(this.pos.x - this.serverPos.x, this.pos.y - this.serverPos.y) : undefined,
+      positionDrift: this.serverPos ? Math.sqrt((this.pos.x - this.serverPos.x) * (this.pos.x - this.serverPos.x) + (this.pos.y - this.serverPos.y) * (this.pos.y - this.serverPos.y)) : undefined,
       tickId: this.lastTickId,
       tickCount: this.tickCount,
       tickTimeMs: this.lastTickTime,
@@ -3896,7 +3896,7 @@ export class Client extends EventEmitter {
       return;
     }
 
-    if (Math.hypot(this.pos.x - p.pos.x, this.pos.y - p.pos.y) < p.radius) {
+    if (Math.sqrt((this.pos.x - p.pos.x) * (this.pos.x - p.pos.x) + (this.pos.y - p.pos.y) * (this.pos.y - p.pos.y)) < p.radius) {
       if (this.applyPredictedDamage(p.damage, p.armorPiercing, 'aoe')) {
         return;
       }
@@ -4260,7 +4260,7 @@ export class Client extends EventEmitter {
 }
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
 
 function validMoveTarget(target: { x: number; y: number }, threshold: number): boolean {
@@ -4338,7 +4338,7 @@ function boundedMovementGoal(
 ): { x: number; y: number; threshold: number } {
   const dx = goal.x - position.x;
   const dy = goal.y - position.y;
-  const distance = Math.hypot(dx, dy);
+  const distance = Math.sqrt((dx) * (dx) + (dy) * (dy));
   if (distance <= maximumDistance || distance === 0) return { ...goal };
   const ratio = maximumDistance / distance;
   return {

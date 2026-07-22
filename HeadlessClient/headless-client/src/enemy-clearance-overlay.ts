@@ -110,7 +110,7 @@ export class EnemyClearanceOverlay {
 }
 
 export function euclideanDistance(a: EnemyPosition, b: EnemyPosition): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
 
 export function pointViolatesCircularExclusion(

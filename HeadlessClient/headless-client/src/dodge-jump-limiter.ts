@@ -86,7 +86,7 @@ export class DodgeJumpLimiter {
     target: { x: number; y: number },
     configuredMaxDistance = MAX_DODGE_JUMP_DISTANCE,
   ): boolean {
-    const distance = Math.hypot(target.x - from.x, target.y - from.y);
+    const distance = Math.sqrt((target.x - from.x) * (target.x - from.x) + (target.y - from.y) * (target.y - from.y));
     const allowance = this.getState(now, configuredMaxDistance).allowance;
     if (!Number.isFinite(distance)
       || distance < MIN_DODGE_JUMP_DISTANCE
@@ -211,5 +211,5 @@ function clampJumpDistance(value: number): number {
 }
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
