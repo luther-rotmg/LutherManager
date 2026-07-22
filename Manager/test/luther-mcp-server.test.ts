@@ -367,6 +367,46 @@ test('canonical luther_* names work and do NOT emit a deprecation warning', asyn
   }
 });
 
+test('rejects request bodies larger than 1 MiB (readJsonBody size guard)', async () => {
+  const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-bigbody-'));
+  const fleet = new FakeFleet();
+  const scriptHost = {
+    list: () => [],
+    start: async () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+  } as unknown as ScriptHost;
+  const gameData = {} as GameDataLoader;
+  const server = new LutherMcpServer({
+    fleet: fleet as unknown as HeadlessFleet,
+    gameData,
+    scriptHost,
+    preferredPort: await availablePort(),
+    configDir,
+  });
+
+  try {
+    const started = await server.start();
+    const config = JSON.parse(readFileSync(join(configDir, 'mcp.json'), 'utf8')) as { endpoint: string; token: string };
+
+    // 1.5 MiB body — well past the 1 MiB guard. Uses fetch with an auth header so
+    // auth passes and the request reaches readJsonBody. The guard should reject
+    // BEFORE the body is fully buffered/parsed.
+    const oversized = 'x'.repeat(1024 * 1024 + 512 * 1024);
+    const response = await fetch(started.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}` },
+      body: oversized,
+    });
+    // The server surfaces the guard as a JSON-RPC or HTTP error, not a 200. Accept either 4xx or 5xx —
+    // the important assertion is that the server didn't silently accept a 1.5 MiB body.
+    assert.ok(response.status >= 400 && response.status < 600,
+      `oversized body should be rejected with a 4xx/5xx; got ${response.status}`);
+  } finally {
+    await server.stop();
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
 test('luther_execute is gate-refused when allowExecuteTool is explicitly false', async () => {
   const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-gate-'));
   const fleet = new FakeFleet();
