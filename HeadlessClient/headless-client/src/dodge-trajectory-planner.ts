@@ -368,17 +368,32 @@ interface TimedCombatTargetPosition {
 const FIXED_CONTROLS = createFixedControls();
 
 /** Exact closest approach for two constant-velocity points over one interval. */
-export function sweptRelativeMotion(
-  playerStart: { x: number; y: number },
-  playerVelocity: { x: number; y: number },
-  projectileStart: { x: number; y: number },
-  projectileVelocity: { x: number; y: number },
+export interface SweptRelativeMotionResult {
+  closestTimeMs: number;
+  minimumDistance: number;
+}
+
+/**
+ * Primitives-in / out-param variant of {@link sweptRelativeMotion}. Zero
+ * allocations. Callers on hot paths use this with a pooled `out` object;
+ * the object-args wrapper below stays for readable one-off / external use.
+ */
+export function sweptRelativeMotionInto(
+  playerStartX: number,
+  playerStartY: number,
+  playerVelocityX: number,
+  playerVelocityY: number,
+  projectileStartX: number,
+  projectileStartY: number,
+  projectileVelocityX: number,
+  projectileVelocityY: number,
   intervalDurationMs: number,
-): { closestTimeMs: number; minimumDistance: number } {
-  const relativeX = playerStart.x - projectileStart.x;
-  const relativeY = playerStart.y - projectileStart.y;
-  const velocityX = playerVelocity.x - projectileVelocity.x;
-  const velocityY = playerVelocity.y - projectileVelocity.y;
+  out: SweptRelativeMotionResult,
+): void {
+  const relativeX = playerStartX - projectileStartX;
+  const relativeY = playerStartY - projectileStartY;
+  const velocityX = playerVelocityX - projectileVelocityX;
+  const velocityY = playerVelocityY - projectileVelocityY;
   const velocitySquared = velocityX * velocityX + velocityY * velocityY;
   const closestTimeMs = velocitySquared <= 1e-18
     ? 0
@@ -387,10 +402,28 @@ export function sweptRelativeMotion(
         0,
         Math.max(0, intervalDurationMs),
       );
-  return {
-    closestTimeMs,
-    minimumDistance: Math.sqrt((relativeX + velocityX * closestTimeMs) * (relativeX + velocityX * closestTimeMs) + (relativeY + velocityY * closestTimeMs) * (relativeY + velocityY * closestTimeMs)),
-  };
+  const closestX = relativeX + velocityX * closestTimeMs;
+  const closestY = relativeY + velocityY * closestTimeMs;
+  out.closestTimeMs = closestTimeMs;
+  out.minimumDistance = Math.sqrt(closestX * closestX + closestY * closestY);
+}
+
+export function sweptRelativeMotion(
+  playerStart: { x: number; y: number },
+  playerVelocity: { x: number; y: number },
+  projectileStart: { x: number; y: number },
+  projectileVelocity: { x: number; y: number },
+  intervalDurationMs: number,
+): SweptRelativeMotionResult {
+  const out: SweptRelativeMotionResult = { closestTimeMs: 0, minimumDistance: 0 };
+  sweptRelativeMotionInto(
+    playerStart.x, playerStart.y,
+    playerVelocity.x, playerVelocity.y,
+    projectileStart.x, projectileStart.y,
+    projectileVelocity.x, projectileVelocity.y,
+    intervalDurationMs, out,
+  );
+  return out;
 }
 
 /** Chronological continuous-position dynamic planner used by predictive dodge. */
@@ -450,6 +483,14 @@ export class SpaceTimeDodgePlanner {
   private readonly diverseBeamRoundScratch: CandidateState[] = [];
   private readonly sectorArrayPool: CandidateState[][] = [];
   private sectorArrayPoolCursor = 0;
+  // Reused across every sweptRelativeMotion call in evaluateEdge + earliestIntentCollision.
+  // The old shape allocated 4 object literals per projectile-segment overlap (playerStart,
+  // projectileStart, projectileVelocity, and the return literal); with sweptRelativeMotionInto
+  // taking primitives + writing into a pooled out, all four allocs are gone.
+  private readonly sweptResultScratch: SweptRelativeMotionResult = {
+    closestTimeMs: 0,
+    minimumDistance: 0,
+  };
 
   private nextSectorArray(): CandidateState[] {
     const cursor = this.sectorArrayPoolCursor++;
@@ -1287,32 +1328,29 @@ export class SpaceTimeDodgePlanner {
     let projectileCost = 0;
     let collision = false;
     let minimumProjectileClearance = Infinity;
+    const sweptOut = this.sweptResultScratch;
     context.projectileIndex.query(from, to, (segment) => {
       if (segment.endMs <= startMs || segment.startMs >= endMs) return;
       const overlapStart = Math.max(startMs, segment.startMs);
       const overlapEnd = Math.min(endMs, segment.endMs);
       if (overlapEnd <= overlapStart) return;
-      const playerStart = {
-        x: from.x + playerVelocity.x * (overlapStart - startMs),
-        y: from.y + playerVelocity.y * (overlapStart - startMs),
-      };
-      const projectileStart = {
-        x: segment.startX + segment.velocityX * (overlapStart - segment.startMs),
-        y: segment.startY + segment.velocityY * (overlapStart - segment.startMs),
-      };
+      const playerStartX = from.x + playerVelocity.x * (overlapStart - startMs);
+      const playerStartY = from.y + playerVelocity.y * (overlapStart - startMs);
+      const projectileStartX = segment.startX + segment.velocityX * (overlapStart - segment.startMs);
+      const projectileStartY = segment.startY + segment.velocityY * (overlapStart - segment.startMs);
       const duration = overlapEnd - overlapStart;
-      const closest = sweptRelativeMotion(
-        playerStart,
-        playerVelocity,
-        projectileStart,
-        { x: segment.velocityX, y: segment.velocityY },
-        duration,
+      sweptRelativeMotionInto(
+        playerStartX, playerStartY,
+        playerVelocity.x, playerVelocity.y,
+        projectileStartX, projectileStartY,
+        segment.velocityX, segment.velocityY,
+        duration, sweptOut,
       );
-      const clearance = closest.minimumDistance - segment.collisionRadius;
+      const clearance = sweptOut.minimumDistance - segment.collisionRadius;
       minimumProjectileClearance = Math.min(minimumProjectileClearance, clearance);
       const aabbCollision = sweptAabbCollision(
-        playerStart.x - projectileStart.x,
-        playerStart.y - projectileStart.y,
+        playerStartX - projectileStartX,
+        playerStartY - projectileStartY,
         playerVelocity.x - segment.velocityX,
         playerVelocity.y - segment.velocityY,
         segment.collisionRadius,
@@ -1787,40 +1825,37 @@ export class SpaceTimeDodgePlanner {
         x: current.x + velocity.x * durationMs,
         y: current.y + velocity.y * durationMs,
       };
+      const sweptOut = this.sweptResultScratch;
       context.projectileIndex.query(current, next, (segment) => {
         if (segment.endMs <= startMs || segment.startMs >= endMs) return;
         const overlapStart = Math.max(startMs, segment.startMs);
         const overlapEnd = Math.min(endMs, segment.endMs);
         if (overlapEnd <= overlapStart) return;
-        const playerStart = {
-          x: current.x + velocity.x * (overlapStart - startMs),
-          y: current.y + velocity.y * (overlapStart - startMs),
-        };
-        const projectileStart = {
-          x: segment.startX + segment.velocityX * (overlapStart - segment.startMs),
-          y: segment.startY + segment.velocityY * (overlapStart - segment.startMs),
-        };
+        const playerStartX = current.x + velocity.x * (overlapStart - startMs);
+        const playerStartY = current.y + velocity.y * (overlapStart - startMs);
+        const projectileStartX = segment.startX + segment.velocityX * (overlapStart - segment.startMs);
+        const projectileStartY = segment.startY + segment.velocityY * (overlapStart - segment.startMs);
         const duration = overlapEnd - overlapStart;
-        const relative = sweptRelativeMotion(
-          playerStart,
-          velocity,
-          projectileStart,
-          { x: segment.velocityX, y: segment.velocityY },
-          duration,
+        sweptRelativeMotionInto(
+          playerStartX, playerStartY,
+          velocity.x, velocity.y,
+          projectileStartX, projectileStartY,
+          segment.velocityX, segment.velocityY,
+          duration, sweptOut,
         );
         const aabb = sweptAabbCollision(
-          playerStart.x - projectileStart.x,
-          playerStart.y - projectileStart.y,
+          playerStartX - projectileStartX,
+          playerStartY - projectileStartY,
           velocity.x - segment.velocityX,
           velocity.y - segment.velocityY,
           segment.collisionRadius,
           duration,
         );
-        if (relative.minimumDistance <= segment.collisionRadius || aabb) {
+        if (sweptOut.minimumDistance <= segment.collisionRadius || aabb) {
           earliest = Math.min(
             earliest,
-            overlapStart + (relative.minimumDistance <= segment.collisionRadius
-              ? relative.closestTimeMs
+            overlapStart + (sweptOut.minimumDistance <= segment.collisionRadius
+              ? sweptOut.closestTimeMs
               : 0),
           );
         }
