@@ -76,6 +76,25 @@ interface RunningScript {
 
 const SCRIPT_MANIFEST = 'hive.script.json';
 
+/**
+ * Resolves the scripts directory with a pre-P1-rename compatibility fallback.
+ * Prefer `Documents/Luther/Scripts` (current default). If that doesn't exist and a
+ * legacy `Documents/Hive/Scripts` does (i.e., the user installed a pre-rename Hive
+ * build and had scripts there), use the legacy path so upgrades don't silently lose
+ * their script library. Brand-new installs get `Luther/Scripts`.
+ *
+ * Mirrors the fallback pattern already used by LutherMcpServer.ts:resolveDefaultConfigDir
+ * and updater.cjs's per-install-token lookup. Doesn't move/migrate data — read-only pointer.
+ */
+function resolveScriptsDir(): string {
+  const documentsRoot = join(process.env.USERPROFILE || homedir(), 'Documents');
+  const preferred = join(documentsRoot, 'Luther', 'Scripts');
+  const legacy = join(documentsRoot, 'Hive', 'Scripts');
+  if (existsSync(preferred)) return preferred;
+  if (existsSync(legacy)) return legacy;
+  return preferred;
+}
+
 export class ScriptHost {
   private scriptsDir: string;
   private running = new Map<string, RunningScript>();
@@ -98,12 +117,7 @@ export class ScriptHost {
 
   constructor(scriptSession: { scriptId: string | undefined; accountId?: string }) {
     this.scriptSession = scriptSession;
-    this.scriptsDir = join(
-      process.env.USERPROFILE || homedir(),
-      'Documents',
-      'Luther',
-      'Scripts'
-    );
+    this.scriptsDir = resolveScriptsDir();
   }
 
   /** DevServer pushes updated script list (`activity`, status) to dashboard sockets when set. */
