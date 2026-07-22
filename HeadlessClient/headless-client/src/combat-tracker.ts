@@ -148,8 +148,8 @@ interface ActiveProjectile extends CombatProjectileSnapshot {
 
 interface PreparedWorld {
   snapshot: CombatWorldSnapshot;
-  tiles: Map<string, CombatTile>;
-  covers: Map<string, CombatEntity[]>;
+  tiles: Map<number, CombatTile>;
+  covers: Map<number, CombatEntity[]>;
   enemies: CombatEntity[];
   players: CombatEntity[];
 }
@@ -163,7 +163,7 @@ const ACCURACY_HISTORY_MS = 60 * 60 * 1000;
  * PLAYERHIT/OTHERHIT/SQUAREHIT/ENEMYHIT claims.
  */
 export class CombatTracker {
-  private readonly projectiles = new Map<string, ActiveProjectile>();
+  private readonly projectiles = new Map<number, ActiveProjectile>();
   private readonly shotTimes: number[] = [];
   private readonly hitTimes: number[] = [];
   private projectileNoclipEnabled = false;
@@ -343,11 +343,11 @@ export class CombatTracker {
   }
 
   private prepareWorld(snapshot: CombatWorldSnapshot): PreparedWorld {
-    const tiles = new Map<string, CombatTile>();
+    const tiles = new Map<number, CombatTile>();
     for (const tile of snapshot.tiles) {
       tiles.set(tileKey(tile.x, tile.y), tile);
     }
-    const covers = new Map<string, CombatEntity[]>();
+    const covers = new Map<number, CombatEntity[]>();
     const enemies: CombatEntity[] = [];
     const players: CombatEntity[] = [];
     for (const source of snapshot.entities) {
@@ -522,12 +522,24 @@ function validMultiplier(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
-function tileKey(x: number, y: number): string {
-  return `${x},${y}`;
+/**
+ * Packed 32-bit tile-key for Map<number, ...> lookups. Same encoding as
+ * dodge-collision-world.ts + static-passability-store.ts + inflated-passability.ts so
+ * keys are cross-module interchangeable. Assumes integer x, y in [-0x8000, 0x8000)
+ * (RotMG maps are 0-2048 tiles, well in range).
+ */
+function tileKey(x: number, y: number): number {
+  return ((x + 0x8000) << 16) | ((y + 0x8000) & 0xffff);
 }
 
-function projectileKey(ownerId: number, bulletId: number): string {
-  return `${ownerId}:${bulletId}`;
+/**
+ * Packed numeric projectile-key = ownerId * 0x10000 + bulletId. Assumes
+ * bulletId < 65536 (RotMG bulletId is 8-bit per shot, always well below), and
+ * ownerId * 65536 stays within Number.MAX_SAFE_INTEGER (up to ~137 billion
+ * ownerId — comfortably above any RotMG object id we'll see).
+ */
+function projectileKey(ownerId: number, bulletId: number): number {
+  return ownerId * 0x10000 + bulletId;
 }
 
 function rawNumber(entity: CombatEntity, stat: number): number | undefined {
