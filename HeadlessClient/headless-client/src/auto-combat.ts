@@ -321,7 +321,7 @@ export class AutoCombatController {
       if (!this.aim.includeInvulnerable && (condition & ConditionEffectBits.INVULNERABLE) !== 0) continue;
       const hp = object.player?.hp ?? rawNumber(object, StatType.HP_STAT, definition.maxHp ?? 0);
       if (hp <= 0) continue;
-      const distance = Math.hypot(object.x - playerPos.x, object.y - playerPos.y);
+      const distance = Math.sqrt((object.x - playerPos.x) * (object.x - playerPos.x) + (object.y - playerPos.y) * (object.y - playerPos.y));
       if (distance > range) continue;
       const maxHp = object.player?.maxHP ?? rawNumber(object, StatType.MAX_HP_STAT, definition.maxHp ?? hp);
       result.push({
@@ -434,14 +434,14 @@ function predictedInterceptPoint(
       lifetimeMultiplier,
       shotProfile,
     );
-    return Math.hypot(target.x - shooter.x, target.y - shooter.y)
-      - Math.hypot(projectilePosition.x, projectilePosition.y);
+    return Math.sqrt((target.x - shooter.x) * (target.x - shooter.x) + (target.y - shooter.y) * (target.y - shooter.y))
+      - Math.sqrt((projectilePosition.x) * (projectilePosition.x) + (projectilePosition.y) * (projectilePosition.y));
   };
   const aimAt = (time: number): { x: number; y: number } | null => {
     const target = time === 0 ? currentTarget : targetAt(time);
     const targetX = target.x - shooter.x;
     const targetY = target.y - shooter.y;
-    const targetDistance = Math.hypot(targetX, targetY);
+    const targetDistance = Math.sqrt((targetX) * (targetX) + (targetY) * (targetY));
     const projectilePosition = projectileLocalPositionAt(
       projectile,
       time,
@@ -449,7 +449,7 @@ function predictedInterceptPoint(
       lifetimeMultiplier,
       shotProfile,
     );
-    const projectileDistance = Math.hypot(projectilePosition.x, projectilePosition.y);
+    const projectileDistance = Math.sqrt((projectilePosition.x) * (projectilePosition.x) + (projectilePosition.y) * (projectilePosition.y));
     if (targetDistance <= 1e-9 || projectileDistance <= 1e-9) return null;
     const baseAngle = Math.atan2(targetY, targetX)
       - Math.atan2(projectilePosition.y, projectilePosition.x);
