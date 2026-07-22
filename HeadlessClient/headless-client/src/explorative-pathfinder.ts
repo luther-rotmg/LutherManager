@@ -63,10 +63,10 @@ interface GridPoint {
 }
 
 interface PlannedPath {
-  startKey: string;
+  startKey: number;
   rawTiles: GridPoint[];
   routeTiles: GridPoint[];
-  tileKeys: Set<string>;
+  tileKeys: Set<number>;
   waypoints: PathPoint[];
   targetBlocked: boolean;
   combat: boolean;
@@ -74,7 +74,7 @@ interface PlannedPath {
 }
 
 interface NoPathCacheEntry {
-  startKey: string;
+  startKey: number;
   goalCell: GridPoint;
   mapVersion: number;
   /** Must match {@link PASSABILITY_SCHEMA_VERSION} or the entry is ignored. */
@@ -746,7 +746,7 @@ export class ExplorativePathfinder {
   ): SegmentTrace | undefined {
     const travelTiles: GridPoint[] = [];
     const corridorTiles: GridPoint[] = [];
-    const corridorKeys = new Set<string>();
+    const corridorKeys = new Set<number>();
     let anchor = { ...position };
 
     for (const waypoint of waypoints) {
@@ -945,7 +945,7 @@ export class ExplorativePathfinder {
     return { x: Math.floor(target.x), y: Math.floor(target.y) };
   }
 
-  private matchesNoPathCache(startKey: string, goalCell: GridPoint): boolean {
+  private matchesNoPathCache(startKey: number, goalCell: GridPoint): boolean {
     const cache = this.noPathCache;
     return cache !== undefined
       && cache.startKey === startKey
@@ -955,7 +955,7 @@ export class ExplorativePathfinder {
       && cache.schemaVersion === PASSABILITY_SCHEMA_VERSION;
   }
 
-  private writeNoPathCache(startKey: string, goalCell: GridPoint): void {
+  private writeNoPathCache(startKey: number, goalCell: GridPoint): void {
     this.noPathCache = {
       startKey,
       goalCell: { ...goalCell },
@@ -1056,15 +1056,15 @@ interface PathSearchParams {
 
 class PathSearch {
   private readonly start: GridPoint;
-  private readonly startKey: string;
+  private readonly startKey: number;
   private readonly goals: ReadonlyArray<GridPoint>;
-  private readonly goalKeys: Set<string>;
+  private readonly goalKeys: Set<number>;
   private readonly isPathBlocked: (x: number, y: number, start: GridPoint) => boolean;
   private readonly mapVersion: number;
   private readonly open = new MinHeap();
-  private readonly bestG = new Map<string, number>();
-  private readonly cameFrom = new Map<string, string>();
-  private readonly points = new Map<string, GridPoint>();
+  private readonly bestG = new Map<number, number>();
+  private readonly cameFrom = new Map<number, number>();
+  private readonly points = new Map<number, GridPoint>();
   private order = 0;
   private expansions = 0;
   private status: PathSearchStatus = 'searching';
@@ -1182,7 +1182,7 @@ class PathSearch {
 }
 
 function goalsKey(goals: ReadonlyArray<GridPoint>): string {
-  return goals.map((goal) => tileKey(goal.x, goal.y)).sort().join('|');
+  return goals.map((goal) => tileKey(goal.x, goal.y)).sort((a, b) => a - b).join('|');
 }
 
 function appendBoundedWaypoints(
@@ -1255,17 +1255,17 @@ function heuristic(point: GridPoint, goals: ReadonlyArray<GridPoint>): number {
 }
 
 function reconstruct(
-  goalKey: string,
-  startKey: string,
-  parent: Map<string, string>,
-  points: Map<string, GridPoint>,
+  goalKey: number,
+  startKey: number,
+  parent: Map<number, number>,
+  points: Map<number, GridPoint>,
 ): GridPoint[] {
   const result: GridPoint[] = [];
   let cursor = goalKey;
   while (cursor !== startKey) {
     const point = points.get(cursor);
     const previous = parent.get(cursor);
-    if (!point || !previous) return [];
+    if (!point || previous === undefined) return [];
     result.push(point);
     cursor = previous;
   }
@@ -1298,8 +1298,14 @@ function tileCenter(point: GridPoint): PathPoint {
   return { x: point.x + 0.5, y: point.y + 0.5 };
 }
 
-function tileKey(x: number, y: number): string {
-  return `${x},${y}`;
+/**
+ * Packed 32-bit tile-key for Map<number, ...> lookups. Same encoding as
+ * client.ts / combat-tracker.ts / dodge-collision-world.ts / static-passability-store.ts /
+ * inflated-passability.ts so keys are cross-module interchangeable. Assumes integer x, y
+ * in [-0x8000, 0x8000) (RotMG maps are 0-2048 tiles, well in range).
+ */
+function tileKey(x: number, y: number): number {
+  return ((x + 0x8000) << 16) | ((y + 0x8000) & 0xffff);
 }
 
 function distance(a: PathPoint, b: PathPoint): number {
