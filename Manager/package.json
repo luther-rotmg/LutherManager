@@ -7,6 +7,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx src/index.ts --dev",
+    "test": "tsx --test test/*.test.ts",
     "dev:wsl": "node dev-wsl.mjs",
     "electron": "electron .",
     "build:sdk": "tsc -p packages/sdk/tsconfig.json && node scripts/prepare-sdk.mjs",

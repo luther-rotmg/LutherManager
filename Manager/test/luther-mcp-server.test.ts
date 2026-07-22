@@ -250,6 +250,123 @@ test('hive_* deprecated aliases log a migration warning exactly once per session
   }
 });
 
+test('rejects Bearer tokens that are wrong (same length AND different length)', async () => {
+  const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-badtoken-'));
+  const fleet = new FakeFleet();
+  const scriptHost = {
+    list: () => [],
+    start: async () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+  } as unknown as ScriptHost;
+  const gameData = {} as GameDataLoader;
+  const server = new LutherMcpServer({
+    fleet: fleet as unknown as HeadlessFleet,
+    gameData,
+    scriptHost,
+    preferredPort: await availablePort(),
+    configDir,
+  });
+
+  try {
+    const started = await server.start();
+    const config = JSON.parse(readFileSync(join(configDir, 'mcp.json'), 'utf8')) as { endpoint: string; token: string };
+
+    // Same-length wrong token exercises timingSafeEqual — the constant-time branch that
+    // matters for defense against timing side-channels. Build by rotating the last char.
+    const sameLenWrong = config.token.slice(0, -1)
+      + (config.token.endsWith('A') ? 'B' : 'A');
+    assert.equal(sameLenWrong.length, config.token.length);
+    assert.notEqual(sameLenWrong, config.token);
+    const sameLen = await fetch(started.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sameLenWrong}` },
+      body: '{}',
+    });
+    assert.equal(sameLen.status, 401, 'same-length wrong Bearer should 401');
+    assert.ok(sameLen.headers.get('www-authenticate')?.includes('Bearer'),
+      'WWW-Authenticate header should advertise Bearer scheme');
+
+    // Different-length wrong token exercises the length-check short-circuit —
+    // timingSafeEqual would throw on mismatched buffer lengths, so the guard is required.
+    const diffLenWrong = 'x'.repeat(4);
+    const diffLen = await fetch(started.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${diffLenWrong}` },
+      body: '{}',
+    });
+    assert.equal(diffLen.status, 401, 'different-length wrong Bearer should 401 without throwing');
+
+    // Non-Bearer scheme (Basic, etc.) must also 401 — the auth guard only recognises Bearer.
+    const basic = await fetch(started.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${config.token}` },
+      body: '{}',
+    });
+    assert.equal(basic.status, 401, 'non-Bearer scheme should 401 even with the right token value');
+  } finally {
+    await server.stop();
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test('canonical luther_* names work and do NOT emit a deprecation warning', async () => {
+  const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-canonical-'));
+  const fleet = new FakeFleet();
+  const scriptHost = {
+    list: () => [],
+    start: async () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+  } as unknown as ScriptHost;
+  const gameData = {} as GameDataLoader;
+  const server = new LutherMcpServer({
+    fleet: fleet as unknown as HeadlessFleet,
+    gameData,
+    scriptHost,
+    preferredPort: await availablePort(),
+    configDir,
+  });
+  let client: McpClient | undefined;
+
+  try {
+    const started = await server.start();
+    const config = JSON.parse(readFileSync(join(configDir, 'mcp.json'), 'utf8')) as { endpoint: string; token: string };
+
+    client = new McpClient({ name: 'hive-mcp-canonical-test', version: '1.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL(started.endpoint), {
+      requestInit: { headers: { Authorization: `Bearer ${config.token}` } },
+    });
+    await client.connect(transport);
+
+    // Call two canonical tool names.
+    const accountResult = await client.callTool({ name: 'luther_list_accounts', arguments: {} });
+    const accountsFirst = accountResult.content[0];
+    assert.equal(accountsFirst?.type, 'text');
+    const accounts = JSON.parse(accountsFirst.type === 'text' ? accountsFirst.text : '[]') as Array<Record<string, unknown>>;
+    assert.equal(accounts[0]?.accountId, 'account-1');
+    // Confirm redaction still applies on the canonical path — regression guard against
+    // the alias path being the only place we redact.
+    assert.equal(accounts[0]?.email, undefined);
+    assert.equal(accounts[0]?.proxy, undefined);
+
+    await client.callTool({ name: 'luther_list_methods', arguments: {} });
+
+    // Read the diagnostic ring; assert NO deprecation warnings were emitted for these calls.
+    const logsResult = await client.callTool({ name: 'luther_get_logs', arguments: { limit: 200 } });
+    const first = logsResult.content[0];
+    assert.equal(first?.type, 'text');
+    const raw = first.type === 'text' ? first.text : '[]';
+    const entries = JSON.parse(raw) as Array<{ message?: string }>;
+    const deprecationWarnings = entries.filter((entry) => entry.message?.includes('Deprecated MCP name'));
+    assert.equal(deprecationWarnings.length, 0,
+      `canonical names must not emit deprecation warnings; got ${deprecationWarnings.length}: `
+        + deprecationWarnings.map((w) => w.message).join(' | '));
+  } finally {
+    await client?.close().catch(() => {});
+    await server.stop();
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
 test('luther_execute is gate-refused when allowExecuteTool is explicitly false', async () => {
   const configDir = mkdtempSync(join(tmpdir(), 'hive-mcp-gate-'));
   const fleet = new FakeFleet();
