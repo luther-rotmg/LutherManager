@@ -23,6 +23,14 @@ import type { GameDataLoader } from '../../game-data/GameDataLoader.js';
 import { Logger } from '../../util/Logger.js';
 import { RuntimeScheduler } from '../../util/RuntimeScheduler.js';
 import type { HeadlessChatMessage, HeadlessFleet, HeadlessSessionSummary } from '../../headless/HeadlessFleet.js';
+import { DailyLoginService, type DailyLoginCandidate } from '../../headless/DailyLoginService.js';
+import {
+  MulingService,
+  normalizeMulingRules,
+  type MulingCandidate,
+  type MulingRole,
+  type MulingRules,
+} from '../../headless/MulingService.js';
 import {
   createProxyAgent,
   parseEnchantments,
@@ -172,6 +180,9 @@ interface DashboardAccountRecord {
   serverName: string;
   notes: string;
   preferredScriptId: string;
+  dailyLogin: boolean;
+  mulingRole: MulingRole;
+  mulingRules: MulingRules;
   createdAt: number;
   updatedAt: number;
   proxyId: string;
@@ -219,6 +230,21 @@ interface DashboardAccountOverviewCharacter {
   dexterity: number;
   vitality: number;
   wisdom: number;
+  creationDate: string;
+  skin: number;
+  tex1: number;
+  tex2: number;
+  pcStats: string;
+  statMaxes?: {
+    maxHp: number;
+    maxMp: number;
+    attack: number;
+    defense: number;
+    speed: number;
+    dexterity: number;
+    vitality: number;
+    wisdom: number;
+  };
   equipment: DashboardAccountOverviewItem[];
   inventory: DashboardAccountOverviewItem[];
   backpacks: DashboardAccountOverviewItem[];
@@ -360,6 +386,8 @@ export class DevServer {
   private readonly pendingHeadlessViewerTicks = new Set<string>();
   private headlessViewerTickScheduled = false;
   private headlessPacketSequence = 0;
+  private dailyLoginService?: DailyLoginService;
+  private mulingService?: MulingService;
 
   private getConfigsDir(): string {
     return join(getHiveDocumentsDir(), 'configs');
@@ -522,6 +550,9 @@ export class DevServer {
       serverName: String(raw?.serverName || 'USWest').trim() || 'USWest',
       notes: String(raw?.notes || ''),
       preferredScriptId: String(raw?.preferredScriptId || '').trim(),
+      dailyLogin: raw?.dailyLogin === true,
+      mulingRole: raw?.mulingRole === 'source' || raw?.mulingRole === 'mule' ? raw.mulingRole : 'off',
+      mulingRules: normalizeMulingRules(raw?.mulingRules),
       createdAt,
       updatedAt,
       proxyId: String(raw?.proxyId || '').trim(),
@@ -544,7 +575,6 @@ export class DevServer {
         return [];
       }
       const raw = readFileSync(filePath, 'utf8');
-      debugLog(`readDashboardAccounts: raw content (first 200 chars): ${raw.slice(0, 200)}`);
       const parsed = JSON.parse(raw) as { accounts?: unknown[] };
       const accounts = Array.isArray(parsed?.accounts) ? parsed.accounts : [];
       debugLog(`readDashboardAccounts: parsed ${accounts.length} account(s)`);
@@ -695,7 +725,24 @@ export class DevServer {
       const equipment = character?.equipment;
       const inventory = character?.inventory;
       const backpacks = character?.backpacks;
-      return [equipment, inventory, backpacks].every((items) => Array.isArray(items) && items.every(hasCompleteItem));
+      const hasCharacterPresentation = Object.prototype.hasOwnProperty.call(character || {}, 'creationDate')
+        && Object.prototype.hasOwnProperty.call(character || {}, 'skin')
+        && Object.prototype.hasOwnProperty.call(character || {}, 'tex1')
+        && Object.prototype.hasOwnProperty.call(character || {}, 'tex2')
+        && Object.prototype.hasOwnProperty.call(character || {}, 'pcStats');
+      const statMaxes = character?.statMaxes;
+      const hasStatMaxes = !!statMaxes && [
+        statMaxes.maxHp,
+        statMaxes.maxMp,
+        statMaxes.attack,
+        statMaxes.defense,
+        statMaxes.speed,
+        statMaxes.dexterity,
+        statMaxes.vitality,
+        statMaxes.wisdom,
+      ].every((value) => Number.isFinite(value) && value > 0);
+      return hasCharacterPresentation && hasStatMaxes
+        && [equipment, inventory, backpacks].every((items) => Array.isArray(items) && items.every(hasCompleteItem));
     }) && storageSections.every((key) => {
       const section = ((overview as unknown) as Record<string, unknown>)[key] as DashboardAccountOverviewStorageSection | undefined;
       return !!section && Array.isArray(section.items) && section.items.every(hasCompleteItem);
@@ -1076,6 +1123,17 @@ export class DevServer {
         : (charsNode.Char ? [charsNode.Char] : []);
       const characters = rawCharacters.map((rawChar) => {
         const classType = this.parseCharListNumber(rawChar.ObjectType);
+        const classStatMaxes = this.gameData?.getPlayerClassStatMaxes(classType);
+        const statMaxes = classStatMaxes ? {
+          maxHp: classStatMaxes.maxHitPoints,
+          maxMp: classStatMaxes.maxMagicPoints,
+          attack: classStatMaxes.attack,
+          defense: classStatMaxes.defense,
+          speed: classStatMaxes.speed,
+          dexterity: classStatMaxes.dexterity,
+          vitality: classStatMaxes.hpRegen,
+          wisdom: classStatMaxes.mpRegen,
+        } : undefined;
         const uniqueLookup = this.buildDashboardUniqueItemLookup(rawChar.UniqueItemInfo);
         const backpackSlots = Math.max(0, this.parseCharListNumber(rawChar.BackpackSlots));
         const backpackCount = Math.max(0, Math.min(8, Math.floor(backpackSlots / 8)));
@@ -1103,6 +1161,12 @@ export class DevServer {
           dexterity: this.parseCharListNumber(rawChar.Dexterity),
           vitality: this.parseCharListNumber(rawChar.HpRegen),
           wisdom: this.parseCharListNumber(rawChar.MpRegen),
+          creationDate: String(rawChar.CreationDate || ''),
+          skin: this.parseCharListNumber(rawChar.Texture),
+          tex1: this.parseCharListNumber(rawChar.Tex1),
+          tex2: this.parseCharListNumber(rawChar.Tex2),
+          pcStats: String(rawChar.PCStats || ''),
+          ...(statMaxes ? { statMaxes } : {}),
           equipment: this.buildDashboardOverviewItems(equipmentTokens, uniqueLookup, true),
           inventory: this.buildDashboardOverviewItems(inventoryTokens, uniqueLookup, true),
           backpacks: this.buildDashboardOverviewItems(backpackTokens, uniqueLookup, true),
@@ -1289,6 +1353,27 @@ export class DevServer {
     this.headlessFleet?.on('chat', (accountId, message) => this.broadcastHeadlessChat(accountId, message));
     this.headlessFleet?.on('packet', (accountId, traffic) => this.captureHeadlessPacket(accountId, traffic));
     this.headlessFleet?.on('viewerTick', (accountId) => this.queueHeadlessViewerTick(accountId));
+    if (this.headlessFleet) {
+      this.dailyLoginService = new DailyLoginService(this.headlessFleet, {
+        stateFile: join(this.getHiveDocumentsDir(), '_daily-login.json'),
+        concurrency: 2,
+        log: (message) => Logger.log('DailyLogin', message),
+      });
+      this.runtimeScheduler.scheduleRepeating(60_000, () => {
+        void this.runDailyLogins();
+      });
+      setImmediate(() => void this.runDailyLogins());
+    }
+    if (this.headlessFleet && this.gameData) {
+      this.mulingService = new MulingService(this.headlessFleet, this.gameData, {
+        stateFile: join(this.getHiveDocumentsDir(), '_muling.json'),
+        log: (message) => Logger.log('Muling', message),
+      });
+      this.runtimeScheduler.scheduleRepeating(60_000, () => {
+        void this.runMuling();
+      });
+      setImmediate(() => void this.runMuling());
+    }
     this.inspector.subscribe((pkt) => {
       if (pkt.captureMode === 'full') this.lab.capture(pkt);
       this.observeTradePacket(pkt);
@@ -2978,6 +3063,66 @@ export class DevServer {
     };
   }
 
+  private getDailyLoginCandidates(): DailyLoginCandidate[] {
+    return this.readDashboardAccounts()
+      .filter((account) => account.dailyLogin)
+      .map((account) => {
+        const candidate: DailyLoginCandidate = {
+          id: account.id,
+          label: account.label,
+          email: account.email,
+          password: account.password,
+          serverName: account.serverName,
+        };
+        try {
+          candidate.proxy = this.resolveDashboardAccountProxy(account);
+        } catch (error) {
+          candidate.configurationError = error instanceof Error ? error.message : String(error);
+        }
+        return candidate;
+      });
+  }
+
+  private async runDailyLogins(): Promise<void> {
+    if (!this.dailyLoginService) return;
+    try {
+      await this.dailyLoginService.runDue(this.getDailyLoginCandidates());
+    } catch (error) {
+      Logger.warn('DailyLogin', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private getMulingCandidates(): MulingCandidate[] {
+    return this.readDashboardAccounts()
+      .filter((account) => account.mulingRole !== 'off')
+      .map((account) => {
+        const candidate: MulingCandidate = {
+          id: account.id,
+          label: account.label,
+          email: account.email,
+          password: account.password,
+          serverName: account.serverName,
+          role: account.mulingRole,
+          rules: account.mulingRules,
+        };
+        try {
+          candidate.proxy = this.resolveDashboardAccountProxy(account);
+        } catch (error) {
+          candidate.configurationError = error instanceof Error ? error.message : String(error);
+        }
+        return candidate;
+      });
+  }
+
+  private async runMuling(force = false): Promise<void> {
+    if (!this.mulingService) return;
+    try {
+      await this.mulingService.runDue(this.getMulingCandidates(), this.serverNames, force);
+    } catch (error) {
+      Logger.warn('Muling', error instanceof Error ? error.message : String(error));
+    }
+  }
+
   start(port = 3000): void {
     this.httpServer.listen(port, () => {
       Logger.log('DevServer', `Dashboard available at http://localhost:${port}`);
@@ -3536,7 +3681,12 @@ export class DevServer {
         debugLog(`GET /api/accounts: returning ${accounts.length} account(s)`);
         const cachedOverviews = this.readAllDashboardAccountOverviewCaches();
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ accounts, cachedOverviews }));
+        res.end(JSON.stringify({
+          accounts,
+          cachedOverviews,
+          dailyLoginReport: this.dailyLoginService?.getReport() ?? null,
+          mulingReport: this.mulingService?.getReport() ?? null,
+        }));
       } catch (err) {
         debugLog(`GET /api/accounts: EXCEPTION: ${(err as Error).message}`);
         Logger.warn('DevServer', `accounts list failed: ${(err as Error).message}`);
@@ -3576,6 +3726,8 @@ export class DevServer {
               this.deleteDashboardAccountOverviewCache(account.id);
             }
           }
+          void this.runDailyLogins();
+          void this.runMuling();
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true, accounts }));
         } catch (err) {
@@ -3584,6 +3736,36 @@ export class DevServer {
           res.end(JSON.stringify({ error: 'Failed to save accounts' }));
         }
       });
+      return;
+    }
+
+    if (req.url === '/api/accounts/muling/run' && req.method === 'POST') {
+      if (!this.mulingService) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Headless muling is unavailable.' }));
+        return;
+      }
+      void this.runMuling(true);
+      res.writeHead(202, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/api/accounts/muling/stop' && req.method === 'POST') {
+      if (!this.mulingService) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Headless muling is unavailable.' }));
+        return;
+      }
+      const report = this.mulingService.stop();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, report }));
+      return;
+    }
+
+    if (req.url === '/api/accounts/muling/status' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ report: this.mulingService?.getReport() ?? null }));
       return;
     }
 

@@ -200,7 +200,7 @@ async function main(): Promise<void> {
   const baseAlias = account.alias ?? account.guid;
   console.log(`logging in as ${baseAlias}…`);
   const { accessToken, clientToken } = await login(account);
-  const { char, servers } = await getCharAndServers(accessToken);
+  const { char, servers, tutorialDone } = await getCharAndServers(accessToken);
   const { a: serverA, b: serverB } = pickServers(servers);
   console.log(
     `account ${baseAlias}, char ${char.charId} — A→${serverA.name} (${serverA.address}), B→${serverB.name} (${serverB.address})`,
@@ -211,6 +211,7 @@ async function main(): Promise<void> {
     clientToken,
     charId: char.charId,
     needsNewChar: char.needsNewChar,
+    tutorialDone,
     servers,
   };
 

@@ -313,6 +313,8 @@ export async function getCharAndServers(
   nextCharId: number;
   maxNumChars: number;
   servers: ServerInfo[];
+  /** Whether the character-list response says the account completed the tutorial. */
+  tutorialDone: boolean;
 }> {
   const xml = await postForm(ENDPOINTS.CHAR_LIST, { do_login: 'true', accessToken, ...UNITY_FIELDS }, options);
   const error = classifyError(xml);
@@ -332,6 +334,9 @@ export async function getCharAndServers(
     equipment: [...entry.equipment],
   }));
   const maxNumChars = Number(/maxNumChars="(\d+)"/.exec(xml)?.[1] ?? String(characters.length));
+  // Match the official/pyrelay behavior: the presence of TDone marks the
+  // account as having completed the tutorial; older/new accounts omit it.
+  const tutorialDone = xml.includes('TDone');
   const char: CharInfo =
     characters.length > 0
       ? characters[0]
@@ -346,7 +351,7 @@ export async function getCharAndServers(
     }
   }
 
-  return { char, characters, nextCharId, maxNumChars, servers };
+  return { char, characters, nextCharId, maxNumChars, servers, tutorialDone };
 }
 
 /**

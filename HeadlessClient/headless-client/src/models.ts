@@ -56,6 +56,8 @@ export interface ClientOptions {
   clientToken: string;
   charId: number;
   needsNewChar: boolean;
+  /** False when `/char/list` omits `TDone`; starts the first Hello in Tutorial. */
+  tutorialDone?: boolean;
   host: string;
   /** Routes every game TCP connection and reconnect through this proxy. */
   proxy?: ProxyConfig;

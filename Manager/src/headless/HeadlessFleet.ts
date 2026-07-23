@@ -98,6 +98,12 @@ export class HeadlessFleet extends EventEmitter {
     return this.entries.size;
   }
 
+  /** Whether an account already has a live client or a connection in progress. */
+  isBusy(accountId: string): boolean {
+    const id = String(accountId);
+    return this.entries.has(id) || this.pending.has(id);
+  }
+
   get(accountId?: string | null): Client | undefined {
     if (accountId) return this.entries.get(String(accountId))?.client;
     return this.entries.values().next().value?.client;
@@ -192,7 +198,7 @@ export class HeadlessFleet extends EventEmitter {
     };
     const requestOptions = account.proxy ? { proxy: account.proxy } : undefined;
     const { accessToken, clientToken } = await login(authAccount, requestOptions);
-    const { char, servers } = await getCharAndServers(accessToken, requestOptions);
+    const { char, servers, tutorialDone } = await getCharAndServers(accessToken, requestOptions);
     const preferred = servers.find((server) => server.name.toLowerCase() === String(account.serverName || '').toLowerCase());
     const server = preferred ?? servers[0];
     if (!server) throw new Error('No game servers were returned for this account.');
@@ -203,6 +209,7 @@ export class HeadlessFleet extends EventEmitter {
       clientToken,
       charId: char.charId,
       needsNewChar: char.needsNewChar,
+      tutorialDone,
       host: server.address,
       proxy: account.proxy,
       servers,

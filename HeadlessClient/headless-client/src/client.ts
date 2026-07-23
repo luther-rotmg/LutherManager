@@ -476,6 +476,7 @@ export class Client extends EventEmitter {
     this.setMaxListeners(config.maxEventListeners);
     this.host = opts.host;
     this.nexusHost = opts.host;
+    this.gameId = opts.tutorialDone === false ? GAME_ID.TUTORIAL : GAME_ID.NEXUS;
     this.accessToken = opts.accessToken;
     this.clientToken = opts.clientToken;
     this.wantVault = opts.autoEnterVault ?? config.autoEnterVault;
@@ -2719,7 +2720,11 @@ export class Client extends EventEmitter {
     }
     this.reconnectTimer = this.timers.setTimeout(() => {
       this.reconnectTimer = undefined;
+      // A not-yet-completed tutorial uses an unkeyed connection just like the
+      // Nexus. Keep retrying it until the server redirects us elsewhere.
+      const retryTutorial = this.gameId === GAME_ID.TUTORIAL;
       this.resetForNexus();
+      if (retryTutorial) this.gameId = GAME_ID.TUTORIAL;
       this.connect();
     }, ms);
   }
@@ -3863,7 +3868,11 @@ export class Client extends EventEmitter {
   /** Processes and acknowledges an area attack using the current local frame state. */
   private handleAoe(p: AoePacket): void {
     const ackTime = this.time();
-    this.thrownAoes?.recordAoe(p.pos, p.radius, ackTime);
+    // Pass through the AoE packet's blast dwell (`p.duration`, seconds) so the
+    // tracker can learn per-effectType dwell durations and surface during-
+    // dwell throws to the dodge planner. Without this the P3 windowed
+    // sampling never fires from real packet traffic.
+    this.thrownAoes?.recordAoe(p.pos, p.radius, ackTime, p.duration);
     this.viewerAoes.push({
       id: this.nextViewerAoeId++,
       x: p.pos.x,

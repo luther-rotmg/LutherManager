@@ -73,6 +73,7 @@
   const EAM_ASSETS = window.EAMAssets || {};
   const EAM_ITEMS = EAM_ASSETS.items || {};
   const EAM_ENCHANTMENTS = window.EAMEnchantments || EAM_ASSETS.enchantments || {};
+  const MULING_ITEM_SEARCH = window.HiveMulingItemSearch || null;
   const ITEM_RARITY_ICONS = {
     1: 'enchantments/uncommon.png',
     2: 'enchantments/rare.png',
@@ -2868,11 +2869,14 @@
   let selectedAccountsOverviewTab = 'characters';
   let accountsDetailsCollapsed = localStorage.getItem('accountsDetailsCollapsed') === '1';
   var activeAccountsEditorTab = 'credentials';
+  var mulingReport = null;
+  var mulingStatusTimer = null;
   function switchAccountsEditorTab(tab) {
     activeAccountsEditorTab = tab;
     var panels = {
       credentials: document.getElementById('accounts-login-section'),
       overview:    document.getElementById('accounts-editor-overview-panel'),
+      muling:      document.getElementById('accounts-editor-muling-panel'),
     };
     Object.keys(panels).forEach(function(k) {
       if (panels[k]) panels[k].style.display = k === tab ? '' : 'none';
@@ -2880,6 +2884,11 @@
     document.querySelectorAll('.accounts-editor-tab').forEach(function(btn) {
       btn.classList.toggle('active', btn.getAttribute('data-editor-tab') === tab);
     });
+    if (tab === 'muling') refreshMulingStatus();
+    else if (mulingStatusTimer) {
+      clearTimeout(mulingStatusTimer);
+      mulingStatusTimer = null;
+    }
   }
   let accountsPasswordVisible = false;
   let accountsSortModeRaw = localStorage.getItem('accountsSortMode') || 'newest';
@@ -2994,6 +3003,7 @@
   const accountsPasswordLabel = document.getElementById('accounts-password-label');
   const accountsPasswordInput = document.getElementById('accounts-password');
   const accountsPasswordVisibilityBtn = document.getElementById('accounts-password-visibility-btn');
+  const accountsDailyLoginInput = document.getElementById('accounts-daily-login');
   const accountsVerifyStatusEl = document.getElementById('accounts-verify-status');
   const accountsServerSelect = document.getElementById('accounts-server');
   const accountsNotesInput = document.getElementById('accounts-notes');
@@ -3005,6 +3015,21 @@
   const accountsProxyAuthWrap = document.getElementById('accounts-proxy-auth-wrap');
   const accountsProxyUsername = document.getElementById('accounts-proxy-username');
   const accountsProxyPassword = document.getElementById('accounts-proxy-password');
+  const accountsMulingRoleSelect = document.getElementById('accounts-muling-role');
+  const accountsMulingRoleHint = document.getElementById('accounts-muling-role-hint');
+  const accountsMulingRulesEl = document.getElementById('accounts-muling-rules');
+  const accountsMulingWeaponTiers = document.getElementById('accounts-muling-weapon-tiers');
+  const accountsMulingAbilityTiers = document.getElementById('accounts-muling-ability-tiers');
+  const accountsMulingArmorTiers = document.getElementById('accounts-muling-armor-tiers');
+  const accountsMulingRingTiers = document.getElementById('accounts-muling-ring-tiers');
+  const accountsMulingItemInput = document.getElementById('accounts-muling-item-input');
+  const accountsMulingItemAddBtn = document.getElementById('accounts-muling-item-add-btn');
+  const accountsMulingItemResults = document.getElementById('accounts-muling-item-results');
+  const accountsMulingSelectedItems = document.getElementById('accounts-muling-selected-items');
+  const accountsMulingRunBtn = document.getElementById('accounts-muling-run-btn');
+  const accountsMulingStopBtn = document.getElementById('accounts-muling-stop-btn');
+  const accountsMulingStatus = document.getElementById('accounts-muling-status');
+  const accountsMulingCapacity = document.getElementById('accounts-muling-capacity');
   const proxyManagerSummary = document.getElementById('proxy-manager-summary');
   const proxyTableBody = document.getElementById('proxy-table-body');
   const proxyListEmpty = document.getElementById('proxy-list-empty');
@@ -15930,6 +15955,28 @@
 
   // ─── Config handler ─────────────────────────────────────
 
+  function normalizeMulingNumberList(value, min, max) {
+    var list = Array.isArray(value) ? value : [];
+    return Array.from(new Set(list.map(Number).filter(function (item) {
+      return Number.isInteger(item) && item >= min && item <= max;
+    }))).sort(function (a, b) { return a - b; });
+  }
+
+  function normalizeDashboardMulingRules(raw) {
+    raw = raw && typeof raw === 'object' ? raw : {};
+    var potionKinds = ['attack', 'defense', 'speed', 'dexterity', 'vitality', 'wisdom', 'life', 'mana'];
+    return {
+      potions: Array.from(new Set((Array.isArray(raw.potions) ? raw.potions : []).map(function (item) {
+        return String(item || '').toLowerCase();
+      }).filter(function (item) { return potionKinds.indexOf(item) >= 0; }))),
+      weaponTiers: normalizeMulingNumberList(raw.weaponTiers, 0, 20),
+      abilityTiers: normalizeMulingNumberList(raw.abilityTiers, 0, 20),
+      armorTiers: normalizeMulingNumberList(raw.armorTiers, 0, 20),
+      ringTiers: normalizeMulingNumberList(raw.ringTiers, 0, 20),
+      itemTypes: normalizeMulingNumberList(raw.itemTypes, 1, 65535),
+    };
+  }
+
   function createEmptyDashboardAccount() {
     return {
       id: 'acct-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
@@ -15939,6 +15986,9 @@
       serverName: (availableServerNames.indexOf('USWest') >= 0 ? 'USWest' : (availableServerNames[0] || 'USWest')),
       notes: '',
       preferredScriptId: '',
+      dailyLogin: false,
+      mulingRole: 'off',
+      mulingRules: normalizeDashboardMulingRules(null),
       proxyId: '',
       proxyProtocol: 'socks5',
       proxy: '',
@@ -15960,6 +16010,9 @@
       serverName: String(raw.serverName || base.serverName).trim() || base.serverName,
       notes: String(raw.notes || ''),
       preferredScriptId: String(raw.preferredScriptId || ''),
+      dailyLogin: raw.dailyLogin === true,
+      mulingRole: raw.mulingRole === 'source' || raw.mulingRole === 'mule' ? raw.mulingRole : 'off',
+      mulingRules: normalizeDashboardMulingRules(raw.mulingRules),
       proxyId: String(raw.proxyId || ''),
       proxyProtocol: ['http', 'https', 'socks4', 'socks5'].includes(String(raw.proxyProtocol || '').toLowerCase())
         ? String(raw.proxyProtocol).toLowerCase()
@@ -16183,6 +16236,37 @@
         '</div>';
       }).join('') +
       '</div>';
+  }
+
+  function isAccountCharacterStatMaxed(character, statKey) {
+    var value = Number(character && character[statKey]);
+    var cap = Number(character && character.statMaxes && character.statMaxes[statKey]);
+    return Number.isFinite(value) && Number.isFinite(cap) && cap > 0 && value >= cap;
+  }
+
+  function formatAccountCharacterCreationDate(value) {
+    if (!value) return '—';
+    var date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+  }
+
+  function setAccountCharacterCardPortrait(el, character) {
+    if (!el) return;
+    var classType = Number(character && character.classType);
+    if (!Number.isFinite(classType) || classType <= 0) return;
+    el.style.backgroundImage = 'url(' + renderClassSprite(classType) + ')';
+    if (typeof window.renderEamPortrait !== 'function') return;
+    var skin = Number(character && character.skin);
+    var tex1 = Number(character && character.tex1);
+    var tex2 = Number(character && character.tex2);
+    window.renderEamPortrait(
+      classType,
+      Number.isFinite(skin) && skin > 0 ? skin : classType,
+      Number.isFinite(tex1) ? tex1 : 0,
+      Number.isFinite(tex2) ? tex2 : 0
+    ).then(function (portraitUrl) {
+      if (portraitUrl && el.isConnected) el.style.backgroundImage = 'url(' + portraitUrl + ')';
+    }).catch(function () {});
   }
 
   function summarizeEquipmentNames(equipment) {
@@ -16564,6 +16648,133 @@
       });
   }
 
+  function formatAccountFameNumber(value) {
+    var number = Number(value || 0);
+    return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0';
+  }
+
+  function buildAccountCharacterFameHtml(character) {
+    var fameApi = window.EAMAccountFame;
+    if (!fameApi || typeof fameApi.analyze !== 'function') {
+      return '<div class="accounts-fame-loading">Loading fame progress...</div>';
+    }
+    var analysis = fameApi.analyze(character);
+    if (!analysis) {
+      return '<div class="accounts-fame-empty">No PC-stat history was returned for this character.</div>';
+    }
+
+    function buildTrackedStats(stats) {
+      return stats.map(function (stat) {
+        var value = Number(stat.value || 0);
+        return (
+          '<div class="accounts-fame-stat' + (value > 0 ? ' has-progress' : '') + '">' +
+            '<span>' + escapeHtml(stat.name) + '</span>' +
+            '<strong>' + escapeHtml(formatAccountFameNumber(value)) + '</strong>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function buildCondition(condition) {
+      var label;
+      var progress = '';
+      if (condition.type === 'StatValue') {
+        label = analysis.statNames[condition.stat] || condition.stat;
+        progress = formatAccountFameNumber(condition.current) + ' / ' + formatAccountFameNumber(condition.threshold);
+      } else if (condition.type === 'MaxedStat') {
+        label = 'Max ' + String(condition.stat || 'stat');
+        progress = condition.complete ? 'Maxed' : 'Not maxed';
+      } else if (condition.type === 'FirstCharacter') {
+        label = 'First character';
+        progress = condition.complete ? 'Complete' : 'Incomplete';
+      } else {
+        label = condition.stat || condition.type || 'Requirement';
+        progress = condition.complete ? 'Complete' : 'Incomplete';
+      }
+      return (
+        '<div class="accounts-fame-condition' + (condition.complete ? ' complete' : '') + '">' +
+          '<span>' + escapeHtml(label) + '</span>' +
+          '<strong>' + escapeHtml(progress) + '</strong>' +
+        '</div>'
+      );
+    }
+
+    function buildGoal(goal) {
+      var rewards = [];
+      if (Number(goal.absoluteBonus) > 0) rewards.push('+' + formatAccountFameNumber(goal.absoluteBonus) + ' fame');
+      if (Number(goal.relativeBonus) > 0) rewards.push('+' + formatAccountFameNumber(goal.relativeBonus) + '%');
+      return (
+        '<div class="accounts-fame-goal">' +
+          '<div class="accounts-fame-goal-head">' +
+            '<span>' + escapeHtml(goal.name) + '</span>' +
+            '<strong>' + escapeHtml(rewards.join(' + ') || 'Bonus') + '</strong>' +
+          '</div>' +
+          '<div class="accounts-fame-conditions">' + goal.conditions.map(buildCondition).join('') + '</div>' +
+        '</div>'
+      );
+    }
+
+    var groupsHtml = analysis.groups.map(function (group) {
+      var earnedCount = group.categories.filter(function (category) {
+        return category.achievedEntries.length > 0;
+      }).length;
+      var categoriesHtml = group.categories.map(function (category) {
+        var earnedRewards = [];
+        if (Number(category.absoluteBonus) > 0) earnedRewards.push('+' + formatAccountFameNumber(category.absoluteBonus) + ' fame');
+        if (Number(category.relativeBonus) > 0) earnedRewards.push('+' + formatAccountFameNumber(category.relativeBonus) + '%');
+        var achievedText = category.highestAchieved
+          ? ('Earned: ' + category.highestAchieved)
+          : 'No bonus earned yet';
+        return (
+          '<details class="accounts-fame-category">' +
+            '<summary>' +
+              '<span><strong>' + escapeHtml(category.name) + '</strong><small>' + escapeHtml(achievedText) + '</small></span>' +
+              '<em>' + escapeHtml(earnedRewards.join(' + ') || '0 bonus') + '</em>' +
+            '</summary>' +
+            '<div class="accounts-fame-category-body">' +
+              (category.nextGoals.length
+                ? '<div class="accounts-fame-next-label">Next progress</div>' + category.nextGoals.map(buildGoal).join('')
+                : '<div class="accounts-fame-complete">All bonuses in this category are complete.</div>') +
+            '</div>' +
+          '</details>'
+        );
+      }).join('');
+      return (
+        '<details class="accounts-fame-group">' +
+          '<summary><span>' + escapeHtml(group.name) + '</span><small>' + earnedCount + ' / ' + group.categories.length + ' categories earning bonuses</small></summary>' +
+          '<div class="accounts-fame-categories">' + categoriesHtml + '</div>' +
+        '</details>'
+      );
+    }).join('');
+
+    var earnedFame = Number(analysis.absoluteBonus || 0) + Number(analysis.relativeFame || 0);
+    return (
+      '<div class="accounts-fame-summary">' +
+        '<div class="accounts-fame-summary-tile"><span>Current Fame</span><strong>' + escapeHtml(formatAccountFameNumber(analysis.currentFame)) + '</strong></div>' +
+        '<div class="accounts-fame-summary-tile"><span>Earned Death Bonus</span><strong>+' + escapeHtml(formatAccountFameNumber(earnedFame)) + '</strong><small>+' + escapeHtml(formatAccountFameNumber(analysis.absoluteBonus)) + ' flat + ' + escapeHtml(formatAccountFameNumber(analysis.relativeBonus)) + '%</small></div>' +
+        '<div class="accounts-fame-summary-tile predicted"><span>Predicted Fame on Death</span><strong>' + escapeHtml(formatAccountFameNumber(analysis.predictedFame)) + '</strong></div>' +
+      '</div>' +
+      '<div class="accounts-fame-panels">' +
+        '<details class="accounts-fame-panel" open>' +
+          '<summary>Fame bonus breakdown</summary>' +
+          '<div class="accounts-fame-panel-body accounts-fame-groups">' + groupsHtml + '</div>' +
+        '</details>' +
+        '<details class="accounts-fame-panel">' +
+          '<summary>Dungeon progress <span>' + analysis.dungeons.filter(function (stat) { return stat.value > 0; }).length + ' tracked</span></summary>' +
+          '<div class="accounts-fame-panel-body accounts-fame-stat-grid">' + buildTrackedStats(analysis.dungeons) + '</div>' +
+        '</details>' +
+        '<details class="accounts-fame-panel">' +
+          '<summary>Other PC stats <span>' + analysis.otherStats.length + ' tracked</span></summary>' +
+          '<div class="accounts-fame-panel-body accounts-fame-stat-grid">' + buildTrackedStats(analysis.otherStats) + '</div>' +
+        '</details>' +
+      '</div>'
+    );
+  }
+
+  window.addEventListener('eam-account-fame-ready', function () {
+    if (activeTab === 'accounts') renderAccountsOverview();
+  });
+
   function renderAccountsOverview() {
     if (!accountsOverviewSummaryEl || !accountsOverviewStatusEl || !accountsCharactersListEl || !accountsCharactersEmptyEl || !accountsCharacterDetailEl) return;
     var account = getSelectedDashboardAccount();
@@ -16659,16 +16870,23 @@
       if (character.seasonal) badges.push('Seasonal');
       if (character.dead) badges.push('Dead');
       btn.innerHTML =
-        '<div class="account-character-card-top">' +
-          '<span class="account-character-card-name">' + escapeHtml(String(character.className || character.classTypeHex || 'Character')) + '</span>' +
-          '<span class="account-character-card-badge">' + escapeHtml(badges.join(' • ')) + '</span>' +
-        '</div>' +
-        '<div class="account-character-card-meta">' +
-          '<span>Fame ' + escapeHtml(String(character.fame || 0)) + '</span>' +
-          '<span>HP ' + escapeHtml(String(character.hp || 0)) + '/' + escapeHtml(String(character.maxHp || 0)) + '</span>' +
-          '<span>ID ' + escapeHtml(String(character.charId || 0)) + '</span>' +
-        '</div>' +
-        '<div class="account-character-card-equipment">' + buildEquipmentSpriteStripHtml(character.equipment) + '</div>';
+        '<div class="account-character-card-main">' +
+          '<div class="account-character-card-portrait" aria-hidden="true"></div>' +
+          '<div class="account-character-card-equipment-column">' +
+            '<span class="account-character-card-name">' + escapeHtml(String(character.className || character.classTypeHex || 'Character')) + '</span>' +
+            '<div class="account-character-card-equipment">' + buildEquipmentSpriteStripHtml(character.equipment) + '</div>' +
+          '</div>' +
+          '<div class="account-character-card-content">' +
+            '<div class="account-character-card-top">' +
+              '<span class="account-character-card-badge">' + escapeHtml(badges.join(' • ')) + '</span>' +
+            '</div>' +
+            '<div class="account-character-card-meta">' +
+              '<span>Fame ' + escapeHtml(String(character.fame || 0)) + '</span>' +
+              '<span>HP ' + escapeHtml(String(character.hp || 0)) + '/' + escapeHtml(String(character.maxHp || 0)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      setAccountCharacterCardPortrait(btn.querySelector('.account-character-card-portrait'), character);
       btn.addEventListener('click', function () {
         selectedAccountCharacterIdByAccountId[account.id] = Number(character.charId);
         renderAccountsOverview();
@@ -16681,44 +16899,34 @@
       return;
     }
 
-    var slotLabels = ['Weapon', 'Ability', 'Armor', 'Ring'];
-    var equipmentHtml = '';
-    (selectedCharacter.equipment || []).forEach(function (item, index) {
-      var isEmpty = !item || Number(item.objectType) < 0;
-      equipmentHtml +=
-        '<div class="accounts-equipment-slot">' +
-          '<div class="accounts-equipment-label">' + escapeHtml(slotLabels[index] || ('Slot ' + String(index + 1))) + '</div>' +
-          '<div class="accounts-equipment-visual">' + buildItemSpriteHtml(item) + '</div>' +
-          (isEmpty ? '<div class="accounts-equipment-empty-note">Empty</div>' : '') +
-        '</div>';
-    });
-
     var stats = [
-      { label: 'HP', value: String(selectedCharacter.hp || 0) + ' / ' + String(selectedCharacter.maxHp || 0) },
-      { label: 'MP', value: String(selectedCharacter.mp || 0) + ' / ' + String(selectedCharacter.maxMp || 0) },
+      { label: 'HP', value: String(selectedCharacter.hp || 0) + ' / ' + String(selectedCharacter.maxHp || 0), statKey: 'maxHp' },
+      { label: 'MP', value: String(selectedCharacter.mp || 0) + ' / ' + String(selectedCharacter.maxMp || 0), statKey: 'maxMp' },
       { label: 'Fame', value: String(selectedCharacter.fame || 0) },
       { label: 'Exp', value: String(selectedCharacter.exp || 0) },
-      { label: 'Attack', value: String(selectedCharacter.attack || 0) },
-      { label: 'Defense', value: String(selectedCharacter.defense || 0) },
-      { label: 'Speed', value: String(selectedCharacter.speed || 0) },
-      { label: 'Dexterity', value: String(selectedCharacter.dexterity || 0) },
-      { label: 'Vitality', value: String(selectedCharacter.vitality || 0) },
-      { label: 'Wisdom', value: String(selectedCharacter.wisdom || 0) },
+      { label: 'Attack', value: String(selectedCharacter.attack || 0), statKey: 'attack' },
+      { label: 'Defense', value: String(selectedCharacter.defense || 0), statKey: 'defense' },
+      { label: 'Speed', value: String(selectedCharacter.speed || 0), statKey: 'speed' },
+      { label: 'Dexterity', value: String(selectedCharacter.dexterity || 0), statKey: 'dexterity' },
+      { label: 'Vitality', value: String(selectedCharacter.vitality || 0), statKey: 'vitality' },
+      { label: 'Wisdom', value: String(selectedCharacter.wisdom || 0), statKey: 'wisdom' },
     ];
     var statsHtml = stats.map(function (stat) {
       return (
         '<div class="accounts-stat-tile">' +
           '<div class="accounts-stat-label">' + escapeHtml(stat.label) + '</div>' +
-          '<div class="accounts-stat-value">' + escapeHtml(stat.value) + '</div>' +
+          '<div class="accounts-stat-value' + (stat.statKey && isAccountCharacterStatMaxed(selectedCharacter, stat.statKey) ? ' stat-maxed' : '') + '">' + escapeHtml(stat.value) + '</div>' +
         '</div>'
       );
     }).join('');
     var inventoryHtml = buildInventorySpriteStripHtml(selectedCharacter.inventory, selectedCharacter.backpacks);
+    var fameHtml = buildAccountCharacterFameHtml(selectedCharacter);
 
     var pills = [
       '<span class="accounts-character-pill">Level ' + escapeHtml(String(selectedCharacter.level || 0)) + '</span>',
       '<span class="accounts-character-pill">Fame ' + escapeHtml(String(selectedCharacter.fame || 0)) + '</span>',
       '<span class="accounts-character-pill">Char ID ' + escapeHtml(String(selectedCharacter.charId || 0)) + '</span>',
+      '<span class="accounts-character-pill">Created ' + escapeHtml(formatAccountCharacterCreationDate(selectedCharacter.creationDate)) + '</span>',
     ];
     if (selectedCharacter.seasonal) pills.push('<span class="accounts-character-pill">Seasonal</span>');
     if (selectedCharacter.dead) pills.push('<span class="accounts-character-pill warn">Dead</span>');
@@ -16732,12 +16940,12 @@
         '<div class="accounts-character-badges">' + pills.join('') + '</div>' +
       '</div>' +
       '<div class="accounts-character-section">' +
-        '<div class="accounts-character-section-title">Equipped</div>' +
-        '<div class="accounts-equipment-grid">' + equipmentHtml + '</div>' +
-      '</div>' +
-      '<div class="accounts-character-section">' +
         '<div class="accounts-character-section-title">Stats</div>' +
         '<div class="accounts-stats-grid">' + statsHtml + '</div>' +
+      '</div>' +
+      '<div class="accounts-character-section">' +
+        '<div class="accounts-character-section-title">Fame on Death</div>' +
+        fameHtml +
       '</div>' +
       '<div class="accounts-character-section">' +
         '<div class="accounts-character-section-title">Inventory</div>' +
@@ -17025,16 +17233,23 @@
       if (character.seasonal) badges.push('Seasonal');
       if (character.dead) badges.push('Dead');
       btn.innerHTML =
-        '<div class="account-character-card-top">' +
-          '<span class="account-character-card-name">' + escapeHtml(String(character.className || character.classTypeHex || 'Character')) + '</span>' +
-          '<span class="account-character-card-badge">' + escapeHtml(badges.join(' • ')) + '</span>' +
-        '</div>' +
-        '<div class="account-character-card-meta">' +
-          '<span>Fame ' + escapeHtml(String(character.fame || 0)) + '</span>' +
-          '<span>HP ' + escapeHtml(String(character.hp || 0)) + '/' + escapeHtml(String(character.maxHp || 0)) + '</span>' +
-          '<span>ID ' + escapeHtml(String(character.charId || 0)) + '</span>' +
-        '</div>' +
-        '<div class="account-character-card-equipment">' + buildEquipmentSpriteStripHtml(character.equipment) + '</div>';
+        '<div class="account-character-card-main">' +
+          '<div class="account-character-card-portrait" aria-hidden="true"></div>' +
+          '<div class="account-character-card-equipment-column">' +
+            '<span class="account-character-card-name">' + escapeHtml(String(character.className || character.classTypeHex || 'Character')) + '</span>' +
+            '<div class="account-character-card-equipment">' + buildEquipmentSpriteStripHtml(character.equipment) + '</div>' +
+          '</div>' +
+          '<div class="account-character-card-content">' +
+            '<div class="account-character-card-top">' +
+              '<span class="account-character-card-badge">' + escapeHtml(badges.join(' • ')) + '</span>' +
+            '</div>' +
+            '<div class="account-character-card-meta">' +
+              '<span>Fame ' + escapeHtml(String(character.fame || 0)) + '</span>' +
+              '<span>HP ' + escapeHtml(String(character.hp || 0)) + '/' + escapeHtml(String(character.maxHp || 0)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      setAccountCharacterCardPortrait(btn.querySelector('.account-character-card-portrait'), character);
       btn.addEventListener('click', function () {
         selectedAccountCharacterIdByAccountId[account.id] = Number(character.charId);
         renderAccountsOverview();
@@ -17047,44 +17262,34 @@
       return;
     }
 
-    var slotLabels = ['Weapon', 'Ability', 'Armor', 'Ring'];
-    var equipmentHtml = '';
-    (selectedCharacter.equipment || []).forEach(function (item, index) {
-      var isEmpty = !item || Number(item.objectType) < 0;
-      equipmentHtml +=
-        '<div class="accounts-equipment-slot">' +
-          '<div class="accounts-equipment-label">' + escapeHtml(slotLabels[index] || ('Slot ' + String(index + 1))) + '</div>' +
-          '<div class="accounts-equipment-visual">' + buildItemSpriteHtml(item) + '</div>' +
-          (isEmpty ? '<div class="accounts-equipment-empty-note">Empty</div>' : '') +
-        '</div>';
-    });
-
     var stats = [
-      { label: 'HP', value: String(selectedCharacter.hp || 0) + ' / ' + String(selectedCharacter.maxHp || 0) },
-      { label: 'MP', value: String(selectedCharacter.mp || 0) + ' / ' + String(selectedCharacter.maxMp || 0) },
+      { label: 'HP', value: String(selectedCharacter.hp || 0) + ' / ' + String(selectedCharacter.maxHp || 0), statKey: 'maxHp' },
+      { label: 'MP', value: String(selectedCharacter.mp || 0) + ' / ' + String(selectedCharacter.maxMp || 0), statKey: 'maxMp' },
       { label: 'Fame', value: String(selectedCharacter.fame || 0) },
       { label: 'Exp', value: String(selectedCharacter.exp || 0) },
-      { label: 'Attack', value: String(selectedCharacter.attack || 0) },
-      { label: 'Defense', value: String(selectedCharacter.defense || 0) },
-      { label: 'Speed', value: String(selectedCharacter.speed || 0) },
-      { label: 'Dexterity', value: String(selectedCharacter.dexterity || 0) },
-      { label: 'Vitality', value: String(selectedCharacter.vitality || 0) },
-      { label: 'Wisdom', value: String(selectedCharacter.wisdom || 0) },
+      { label: 'Attack', value: String(selectedCharacter.attack || 0), statKey: 'attack' },
+      { label: 'Defense', value: String(selectedCharacter.defense || 0), statKey: 'defense' },
+      { label: 'Speed', value: String(selectedCharacter.speed || 0), statKey: 'speed' },
+      { label: 'Dexterity', value: String(selectedCharacter.dexterity || 0), statKey: 'dexterity' },
+      { label: 'Vitality', value: String(selectedCharacter.vitality || 0), statKey: 'vitality' },
+      { label: 'Wisdom', value: String(selectedCharacter.wisdom || 0), statKey: 'wisdom' },
     ];
     var statsHtml = stats.map(function (stat) {
       return (
         '<div class="accounts-stat-tile">' +
           '<div class="accounts-stat-label">' + escapeHtml(stat.label) + '</div>' +
-          '<div class="accounts-stat-value">' + escapeHtml(stat.value) + '</div>' +
+          '<div class="accounts-stat-value' + (stat.statKey && isAccountCharacterStatMaxed(selectedCharacter, stat.statKey) ? ' stat-maxed' : '') + '">' + escapeHtml(stat.value) + '</div>' +
         '</div>'
       );
     }).join('');
     var inventoryHtml = buildInventorySpriteStripHtml(selectedCharacter.inventory, selectedCharacter.backpacks);
+    var fameHtml = buildAccountCharacterFameHtml(selectedCharacter);
 
     var pills = [
       '<span class="accounts-character-pill">Level ' + escapeHtml(String(selectedCharacter.level || 0)) + '</span>',
       '<span class="accounts-character-pill">Fame ' + escapeHtml(String(selectedCharacter.fame || 0)) + '</span>',
       '<span class="accounts-character-pill">Char ID ' + escapeHtml(String(selectedCharacter.charId || 0)) + '</span>',
+      '<span class="accounts-character-pill">Created ' + escapeHtml(formatAccountCharacterCreationDate(selectedCharacter.creationDate)) + '</span>',
     ];
     if (selectedCharacter.seasonal) pills.push('<span class="accounts-character-pill">Seasonal</span>');
     if (selectedCharacter.dead) pills.push('<span class="accounts-character-pill warn">Dead</span>');
@@ -17098,12 +17303,12 @@
         '<div class="accounts-character-badges">' + pills.join('') + '</div>' +
       '</div>' +
       '<div class="accounts-character-section">' +
-        '<div class="accounts-character-section-title">Equipped</div>' +
-        '<div class="accounts-equipment-grid">' + equipmentHtml + '</div>' +
-      '</div>' +
-      '<div class="accounts-character-section">' +
         '<div class="accounts-character-section-title">Stats</div>' +
         '<div class="accounts-stats-grid">' + statsHtml + '</div>' +
+      '</div>' +
+      '<div class="accounts-character-section">' +
+        '<div class="accounts-character-section-title">Fame on Death</div>' +
+        fameHtml +
       '</div>' +
       '<div class="accounts-character-section">' +
         '<div class="accounts-character-section-title">Inventory</div>' +
@@ -17409,6 +17614,151 @@
     renderAccountsList();
   }
 
+  function parseMulingTierInput(input) {
+    return normalizeMulingNumberList(String(input && input.value || '').split(/[\s,]+/).filter(Boolean), 0, 20);
+  }
+
+  function mulingItemLabel(objectType) {
+    var record = getEamItemRecordStrict(objectType);
+    return String(record && record[0] || ('Object ' + objectType)) + ' [' + objectType + ']';
+  }
+
+  var mulingItemSearchIndex = [];
+  var mulingItemSearchResults = [];
+  var mulingItemSearchHighlight = 0;
+  var mulingItemSearchReady = false;
+  var mulingItemSearchLoading = false;
+
+  function resolveMulingItemInput(rawValue) {
+    return MULING_ITEM_SEARCH
+      ? MULING_ITEM_SEARCH.resolve(mulingItemSearchIndex, rawValue)
+      : null;
+  }
+
+  function hideMulingItemResults() {
+    mulingItemSearchResults = [];
+    mulingItemSearchHighlight = 0;
+    if (accountsMulingItemResults) {
+      accountsMulingItemResults.hidden = true;
+      accountsMulingItemResults.innerHTML = '';
+    }
+    if (accountsMulingItemInput) {
+      accountsMulingItemInput.setAttribute('aria-expanded', 'false');
+      accountsMulingItemInput.removeAttribute('aria-activedescendant');
+    }
+  }
+
+  function renderMulingItemResults() {
+    if (!accountsMulingItemResults || !accountsMulingItemInput || accountsMulingItemInput.disabled) {
+      hideMulingItemResults();
+      return;
+    }
+    var query = String(accountsMulingItemInput.value || '').trim();
+    if (!query) {
+      hideMulingItemResults();
+      return;
+    }
+    if (!mulingItemSearchReady) {
+      accountsMulingItemResults.innerHTML =
+        '<div class="accounts-muling-item-search-message">Loading item catalog...</div>';
+      accountsMulingItemResults.hidden = false;
+      accountsMulingItemInput.setAttribute('aria-expanded', 'true');
+      return;
+    }
+    mulingItemSearchResults = MULING_ITEM_SEARCH
+      ? MULING_ITEM_SEARCH.search(mulingItemSearchIndex, query, 8)
+      : [];
+    if (mulingItemSearchHighlight >= mulingItemSearchResults.length) mulingItemSearchHighlight = 0;
+    if (!mulingItemSearchResults.length) {
+      accountsMulingItemResults.innerHTML =
+        '<div class="accounts-muling-item-search-message">No matching tradeable items. You can still add a valid numeric object type.</div>';
+    } else {
+      accountsMulingItemResults.innerHTML = mulingItemSearchResults.map(function (item, index) {
+        var active = index === mulingItemSearchHighlight;
+        return '<button type="button" id="accounts-muling-item-result-' + index + '"' +
+          ' class="accounts-muling-item-result' + (active ? ' active' : '') + '"' +
+          ' role="option" aria-selected="' + (active ? 'true' : 'false') + '"' +
+          ' data-muling-item-result="' + index + '">' +
+          '<span class="accounts-muling-item-result-name">' + escapeHtml(item.name) + '</span>' +
+          '<span class="accounts-muling-item-result-id">' + item.objectType +
+          ' / 0x' + item.objectType.toString(16).toUpperCase().padStart(4, '0') + '</span></button>';
+      }).join('');
+    }
+    accountsMulingItemResults.hidden = false;
+    accountsMulingItemInput.setAttribute('aria-expanded', 'true');
+    if (mulingItemSearchResults.length) {
+      accountsMulingItemInput.setAttribute(
+        'aria-activedescendant',
+        'accounts-muling-item-result-' + mulingItemSearchHighlight,
+      );
+    } else {
+      accountsMulingItemInput.removeAttribute('aria-activedescendant');
+    }
+  }
+
+  function initializeMulingItemSearch() {
+    if (mulingItemSearchLoading || mulingItemSearchReady || !MULING_ITEM_SEARCH) return;
+    mulingItemSearchLoading = true;
+    var finish = function () {
+      mulingItemSearchIndex = MULING_ITEM_SEARCH.createIndex(EAM_ITEMS);
+      mulingItemSearchReady = true;
+      mulingItemSearchLoading = false;
+      if (accountsMulingItemInput && document.activeElement === accountsMulingItemInput) {
+        renderMulingItemResults();
+      }
+    };
+    if (window._eamPromise && typeof window._eamPromise.then === 'function') {
+      window._eamPromise.then(finish, finish);
+    } else {
+      finish();
+    }
+  }
+
+  function chooseMulingItemSearchResult(index) {
+    var item = mulingItemSearchResults[index];
+    if (!item || !accountsMulingItemInput) return null;
+    accountsMulingItemInput.value = item.label;
+    hideMulingItemResults();
+    return item.objectType;
+  }
+
+  function renderMulingSelectedItems(account, fieldDisabled) {
+    if (!accountsMulingSelectedItems) return;
+    var itemTypes = account && account.mulingRules ? account.mulingRules.itemTypes : [];
+    if (!itemTypes.length) {
+      accountsMulingSelectedItems.innerHTML = '<span class="accounts-field-hint">No exact items selected.</span>';
+      return;
+    }
+    accountsMulingSelectedItems.innerHTML = itemTypes.map(function (objectType) {
+      return '<span class="accounts-muling-item-chip">' + escapeHtml(mulingItemLabel(objectType)) +
+        '<button type="button" data-remove-muling-item="' + objectType + '"' + (fieldDisabled ? ' disabled' : '') + '>×</button></span>';
+    }).join('');
+  }
+
+  function renderSelectedAccountMulingStatus() {
+    var account = getSelectedDashboardAccount();
+    var entry = account && mulingReport && mulingReport.accounts ? mulingReport.accounts[account.id] : null;
+    if (accountsMulingStatus) {
+      accountsMulingStatus.textContent = entry
+        ? String(entry.message || entry.status || 'No status available.')
+        : 'No muling cycle has run for this account yet.';
+      accountsMulingStatus.classList.toggle('error', !!(entry && entry.status === 'failed'));
+    }
+    if (accountsMulingCapacity) {
+      var capacity = entry && entry.capacity;
+      accountsMulingCapacity.textContent = capacity
+        ? ('Free space — inventory: ' + capacity.inventoryFree + ', vault: ' + capacity.vaultFree +
+          ', potion storage: ' + capacity.potionFree + (capacity.full ? ' · FULL' : ''))
+        : '';
+    }
+    var cycleActive = !!(mulingReport && (mulingReport.running || mulingReport.stopping));
+    if (accountsMulingRunBtn) accountsMulingRunBtn.disabled = cycleActive;
+    if (accountsMulingStopBtn) {
+      accountsMulingStopBtn.disabled = !mulingReport || !mulingReport.running || !!mulingReport.stopping;
+      accountsMulingStopBtn.textContent = mulingReport && mulingReport.stopping ? 'Stopping...' : 'Stop Muling';
+    }
+  }
+
   function isSelectedAccountRunning() {
     var account = getSelectedDashboardAccount();
     if (!account || !gameConnected || !lastPlayerData) return false;
@@ -17458,6 +17808,46 @@
       accountsPasswordVisibilityBtn.disabled = fieldDisabled;
       accountsPasswordVisibilityBtn.textContent = accountsPasswordVisible && !fieldDisabled ? 'Hide' : 'Show';
     }
+    if (accountsDailyLoginInput) {
+      accountsDailyLoginInput.disabled = fieldDisabled;
+      accountsDailyLoginInput.checked = !!(account && account.dailyLogin);
+    }
+    var mulingRole = account ? String(account.mulingRole || 'off') : 'off';
+    var mulingRules = account ? normalizeDashboardMulingRules(account.mulingRules) : normalizeDashboardMulingRules(null);
+    if (accountsMulingRoleSelect) {
+      accountsMulingRoleSelect.disabled = fieldDisabled;
+      accountsMulingRoleSelect.value = mulingRole;
+    }
+    if (accountsMulingRoleHint) {
+      accountsMulingRoleHint.textContent = mulingRole === 'source'
+        ? 'This account dumps only the selected item rules to matching mules.'
+        : mulingRole === 'mule'
+          ? 'This mule accepts only the selected item rules and auto-organizes its storage.'
+          : 'This account is not used by automated muling.';
+    }
+    if (accountsMulingRulesEl) {
+      accountsMulingRulesEl.style.opacity = mulingRole === 'off' ? '0.55' : '';
+    }
+    document.querySelectorAll('[data-muling-potion]').forEach(function (input) {
+      input.disabled = fieldDisabled || mulingRole === 'off';
+      input.checked = mulingRules.potions.indexOf(input.getAttribute('data-muling-potion')) >= 0;
+    });
+    [
+      [accountsMulingWeaponTiers, mulingRules.weaponTiers],
+      [accountsMulingAbilityTiers, mulingRules.abilityTiers],
+      [accountsMulingArmorTiers, mulingRules.armorTiers],
+      [accountsMulingRingTiers, mulingRules.ringTiers],
+    ].forEach(function (pair) {
+      if (!pair[0]) return;
+      pair[0].disabled = fieldDisabled || mulingRole === 'off';
+      pair[0].value = pair[1].join(', ');
+    });
+    if (accountsMulingItemInput) accountsMulingItemInput.disabled = fieldDisabled || mulingRole === 'off';
+    if (accountsMulingItemAddBtn) accountsMulingItemAddBtn.disabled = fieldDisabled || mulingRole === 'off';
+    initializeMulingItemSearch();
+    if (accountsMulingItemInput && accountsMulingItemInput.disabled) hideMulingItemResults();
+    renderMulingSelectedItems(account, fieldDisabled || mulingRole === 'off');
+    renderSelectedAccountMulingStatus();
     if (accountsServerSelect) {
       accountsServerSelect.disabled = fieldDisabled;
       if (account) accountsServerSelect.value = String(account.serverName || accountsServerSelect.value || 'USWest');
@@ -17536,6 +17926,7 @@
       .then(function (r) { if (!r.ok) throw new Error('Failed to load accounts'); return r.json(); })
       .then(function (data) {
         dashboardAccounts = Array.isArray(data && data.accounts) ? data.accounts.map(normalizeDashboardAccount) : [];
+        mulingReport = data && data.mulingReport && typeof data.mulingReport === 'object' ? data.mulingReport : null;
         accountOverviewById = Object.create(null);
         accountOverviewNoticeById = Object.create(null);
         pruneDashboardAccountOverviewState();
@@ -17572,14 +17963,22 @@
   }
 
   function saveDashboardAccounts(throwOnError, skipAutoLoad) {
+    var submittedAccounts = dashboardAccounts;
     return fetch('/api/accounts/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accounts: dashboardAccounts }),
+      body: JSON.stringify({ accounts: submittedAccounts }),
     })
       .then(function (r) { if (!r.ok) throw new Error('Failed to save accounts'); return r.json(); })
       .then(function (data) {
-        dashboardAccounts = Array.isArray(data && data.accounts) ? data.accounts.map(normalizeDashboardAccount) : dashboardAccounts;
+        var returnedAccounts = Array.isArray(data && data.accounts) ? data.accounts : null;
+        if (returnedAccounts && returnedAccounts.some(function (account) {
+          return !Object.prototype.hasOwnProperty.call(account || {}, 'mulingRole')
+            || !Object.prototype.hasOwnProperty.call(account || {}, 'mulingRules');
+        })) {
+          throw new Error('The dashboard server is outdated. Restart Hive before saving or running muling. Your unsaved settings were kept in this window.');
+        }
+        dashboardAccounts = returnedAccounts ? returnedAccounts.map(normalizeDashboardAccount) : dashboardAccounts;
         pruneDashboardAccountOverviewState();
         if (!selectedAccountId && dashboardAccounts[0]) selectedAccountId = dashboardAccounts[0].id;
         setAccountsDirty(false, 'Accounts saved.');
@@ -17587,9 +17986,10 @@
         if (!skipAutoLoad) maybeLoadSelectedDashboardAccountOverview();
     
       })
-      .catch(function () {
-        setAccountsStatus('Failed to save accounts.', true);
-        if (throwOnError) throw new Error('Failed to save accounts.');
+      .catch(function (error) {
+        var message = String(error && error.message || 'Failed to save accounts.');
+        setAccountsStatus(message, true);
+        if (throwOnError) throw error instanceof Error ? error : new Error(message);
       });
   }
 
@@ -19178,6 +19578,20 @@
     account.label = String(accountsAliasInput && accountsAliasInput.value || '');
     account.email = String(accountsEmailInput && accountsEmailInput.value || '').trim();
     account.password = String(accountsPasswordInput && accountsPasswordInput.value || '');
+    account.dailyLogin = !!(accountsDailyLoginInput && accountsDailyLoginInput.checked);
+    account.mulingRole = String(accountsMulingRoleSelect && accountsMulingRoleSelect.value || 'off');
+    var selectedPotions = [];
+    document.querySelectorAll('[data-muling-potion]:checked').forEach(function (input) {
+      selectedPotions.push(input.getAttribute('data-muling-potion'));
+    });
+    account.mulingRules = normalizeDashboardMulingRules({
+      potions: selectedPotions,
+      weaponTiers: parseMulingTierInput(accountsMulingWeaponTiers),
+      abilityTiers: parseMulingTierInput(accountsMulingAbilityTiers),
+      armorTiers: parseMulingTierInput(accountsMulingArmorTiers),
+      ringTiers: parseMulingTierInput(accountsMulingRingTiers),
+      itemTypes: account.mulingRules && account.mulingRules.itemTypes,
+    });
     account.serverName = String(accountsServerSelect && accountsServerSelect.value || account.serverName || 'USWest').trim() || 'USWest';
     account.notes = String(accountsNotesInput && accountsNotesInput.value || '');
     account.proxyId = String(accountsProxyIdSelect && accountsProxyIdSelect.value || '').trim();
@@ -19215,6 +19629,186 @@
   });
   if (accountsServerSelect) {
     accountsServerSelect.addEventListener('change', updateSelectedDashboardAccountFromEditor);
+  }
+  if (accountsDailyLoginInput) {
+    accountsDailyLoginInput.addEventListener('change', updateSelectedDashboardAccountFromEditor);
+  }
+  if (accountsMulingRoleSelect) {
+    accountsMulingRoleSelect.addEventListener('change', function () {
+      updateSelectedDashboardAccountFromEditor();
+      renderAccountsEditor();
+    });
+  }
+  [accountsMulingWeaponTiers, accountsMulingAbilityTiers, accountsMulingArmorTiers, accountsMulingRingTiers]
+    .forEach(function (input) {
+      if (!input) return;
+      input.addEventListener('input', updateSelectedDashboardAccountFromEditor);
+      input.addEventListener('change', updateSelectedDashboardAccountFromEditor);
+    });
+  document.querySelectorAll('[data-muling-potion]').forEach(function (input) {
+    input.addEventListener('change', updateSelectedDashboardAccountFromEditor);
+  });
+
+  function addSelectedMulingItem(preferredObjectType) {
+    var account = getSelectedDashboardAccount();
+    if (!account || account.mulingRole === 'off') return;
+    var objectType = Number.isInteger(preferredObjectType)
+      ? preferredObjectType
+      : resolveMulingItemInput(accountsMulingItemInput && accountsMulingItemInput.value);
+    if (!Number.isInteger(objectType) || objectType <= 0 || objectType > 65535) {
+      if (accountsMulingStatus) accountsMulingStatus.textContent = 'Choose a known item or enter a valid decimal/hex object type.';
+      return;
+    }
+    account.mulingRules = normalizeDashboardMulingRules(account.mulingRules);
+    if (account.mulingRules.itemTypes.indexOf(objectType) < 0) account.mulingRules.itemTypes.push(objectType);
+    account.mulingRules.itemTypes.sort(function (a, b) { return a - b; });
+    account.updatedAt = Date.now();
+    if (accountsMulingItemInput) accountsMulingItemInput.value = '';
+    hideMulingItemResults();
+    setAccountsDirty(true, 'Unsaved muling changes.');
+    renderMulingSelectedItems(account, false);
+  }
+
+  if (accountsMulingItemAddBtn) accountsMulingItemAddBtn.addEventListener('click', addSelectedMulingItem);
+  if (accountsMulingItemInput) {
+    accountsMulingItemInput.addEventListener('focus', function () {
+      initializeMulingItemSearch();
+      renderMulingItemResults();
+    });
+    accountsMulingItemInput.addEventListener('input', function () {
+      mulingItemSearchHighlight = 0;
+      renderMulingItemResults();
+    });
+    accountsMulingItemInput.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (!mulingItemSearchResults.length) {
+          renderMulingItemResults();
+          return;
+        }
+        event.preventDefault();
+        var direction = event.key === 'ArrowDown' ? 1 : -1;
+        mulingItemSearchHighlight =
+          (mulingItemSearchHighlight + direction + mulingItemSearchResults.length) % mulingItemSearchResults.length;
+        renderMulingItemResults();
+        return;
+      }
+      if (event.key === 'Escape') {
+        hideMulingItemResults();
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        var highlighted = mulingItemSearchResults[mulingItemSearchHighlight];
+        addSelectedMulingItem(highlighted ? highlighted.objectType : undefined);
+      }
+    });
+  }
+  if (accountsMulingItemResults) {
+    accountsMulingItemResults.addEventListener('mousemove', function (event) {
+      var result = event.target.closest('[data-muling-item-result]');
+      if (!result) return;
+      var index = Number(result.getAttribute('data-muling-item-result'));
+      if (!Number.isInteger(index) || index === mulingItemSearchHighlight) return;
+      mulingItemSearchHighlight = index;
+      renderMulingItemResults();
+    });
+    accountsMulingItemResults.addEventListener('click', function (event) {
+      var result = event.target.closest('[data-muling-item-result]');
+      if (!result) return;
+      event.preventDefault();
+      var index = Number(result.getAttribute('data-muling-item-result'));
+      if (chooseMulingItemSearchResult(index) !== null && accountsMulingItemInput) {
+        accountsMulingItemInput.focus();
+        hideMulingItemResults();
+      }
+    });
+  }
+  document.addEventListener('click', function (event) {
+    if (!event.target.closest('.accounts-muling-item-picker')) hideMulingItemResults();
+  });
+  if (accountsMulingSelectedItems) {
+    accountsMulingSelectedItems.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-remove-muling-item]');
+      var account = getSelectedDashboardAccount();
+      if (!button || !account || button.disabled) return;
+      var objectType = Number(button.getAttribute('data-remove-muling-item'));
+      account.mulingRules = normalizeDashboardMulingRules(account.mulingRules);
+      account.mulingRules.itemTypes = account.mulingRules.itemTypes.filter(function (item) { return item !== objectType; });
+      account.updatedAt = Date.now();
+      setAccountsDirty(true, 'Unsaved muling changes.');
+      renderMulingSelectedItems(account, false);
+    });
+  }
+
+  function refreshMulingStatus() {
+    if (mulingStatusTimer) {
+      clearTimeout(mulingStatusTimer);
+      mulingStatusTimer = null;
+    }
+    return fetch('/api/accounts/muling/status')
+      .then(function (response) { if (!response.ok) throw new Error('Failed to load muling status'); return response.json(); })
+      .then(function (data) {
+        mulingReport = data && data.report && typeof data.report === 'object' ? data.report : null;
+        renderSelectedAccountMulingStatus();
+        if (activeAccountsEditorTab === 'muling') {
+          mulingStatusTimer = setTimeout(refreshMulingStatus,
+            mulingReport && (mulingReport.running || mulingReport.stopping) ? 1000 : 5000);
+        }
+      })
+      .catch(function () {
+        if (accountsMulingStatus) accountsMulingStatus.textContent = 'Could not load muling status.';
+      });
+  }
+
+  if (accountsMulingRunBtn) {
+    accountsMulingRunBtn.addEventListener('click', function () {
+      updateSelectedDashboardAccountFromEditor();
+      var hasSource = dashboardAccounts.some(function (account) { return account.mulingRole === 'source'; });
+      var hasMule = dashboardAccounts.some(function (account) { return account.mulingRole === 'mule'; });
+      if (!hasSource || !hasMule) {
+        if (accountsMulingStatus) {
+          accountsMulingStatus.textContent = 'Configure and save at least one source account and one mule receiver before running muling.';
+        }
+        return;
+      }
+      accountsMulingRunBtn.disabled = true;
+      var saveFirst = accountsDirty ? saveDashboardAccounts(true, true) : Promise.resolve();
+      saveFirst.then(function () {
+        return fetch('/api/accounts/muling/run', { method: 'POST' });
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Could not start muling.');
+        if (accountsMulingStatus) accountsMulingStatus.textContent = 'Starting automated muling…';
+        mulingStatusTimer = setTimeout(refreshMulingStatus, 500);
+      }).catch(function (error) {
+        accountsMulingRunBtn.disabled = false;
+        if (accountsMulingStatus) accountsMulingStatus.textContent = error && error.message || 'Could not start muling.';
+      });
+    });
+  }
+  if (accountsMulingStopBtn) {
+    accountsMulingStopBtn.addEventListener('click', function () {
+      if (!mulingReport || !mulingReport.running || mulingReport.stopping) return;
+      accountsMulingStopBtn.disabled = true;
+      accountsMulingStopBtn.textContent = 'Stopping...';
+      if (accountsMulingStatus) accountsMulingStatus.textContent = 'Stopping automated muling and disconnecting its active accounts...';
+      fetch('/api/accounts/muling/stop', { method: 'POST' })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) throw new Error(String(data && data.error || 'Could not stop muling.'));
+            return data;
+          });
+        })
+        .then(function (data) {
+          mulingReport = data && data.report && typeof data.report === 'object' ? data.report : mulingReport;
+          renderSelectedAccountMulingStatus();
+          if (mulingStatusTimer) clearTimeout(mulingStatusTimer);
+          mulingStatusTimer = setTimeout(refreshMulingStatus, 250);
+        })
+        .catch(function (error) {
+          if (accountsMulingStatus) accountsMulingStatus.textContent = String(error && error.message || 'Could not stop muling.');
+          renderSelectedAccountMulingStatus();
+        });
+    });
   }
   // ── "Import from RotMG Exalt Launcher" button (email accounts only) ──────
   var accountsImportLauncherBtn    = document.getElementById('accounts-import-launcher-btn');

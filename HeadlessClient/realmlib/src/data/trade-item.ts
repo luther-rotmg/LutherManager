@@ -20,12 +20,17 @@ export class TradeItem implements DataPacket {
    * Whether or not the item is included in an active trade
    */
   included: boolean;
+  /**
+   * Serialized enchantment data attached to the item.
+   */
+  enchantment: string;
 
   constructor() {
     this.item = 0;
     this.slotType = 0;
     this.tradeable = false;
     this.included = false;
+    this.enchantment = '';
   }
 
   read(reader: Reader): void {
@@ -33,6 +38,7 @@ export class TradeItem implements DataPacket {
     this.slotType = reader.readInt32();
     this.tradeable = reader.readBoolean();
     this.included = reader.readBoolean();
+    this.enchantment = reader.readString();
   }
 
   write(writer: Writer): void {
@@ -40,6 +46,7 @@ export class TradeItem implements DataPacket {
     writer.writeInt32(this.slotType);
     writer.writeBoolean(this.tradeable);
     writer.writeBoolean(this.included);
+    writer.writeString(this.enchantment);
   }
 
   toString(): string {

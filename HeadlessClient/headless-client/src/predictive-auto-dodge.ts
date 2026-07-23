@@ -6,6 +6,7 @@ import {
 } from './dodge-movement-intent';
 import {
   SpaceTimeDodgePlanner,
+  type DeterministicDodgePlannerMetrics,
   type DodgePlannerMetrics,
   type DodgePlannerOptions,
   type DodgePlanningAoe,
@@ -24,6 +25,7 @@ import {
 } from './dodge-jump-limiter';
 
 export type {
+  DeterministicDodgePlannerMetrics,
   DodgePlannerMetrics,
   DodgeTrajectory,
   TimedDodgeWaypoint,
@@ -38,9 +40,13 @@ export interface AutoDodgeOptions {
   maxJumpDistance?: number;
 }
 
-export interface AutoDodgeAoeThreat extends DodgePlanningAoe {}
-
-export interface AutoDodgeEnvironment extends DodgePlanningEnvironment {}
+// `AutoDodgeAoeThreat` and `AutoDodgeEnvironment` used to exist here as empty
+// extensions of `DodgePlanningAoe` and `DodgePlanningEnvironment` respectively.
+// They created a naming fork with no semantic difference — consumers had to
+// choose between structurally-identical types, and grepping for one name missed
+// code using the other. Deleted for the LutherManager fork; use the
+// `DodgePlanning*` names directly. Any historical caller compiles against the
+// same shape via TypeScript's structural typing.
 
 /** Internal trajectory-controller state; scripts select movement intent, not this state. */
 export type DodgeSafetyState = 'normal' | 'evasive' | 'recovering';
@@ -75,8 +81,8 @@ export interface AutoDodgeSnapshot {
   jumpAllowance?: number;
   jumpStatus?: DodgeJumpStatus;
   projectiles: Iterable<CombatProjectileSnapshot>;
-  aoes: readonly AutoDodgeAoeThreat[];
-  environment: AutoDodgeEnvironment;
+  aoes: readonly DodgePlanningAoe[];
+  environment: DodgePlanningEnvironment;
 }
 
 export interface AutoDodgeState {
@@ -127,7 +133,15 @@ export interface AutoDodgeState {
   lookaheadRevision: number;
   lookaheadChanged: boolean;
   decision: string;
-  plannerMetrics: DodgePlannerMetrics;
+  /**
+   * Deterministic subset of {@link DodgePlannerMetrics} — the three wall-clock
+   * fields (`planningDurationMs`, `averagePlanningDurationMs`,
+   * `worstPlanningDurationMs`) are excluded so two byte-identical replays
+   * produce byte-identical AutoDodgeState. Live telemetry consumers (dodge
+   * viewer, dashboards) should use {@link PredictiveAutoDodgeController.getPlannerMetrics}
+   * instead, which still returns the full DodgePlannerMetrics.
+   */
+  plannerMetrics: DeterministicDodgePlannerMetrics;
 }
 
 interface CommittedPlan {
@@ -200,7 +214,7 @@ export class PredictiveAutoDodgeController {
 
   constructor(plannerOptions: DodgePlannerOptions = {}) {
     this.planner = new SpaceTimeDodgePlanner(plannerOptions);
-    this.state = emptyState(false, this.planner.getMetrics());
+    this.state = emptyState(false, this.planner.getDeterministicMetrics());
   }
 
   setEnabled(enabled: boolean, options: AutoDodgeOptions = {}): void {
@@ -253,7 +267,7 @@ export class PredictiveAutoDodgeController {
     this.lastLookaheadTarget = null;
     this.lookaheadRevision = 0;
     this.lastMovementCommandAt = null;
-    this.state = emptyState(this.enabled, this.planner.getMetrics());
+    this.state = emptyState(this.enabled, this.planner.getDeterministicMetrics());
   }
 
   getState(): AutoDodgeState {
@@ -287,7 +301,7 @@ export class PredictiveAutoDodgeController {
     this.lastLookaheadTarget = null;
     this.replanCause = 'correction';
     this.state = {
-      ...emptyState(this.enabled, this.planner.getMetrics()),
+      ...emptyState(this.enabled, this.planner.getDeterministicMetrics()),
       planRevision: this.planRevision,
       searchRevision: this.searchRevision,
       lastReplanAt: this.lastReplanAt,
@@ -313,7 +327,7 @@ export class PredictiveAutoDodgeController {
   evaluate(snapshot: AutoDodgeSnapshot): AutoDodgeState {
     this.beginEvaluation();
     if (!this.enabled) {
-      this.state = emptyState(false, this.planner.getMetrics(), snapshot.intentVelocity);
+      this.state = emptyState(false, this.planner.getDeterministicMetrics(), snapshot.intentVelocity);
       return this.state;
     }
 
@@ -754,7 +768,7 @@ export class PredictiveAutoDodgeController {
       lookaheadRevision: this.lookaheadRevision,
       lookaheadChanged,
       decision: result.decision,
-      plannerMetrics: this.planner.getMetrics(),
+      plannerMetrics: this.planner.getDeterministicMetrics(),
     };
     return this.state;
   }
@@ -811,7 +825,7 @@ export class PredictiveAutoDodgeController {
   }
 }
 
-export interface TrackedThrownAoe extends AutoDodgeAoeThreat {
+export interface TrackedThrownAoe extends DodgePlanningAoe {
   id: number;
   effectType: number;
 }
@@ -820,13 +834,13 @@ export interface TrackedThrownAoe extends AutoDodgeAoeThreat {
 export class ThrownAoeTracker {
   private readonly throws: TrackedThrownAoe[] = [];
   private readonly learnedRadius = new Map<number, number>();
-  private readonly active: TrackedThrownAoe[] = [];
+  private readonly learnedBlastDuration = new Map<number, number>();
   private nextId = 1;
 
   clear(): void {
     this.throws.length = 0;
     this.learnedRadius.clear();
-    this.active.length = 0;
+    this.learnedBlastDuration.clear();
     this.nextId = 1;
   }
 
@@ -835,9 +849,14 @@ export class ThrownAoeTracker {
     end: { x: number; y: number },
     durationSeconds: number,
     now: number,
+    blastDurationSeconds?: number,
   ): void {
     const durationMs = Math.max(0, durationSeconds * 1000);
     const normalizedType = effectType >>> 0;
+    const learnedBlastMs = this.learnedBlastDuration.get(normalizedType);
+    const explicitBlastMs = blastDurationSeconds !== undefined
+      ? Math.max(0, blastDurationSeconds * 1000)
+      : undefined;
     this.throws.push({
       id: this.nextId++,
       effectType: normalizedType,
@@ -845,12 +864,17 @@ export class ThrownAoeTracker {
       y: end.y,
       radius: this.learnedRadius.get(normalizedType) ?? 1,
       landingTime: now + durationMs,
+      blastDurationMs: explicitBlastMs ?? learnedBlastMs,
     });
   }
 
-  recordAoe(position: { x: number; y: number }, radius: number, now: number): void {
+  recordAoe(
+    position: { x: number; y: number },
+    radius: number,
+    now: number,
+    blastDurationSeconds?: number,
+  ): void {
     let best: TrackedThrownAoe | undefined;
-    let bestIndex = -1;
     let bestDistance = 1;
     for (let index = 0; index < this.throws.length; index++) {
       const thrown = this.throws[index]!;
@@ -859,33 +883,52 @@ export class ThrownAoeTracker {
       if (distance > bestDistance) continue;
       bestDistance = distance;
       best = thrown;
-      bestIndex = index;
     }
     if (!best) return;
     this.learnedRadius.set(best.effectType, radius);
-    if (bestIndex >= 0) this.throws.splice(bestIndex, 1);
+    best.radius = radius;
+    if (blastDurationSeconds !== undefined) {
+      const blastMs = Math.max(0, blastDurationSeconds * 1000);
+      this.learnedBlastDuration.set(best.effectType, blastMs);
+      best.blastDurationMs = blastMs;
+    }
+    // Do NOT splice the matched throw here — leaving it in place lets
+    // getActive() surface it to the planner during the dwell window (see
+    // spec docs/superpowers/specs/2026-07-19-aoe-blast-dwell-rewrite-design.md
+    // touchpoint 3). Post-dwell expiry happens in getActive() below.
   }
 
   getActive(now: number): readonly TrackedThrownAoe[] {
-    this.active.length = 0;
+    // Fresh array per call — the prior contract returned `this.active` (a
+    // mutable buffer swapped on each call), so a caller retaining the array
+    // across the next `getActive()` silently got a length-zero view when the
+    // buffer was reset. `TrackedThrownAoe` is a flat primitive shape; shallow
+    // clone plus a fresh array is cheap and avoids the retention footgun.
+    const active: TrackedThrownAoe[] = [];
     for (let index = this.throws.length - 1; index >= 0; index--) {
       const thrown = this.throws[index]!;
-      if (now > thrown.landingTime + 750) {
+      const dwellMs = thrown.blastDurationMs ?? 0;
+      const expiresAt = thrown.landingTime + Math.max(750, dwellMs);
+      if (now > expiresAt) {
         this.throws.splice(index, 1);
         continue;
       }
-      if (now < thrown.landingTime) {
-        thrown.radius = this.learnedRadius.get(thrown.effectType) ?? thrown.radius;
-        this.active.push(thrown);
+      thrown.radius = this.learnedRadius.get(thrown.effectType) ?? thrown.radius;
+      const learnedBlast = this.learnedBlastDuration.get(thrown.effectType);
+      if (learnedBlast !== undefined) thrown.blastDurationMs = learnedBlast;
+      // Include pre-landing throws (existing behavior) AND during-dwell throws
+      // (new for P3). Post-dwell throws are cleaned up above.
+      if (now < thrown.landingTime + (thrown.blastDurationMs ?? 0)) {
+        active.push({ ...thrown });
       }
     }
-    return this.active;
+    return active;
   }
 }
 
 function emptyState(
   enabled: boolean,
-  metrics: DodgePlannerMetrics,
+  metrics: DeterministicDodgePlannerMetrics,
   velocity = { x: 0, y: 0 },
 ): AutoDodgeState {
   return {
@@ -945,7 +988,9 @@ function cloneState(state: AutoDodgeState): AutoDodgeState {
   };
 }
 
-function cloneMetrics(metrics: DodgePlannerMetrics): DodgePlannerMetrics {
+function cloneMetrics(
+  metrics: DeterministicDodgePlannerMetrics,
+): DeterministicDodgePlannerMetrics {
   return { ...metrics, statesEnteringLayers: [...metrics.statesEnteringLayers] };
 }
 
@@ -1136,9 +1181,15 @@ function sameMovementIntent(
       || aDirection.x * bDirection.x + aDirection.y * bDirection.y >= GOAL_DIRECTION_CHANGE_COSINE;
   }
   if (a.mode !== 'combat_range' || b.mode !== 'combat_range') return false;
+  // Combat-range intents must match on BOTH targetId AND position tolerance:
+  // a targetId is stable across ticks even when the server relocates the
+  // enemy, so `targetId ===` alone lets a target that moved 20 tiles between
+  // frames read as unchanged. Mirror the goal-branch position check.
+  const withinDistance = Math.hypot(a.targetX - b.targetX, a.targetY - b.targetY)
+    < GOAL_CHANGE_TOLERANCE;
   const sameTarget = a.targetId > 0 || b.targetId > 0
-    ? a.targetId === b.targetId
-    : Math.hypot(a.targetX - b.targetX, a.targetY - b.targetY) < GOAL_CHANGE_TOLERANCE;
+    ? a.targetId === b.targetId && withinDistance
+    : withinDistance;
   return sameTarget
     && Math.abs(a.hardMinimumRange - b.hardMinimumRange) <= RANGE_CHANGE_TOLERANCE
     && Math.abs(a.preferredMinimumRange - b.preferredMinimumRange) <= RANGE_CHANGE_TOLERANCE
@@ -1194,7 +1245,7 @@ function projectileKey(projectile: CombatProjectileSnapshot): string {
   return `${projectile.ownerId}:${projectile.bulletId}:${projectile.startTime}`;
 }
 
-function aoeKey(aoe: AutoDodgeAoeThreat): string {
+function aoeKey(aoe: DodgePlanningAoe): string {
   return `${aoe.landingTime}:${aoe.x}:${aoe.y}:${aoe.radius}`;
 }
 

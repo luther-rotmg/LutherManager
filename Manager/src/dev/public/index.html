@@ -562,6 +562,7 @@
               <div class="accounts-editor-tabs">
                 <button type="button" class="accounts-editor-tab active" data-editor-tab="credentials">Credentials</button>
                 <button type="button" class="accounts-editor-tab" data-editor-tab="overview">Overview</button>
+                <button type="button" class="accounts-editor-tab" data-editor-tab="muling">Mule / Muling</button>
               </div>
             </div>
 
@@ -644,6 +645,15 @@
                 </div>
               </div>
 
+              <div class="acct-section acct-section--automation">
+                <div class="acct-section-head"><span class="acct-section-title">Automation</span></div>
+                <label class="accounts-checkbox-label" for="accounts-daily-login">
+                  <input type="checkbox" id="accounts-daily-login">
+                  <span>Daily login</span>
+                  <span class="accounts-field-hint">Connect once per UTC day using this account's proxy; up to two run at once</span>
+                </label>
+              </div>
+
               <div class="accounts-credentials-actions">
                 <button type="button" id="accounts-save-btn" class="accounts-save-inline-btn setting-btn" disabled>Save &amp; Verify</button>
                 <span id="accounts-verify-status" class="accounts-status"></span>
@@ -651,6 +661,97 @@
               </div>
 
             </div><!-- /credentials tab -->
+
+            <!-- Muling tab -->
+            <div class="accounts-editor-tab-panel" id="accounts-editor-muling-panel" style="display:none;">
+              <div class="accounts-overview-toolbar">
+                <div>
+                  <div class="accounts-overview-title">Automated Muling</div>
+                  <div class="accounts-overview-summary">Sources dump matching items. Mules accept matching items and organize them into Potion Storage or the Vault. Runs on startup and every 10 minutes.</div>
+                </div>
+                <div class="accounts-overview-toolbar-actions">
+                  <button type="button" id="accounts-muling-stop-btn" class="setting-btn setting-btn-danger" disabled>Stop Muling</button>
+                  <button type="button" id="accounts-muling-run-btn" class="setting-btn setting-btn-secondary">Run Muling Now</button>
+                </div>
+              </div>
+
+              <div class="acct-section">
+                <div class="acct-section-head"><span class="acct-section-title">Account Role</span></div>
+                <div class="accounts-field">
+                  <label for="accounts-muling-role">Role</label>
+                  <select id="accounts-muling-role">
+                    <option value="off">Disabled</option>
+                    <option value="source">Dump source</option>
+                    <option value="mule">Mule receiver</option>
+                  </select>
+                  <span id="accounts-muling-role-hint" class="accounts-field-hint">This account is not used by automated muling.</span>
+                </div>
+              </div>
+
+              <div id="accounts-muling-rules">
+                <div class="acct-section">
+                  <div class="acct-section-head"><span class="acct-section-title">Stat Potions</span></div>
+                  <div class="accounts-muling-potion-grid">
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="attack">Attack</label>
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="defense">Defense</label>
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="speed">Speed</label>
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="dexterity">Dexterity</label>
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="vitality">Vitality</label>
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="wisdom">Wisdom</label>
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="life">Life</label>
+                    <label class="accounts-checkbox-label"><input type="checkbox" data-muling-potion="mana">Mana</label>
+                  </div>
+                </div>
+
+                <div class="acct-section">
+                  <div class="acct-section-head"><span class="acct-section-title">Tiered Equipment</span></div>
+                  <div class="accounts-row">
+                    <div class="accounts-field">
+                      <label for="accounts-muling-weapon-tiers">Weapon tiers</label>
+                      <input id="accounts-muling-weapon-tiers" type="text" placeholder="e.g. 12, 13" autocomplete="off">
+                    </div>
+                    <div class="accounts-field">
+                      <label for="accounts-muling-ability-tiers">Ability tiers</label>
+                      <input id="accounts-muling-ability-tiers" type="text" placeholder="e.g. 5, 6" autocomplete="off">
+                    </div>
+                  </div>
+                  <div class="accounts-row">
+                    <div class="accounts-field">
+                      <label for="accounts-muling-armor-tiers">Armor tiers</label>
+                      <input id="accounts-muling-armor-tiers" type="text" placeholder="e.g. 12, 13" autocomplete="off">
+                    </div>
+                    <div class="accounts-field">
+                      <label for="accounts-muling-ring-tiers">Ring tiers</label>
+                      <input id="accounts-muling-ring-tiers" type="text" placeholder="e.g. 5, 6" autocomplete="off">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="acct-section">
+                  <div class="acct-section-head"><span class="acct-section-title">Exact Items</span></div>
+                  <div class="accounts-field">
+                    <label for="accounts-muling-item-input">Item name or object type</label>
+                    <div class="accounts-muling-item-picker">
+                      <div class="accounts-password-row">
+                        <input id="accounts-muling-item-input" type="text" placeholder="Search an item or enter 0x1234"
+                          autocomplete="off" spellcheck="false" aria-autocomplete="list"
+                          aria-controls="accounts-muling-item-results" aria-expanded="false">
+                        <button type="button" id="accounts-muling-item-add-btn" class="setting-btn setting-btn-secondary">Add</button>
+                      </div>
+                      <div id="accounts-muling-item-results" class="accounts-muling-item-results" role="listbox" hidden></div>
+                    </div>
+                    <span class="accounts-field-hint">Search by any part of an item name, decimal ID, or hexadecimal ID.</span>
+                    <div id="accounts-muling-selected-items" class="accounts-muling-selected-items"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="acct-section">
+                <div class="acct-section-head"><span class="acct-section-title">Current Status</span></div>
+                <div id="accounts-muling-status" class="accounts-overview-status">No muling cycle has run for this account yet.</div>
+                <div id="accounts-muling-capacity" class="accounts-field-hint"></div>
+              </div>
+            </div><!-- /muling tab -->
 
             <!-- Overview tab -->
             <div class="accounts-editor-tab-panel accounts-overview-section" id="accounts-editor-overview-panel" style="display:none;">
@@ -1962,7 +2063,9 @@
 })();
 </script>
 <script src="eam-portrait.js"></script>
+<script src="muling-item-search.js"></script>
 <script src="app.js"></script>
+<script type="module" src="account-fame.js"></script>
 
 <!-- Quick Launch account picker popup -->
 <div id="ql-picker" class="ql-picker-overlay" style="display:none;">

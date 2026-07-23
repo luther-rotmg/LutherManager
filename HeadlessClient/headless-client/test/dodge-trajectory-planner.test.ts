@@ -38,7 +38,9 @@ const PROJECTILE_DEFINITION: CombatProjectileDefinition = {
 
 const OPEN_ENVIRONMENT: DodgePlanningEnvironment = {
   canOccupy: () => true,
+  enemyClearance: () => Infinity,
   isProjectileSegmentOpen: () => true,
+  getRevision: () => 0,
 };
 
 test('1. projectile-free planning follows the global pathfinding intent', () => {
@@ -84,6 +86,7 @@ test('goal mode passes a combat enemy without combat-range attraction', () => {
       canOccupy: () => true,
       enemyClearance: (x, y) => Math.hypot(x - enemy.x, y - enemy.y),
       isProjectileSegmentOpen: () => true,
+      getRevision: () => 0,
     },
   }));
 
@@ -357,6 +360,7 @@ test('9. enemy hard-radius exclusion invalidates otherwise direct movement', () 
       canOccupy: () => true,
       enemyClearance: (x, y) => Math.hypot(x - enemy.x, y - enemy.y),
       isProjectileSegmentOpen: () => true,
+      getRevision: () => 0,
     },
   }));
 
@@ -371,6 +375,7 @@ test('10. nonlinear enemy soft cost keeps the route off the hard boundary', () =
       canOccupy: () => true,
       enemyClearance: (x, y) => Math.hypot(x - enemy.x, y - enemy.y),
       isProjectileSegmentOpen: () => true,
+      getRevision: () => 0,
     },
   }));
 
@@ -661,6 +666,8 @@ test('21. no valid trajectory produces a finite controlled stop', () => {
     environment: {
       canOccupy: () => false,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   }));
 
@@ -865,6 +872,218 @@ test('accelerating projectile is classified as nonlinear and caught at its quadr
   );
 });
 
+test('combat-range findEmergencyJump respects hardMinimumRange and retreatPenaltyScale', () => {
+  const planner = testPlanner();
+  // Combat target at (7.5, 5). Player at (5, 5) with combat_range intent.
+  // hardMinimumRange=1.3 defines the "must not enter" ring around the target.
+  const combatInput: DodgePlanningInput = {
+    ...emergencyJumpInput(),
+    intent: combatIntent({
+      targetId: 42,
+      targetX: 7.5,
+      targetY: 5,
+      hardMinimumRange: 1.3,
+      preferredMinimumRange: 2,
+      preferredMaximumRange: 3,
+    }),
+    // Open environment on the plane so many directions are landable.
+    environment: OPEN_ENVIRONMENT,
+    retreatPenaltyScale: 1,
+  };
+
+  const pressured = planner.findEmergencyJump(combatInput, 1.5);
+  assert.ok(pressured !== undefined,
+    'expected findEmergencyJump to return a landing under retreatPenaltyScale=1');
+  assert.ok(
+    Math.hypot(pressured.target.x - 7.5, pressured.target.y - 5) >= 1.3 - 1e-6,
+    `landing must respect hardMinimumRange (>=1.3), got distance ${Math.hypot(pressured.target.x - 7.5, pressured.target.y - 5)}`,
+  );
+
+  // Sub-case (b): retreatPenaltyScale=0 zeroes the terminalCombatTooFar
+  // contribution to the score. Regardless of that, hardMinimumRange must
+  // still hold — pinning the invariant against a regression that ties
+  // hardMinimumRange enforcement to the retreat-scale multiplier.
+  const relaxed = planner.findEmergencyJump({
+    ...combatInput,
+    retreatPenaltyScale: 0,
+  }, 1.5);
+  assert.ok(relaxed !== undefined);
+  assert.ok(
+    Math.hypot(relaxed.target.x - 7.5, relaxed.target.y - 5) >= 1.3 - 1e-6,
+    'hardMinimumRange must hold regardless of retreatPenaltyScale',
+  );
+});
+
+test('evaluateEdge rejects candidates moving toward an enemy already inside the hard zone', () => {
+  // Player starts inside ENEMY_AVOID_RADIUS of the enemy: monotonic escape
+  // is the only legal move. Any candidate that steps closer must be rejected
+  // (candidatesRejectedByGeometry increments); any that steps away must be
+  // acceptable (some trajectory ending with monotonic distances survives).
+  const enemy = { x: 5.5, y: 5 };
+  const result = plan(planningInput({
+    position: { x: 5, y: 5 },
+    goal: undefined,
+    intentVelocity: { x: -0.006, y: 0 },
+    environment: {
+      getRevision: () => 0,
+      canOccupy: () => true,
+      enemyClearance: (x, y) => Math.hypot(x - enemy.x, y - enemy.y),
+      isProjectileSegmentOpen: () => true,
+    },
+  }));
+  assert.ok(result.metrics.candidatesRejectedByGeometry > 0,
+    'some inward candidates must have been rejected by the monotonic-escape guard');
+  const distances = result.trajectory.waypoints.map((waypoint) => (
+    Math.hypot(waypoint.x - enemy.x, waypoint.y - enemy.y)
+  ));
+  let prior = Math.hypot(5 - enemy.x, 5 - enemy.y);
+  for (const distance of distances) {
+    if (prior >= ENEMY_AVOID_RADIUS - 1e-6) break;
+    assert.ok(distance + 1e-6 >= prior,
+      `trajectory must monotonically escape while inside hard zone; ${prior} -> ${distance}`);
+    prior = distance;
+  }
+  assert.ok(result.minimumEnemyClearance >= 0,
+    'no waypoint may be closer to the enemy than the enemy centre');
+});
+
+test('predictProjectileSegments skips non-enemy, hit, future, and expired projectiles', () => {
+  // Baseline: one live enemy projectile that WILL be considered.
+  const live = projectile({
+    startX: 4, startY: 5, angle: 0,
+    definition: { speed: 100, lifetimeMs: 1000 },
+  });
+  const nonEnemy: CombatProjectileSnapshot = {
+    ...projectile({ startX: 4, startY: 5, angle: 0, bulletId: 2 }),
+    side: 'own',
+  };
+  const alreadyHit: CombatProjectileSnapshot = {
+    ...projectile({ startX: 4, startY: 5, angle: 0, bulletId: 3 }),
+    hitObjects: new Set<number>([10]),
+  };
+  const horizonMs = 1000;
+  // startTime = input.time + horizonMs + 1 clears the strict `>` inequality
+  // that gates the "future" case in predictProjectileSegments.
+  const future: CombatProjectileSnapshot = projectile({
+    startX: 4, startY: 5, angle: 0, bulletId: 4,
+    startTime: 0 + horizonMs + 1,
+  });
+  const expired: CombatProjectileSnapshot = projectile({
+    startX: 4, startY: 5, angle: 0, bulletId: 5,
+    // startTime + lifetimeMs < input.time (0). lifetimeMs default is 1000,
+    // so startTime = -1001 puts startTime+lifetimeMs = -1 < 0.
+    startTime: -1001,
+  });
+
+  const skippedOnly = plan(planningInput({
+    projectiles: [nonEnemy, alreadyHit, future, expired],
+  }));
+  assert.equal(skippedOnly.metrics.activeProjectilesConsidered, 0,
+    'projectiles matching any of the four skip guards must not be counted');
+
+  const withLive = plan(planningInput({
+    projectiles: [nonEnemy, alreadyHit, future, expired, live],
+  }));
+  assert.equal(withLive.metrics.activeProjectilesConsidered, 1,
+    'only the single live enemy projectile survives all four guards');
+});
+
+test('dwelling AoE catches a player transiting through the blast during dwell', () => {
+  // Player at (3, 5) moving east at 0.006 tile/ms toward goal (10, 5).
+  // AoE lands at t=100ms centered at (5, 5) with radius=1 and dwells 400 ms.
+  // Player positions along the intent line: t=100 -> 3.6 (clearance 1.4, safe),
+  // t=250 -> 4.5 (clearance 0.5, INSIDE the blast), t=500 -> 6.0 (exit).
+  // Pre-fix: sampled only at t=100 (landing), single-clearance 1.4, safe.
+  // Post-fix: sweeps the [100, 500] window and catches the impact around t=250.
+  const result = plan(planningInput({
+    position: { x: 3, y: 5 },
+    goal: { x: 10, y: 5 },
+    aoes: [{ x: 5, y: 5, radius: 1, landingTime: 100, blastDurationMs: 400 }],
+  }));
+  assert.ok(result.earliestIntentCollisionMs !== null,
+    'expected the dwelling AoE to be detected as a first-impact');
+  assert.ok((result.earliestIntentCollisionMs ?? Infinity) <= 300,
+    `expected first-impact <= 300ms (mid-dwell transit), got ${result.earliestIntentCollisionMs}`);
+});
+
+test('single-frame AoE (no blastDurationMs) preserves pre-P3 semantics', () => {
+  // Explicit blastDurationMs === 0 and blastDurationMs === undefined must both
+  // produce identical planner output — the P3 windowed loop's fast-path for
+  // dwellMs=0 is single-sample-at-landing, byte-for-byte matching the old
+  // single-frame behavior.
+  const undefinedDwell = plan(planningInput({
+    aoes: [{ x: 6, y: 5, radius: 0.6, landingTime: 200 }],
+  }));
+  const zeroDwell = plan(planningInput({
+    aoes: [{ x: 6, y: 5, radius: 0.6, landingTime: 200, blastDurationMs: 0 }],
+  }));
+  assert.deepStrictEqual(trajectorySignature(zeroDwell), trajectorySignature(undefinedDwell));
+});
+
+test('normalizeCostWeights sanitises NaN, Infinity, and negative overrides', () => {
+  // Pollute every documented cost knob with a non-finite / negative override.
+  // If the sanitiser drops the isFinite guard or the < 0 guard, cumulativeCost
+  // / terminalScore / firstControl / earliestIntentCollisionMs would diverge
+  // from a clean planner on the same deterministic input.
+  const clean = plan(planningInput({
+    projectiles: [projectile({ startX: 4, startY: 5, angle: 0, definition: { speed: 100 } })],
+  }));
+  const polluted = plan(planningInput({
+    projectiles: [projectile({ startX: 4, startY: 5, angle: 0, definition: { speed: 100 } })],
+  }), {
+    costWeights: {
+      basePerSecond: NaN,
+      projectileRiskPerSecond: -5,
+      incompleteHorizonPerSecond: Infinity,
+      terminalGoalDistance: -0.001,
+    },
+  });
+  assert.deepStrictEqual(trajectorySignature(polluted), trajectorySignature(clean));
+});
+
+test('normalizeTimeLayers falls back to DEFAULT_TIME_LAYERS_MS on pathological inputs', () => {
+  const baseline = plan(planningInput({
+    projectiles: [projectile({ startX: 4, startY: 5, angle: 0, definition: { speed: 100 } })],
+  }));
+  // Case (a): first layer != 0.
+  const nonZeroStart = plan(planningInput({
+    projectiles: [projectile({ startX: 4, startY: 5, angle: 0, definition: { speed: 100 } })],
+  }), { timeLayersMs: [100, 200, 300] });
+  assert.deepStrictEqual(trajectorySignature(nonZeroStart), trajectorySignature(baseline));
+  // Case (b): fewer than 3 layers.
+  const tooShort = plan(planningInput({
+    projectiles: [projectile({ startX: 4, startY: 5, angle: 0, definition: { speed: 100 } })],
+  }), { timeLayersMs: [0, 100] });
+  assert.deepStrictEqual(trajectorySignature(tooShort), trajectorySignature(baseline));
+  // Case (c): non-monotonic (duplicate) layers.
+  const duplicate = plan(planningInput({
+    projectiles: [projectile({ startX: 4, startY: 5, angle: 0, definition: { speed: 100 } })],
+  }), { timeLayersMs: [0, 200, 200, 400] });
+  assert.deepStrictEqual(trajectorySignature(duplicate), trajectorySignature(baseline));
+});
+
+test('projectile iteration order does not affect plan result (determinism)', () => {
+  const a = projectile({
+    ownerId: 100, bulletId: 1, startX: 4, startY: 5, angle: 0,
+    definition: { speed: 100 },
+  });
+  const b = projectile({
+    ownerId: 200, bulletId: 2, startX: 4, startY: 4.5, angle: 0,
+    definition: { speed: 100 },
+  });
+  const forward = plan(planningInput({ projectiles: [a, b] }));
+  const reversed = plan(planningInput({ projectiles: [b, a] }));
+  assert.deepStrictEqual(trajectorySignature(reversed), trajectorySignature(forward));
+});
+
+test('aoe iteration order does not affect plan result (determinism)', () => {
+  const a = { x: 6, y: 4.8, radius: 0.7, landingTime: 150 };
+  const b = { x: 6.5, y: 5.1, radius: 0.6, landingTime: 250 };
+  const forward = plan(planningInput({ aoes: [a, b] }));
+  const reversed = plan(planningInput({ aoes: [b, a] }));
+  assert.deepStrictEqual(trajectorySignature(reversed), trajectorySignature(forward));
+});
+
 function testPlanner(options: ConstructorParameters<typeof SpaceTimeDodgePlanner>[0] = {}) {
   return new SpaceTimeDodgePlanner({ maxStatesPerLayer: 64, ...options });
 }
@@ -924,6 +1143,8 @@ function timedCorridorInput(): DodgePlanningInput {
     environment: {
       canOccupy: (_x, y) => Math.abs(y - 5) < 0.03,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 }
@@ -939,6 +1160,8 @@ function retreatInput(): DodgePlanningInput {
     environment: {
       canOccupy: (x, y) => x >= 0 && x <= 12 && Math.abs(y - 5) < 0.03,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 }
@@ -959,6 +1182,8 @@ function emergencyJumpInput(): DodgePlanningInput & {
     environment: {
       canOccupy: (x, y) => x >= 0 && x <= 12 && Math.abs(y - 5) < 0.03,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 }

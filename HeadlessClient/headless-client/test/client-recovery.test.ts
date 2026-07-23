@@ -32,6 +32,44 @@ test('backoffDelay first attempt has no jitter room and equals the base', () => 
   assert.equal(backoffDelay(0, 1000, 60_000), 1000);
 });
 
+test('client starts in Tutorial only when TDone was absent', () => {
+  const base = {
+    alias: 'tutorial-routing-test',
+    accessToken: '',
+    clientToken: '',
+    charId: 1,
+    needsNewChar: false,
+    host: '127.0.0.1',
+  };
+  assert.equal(new Client({ ...base, tutorialDone: false }).getGameId(), -1);
+  assert.equal(new Client({ ...base, tutorialDone: true }).getGameId(), -2);
+  assert.equal(new Client(base).getGameId(), -2);
+});
+
+test('automatic reconnect keeps an active Tutorial destination', async () => {
+  const client = new Client({
+    alias: 'tutorial-retry-test',
+    accessToken: '',
+    clientToken: '',
+    charId: 1,
+    needsNewChar: false,
+    tutorialDone: false,
+    host: 'nexus.example',
+  });
+  const state = client as unknown as {
+    gameId: number;
+    connect(): void;
+    scheduleReconnect(ms: number): void;
+  };
+  let connects = 0;
+  state.connect = () => { connects++; };
+  state.scheduleReconnect(0);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.equal(connects, 1);
+  assert.equal(state.gameId, -1);
+});
+
 test('socket reconnects do not reset the gameplay clock', async () => {
   const client = new Client({
     alias: 'clock-test',

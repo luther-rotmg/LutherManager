@@ -167,7 +167,10 @@
     var cacheKey = [type || 0, skin || 0, tex1Id || 0, tex2Id || 0, adjust || 0].join(':');
     if (portraitPromises[cacheKey]) return portraitPromises[cacheKey];
 
-    portraitPromises[cacheKey] = Promise.resolve().then(function () {
+    // Do not cache an empty portrait while the asynchronously loaded EAM
+    // sprite tables are still being populated. This most commonly affected
+    // whichever default class was rendered first (often Wizard).
+    portraitPromises[cacheKey] = (window._eamPromise || Promise.resolve()).then(function () {
       var skinEntry = getSkinEntry(type, skin);
       if (!skinEntry) return '';
 

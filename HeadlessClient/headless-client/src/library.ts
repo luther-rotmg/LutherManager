@@ -109,8 +109,6 @@ export type {
 } from './dodge-trajectory-planner';
 export { PredictiveAutoDodgeController, ThrownAoeTracker } from './predictive-auto-dodge';
 export type {
-  AutoDodgeAoeThreat,
-  AutoDodgeEnvironment,
   AutoDodgeOptions,
   AutoDodgeSnapshot,
   AutoDodgeState,
@@ -170,6 +168,7 @@ export {
   TradeAcceptedPacket,
   TradeChangedPacket,
   TradeDonePacket,
+  TradeRequestedPacket,
   TradeStartPacket,
 } from 'realmlib';
 export type { PartyInfoData, PartyPlayerData, SlotEnchantments, TradeItem } from 'realmlib';

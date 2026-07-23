@@ -7,10 +7,10 @@ import type {
 } from '../src/combat-tracker';
 import { DodgeCollisionWorld, ENEMY_AVOID_RADIUS } from '../src/dodge-collision-world';
 import { MovementController } from '../src/movement-controller';
+import type { DodgePlanningEnvironment } from '../src/dodge-trajectory-planner';
 import {
   PredictiveAutoDodgeController,
   ThrownAoeTracker,
-  type AutoDodgeEnvironment,
 } from '../src/predictive-auto-dodge';
 
 const definition: CombatProjectileDefinition = {
@@ -29,9 +29,11 @@ const definition: CombatProjectileDefinition = {
   speedClamp: -1,
 };
 
-const openEnvironment: AutoDodgeEnvironment = {
+const openEnvironment: DodgePlanningEnvironment = {
   canOccupy: () => true,
+  enemyClearance: () => Infinity,
   isProjectileSegmentOpen: () => true,
+  getRevision: () => 0,
 };
 
 test('predictive auto-dodge escapes an imminent projectile from standstill', () => {
@@ -229,6 +231,8 @@ test('projectile jump remains unused while a legal continuous trajectory survive
     environment: {
       canOccupy: (_x, y) => y >= 5,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 
@@ -638,15 +642,18 @@ test('repeated combat target refreshes search without rotating the committed tra
       y: position.y + state.velocity.y * 50,
     };
     const refresh = Math.floor(time / 250);
+    // Keep cumulative target drift within GOAL_CHANGE_TOLERANCE (0.5) so the
+    // sameMovementIntent position check (post-P2-Commit-3 fix) does not force
+    // a replan. Per-refresh delta 0.1; two refreshes = 0.2 total drift.
     state = controller.evaluate({
       time,
       playerId: 10,
       position,
-      goal: { x: 9 + refresh * 0.4, y: 5 },
+      goal: { x: 9 + refresh * 0.1, y: 5 },
       movementIntent: {
         mode: 'combat_range',
         targetId: 42,
-        targetX: 12 + refresh * 0.4,
+        targetX: 12 + refresh * 0.1,
         targetY: 5,
         hardMinimumRange: 1.3,
         preferredMinimumRange: 2,
@@ -667,6 +674,57 @@ test('repeated combat target refreshes search without rotating the committed tra
   assert.equal(state.planReused, true);
 });
 
+test('combat-range intent forces replan when targetId matches but target position drifts past tolerance', () => {
+  const controller = new PredictiveAutoDodgeController({ maxStatesPerLayer: 64 });
+  controller.setEnabled(true);
+  const baseSnapshot = {
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    goal: { x: 9, y: 5 },
+    routeRevision: 0,
+    moveSpeed: 0.004,
+    intentVelocity: { x: 0.004, y: 0 },
+    movementLeadMs: 0,
+    projectiles: [],
+    aoes: [],
+    environment: openEnvironment,
+  } as const;
+
+  const first = controller.evaluate({
+    time: 0,
+    ...baseSnapshot,
+    movementIntent: {
+      mode: 'combat_range',
+      targetId: 42,
+      targetX: 12,
+      targetY: 5,
+      hardMinimumRange: 1.3,
+      preferredMinimumRange: 2,
+      preferredMaximumRange: 3,
+    },
+  });
+  assert.equal(first.planRevision, 1);
+
+  // Server tick relocates target 20 tiles east; targetId unchanged. Pre-fix,
+  // sameMovementIntent short-circuited on targetId, missing this motion. Post-
+  // fix, position tolerance is applied even when targetId matches.
+  const second = controller.evaluate({
+    time: 30,
+    ...baseSnapshot,
+    movementIntent: {
+      mode: 'combat_range',
+      targetId: 42,
+      targetX: 32,
+      targetY: 5,
+      hardMinimumRange: 1.3,
+      preferredMinimumRange: 2,
+      preferredMaximumRange: 3,
+    },
+  });
+  assert.ok(second.planRevision >= 2,
+    `expected replan (planRevision >= 2) on 20-tile target drift, got ${second.planRevision}`);
+});
+
 test('goal-owned dodge stops instead of bypassing local collision when no route exists', () => {
   const controller = new PredictiveAutoDodgeController();
   controller.setEnabled(true);
@@ -683,6 +741,8 @@ test('goal-owned dodge stops instead of bypassing local collision when no route 
     environment: {
       canOccupy: () => false,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 
@@ -707,6 +767,8 @@ test('goal-blocked dodge throttles repeated searches while the collision snapsho
     environment: {
       canOccupy: () => false,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 
@@ -741,6 +803,8 @@ test('goal-owned dodge can leave an occupied starting tile accepted by global pa
     environment: {
       canOccupy: (x, y) => Math.floor(x) !== 5 || Math.floor(y) !== 5,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 
@@ -824,6 +888,8 @@ test('time-layered danger search uses non-cardinal vectors in a narrow angular r
       canOccupy: (x, y) => x >= 6.5
         || x >= 5 && Math.abs(y - (5 + (x - 5) * slope)) <= 0.03,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 
@@ -883,6 +949,8 @@ test('goal path searches around threats without crossing static collision', () =
         return y >= 5;
       },
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 
@@ -910,6 +978,7 @@ test('goal path arcs around an enemy exclusion circle while advancing', () => {
       canOccupy: () => true,
       enemyClearance: (x, y) => Math.hypot(x - enemy.x, y - enemy.y),
       isProjectileSegmentOpen: () => true,
+      getRevision: () => 0,
     },
   });
 
@@ -981,6 +1050,7 @@ test('predictive auto-dodge may cross an enemy buffer when it is the safe escape
       },
       enemyClearance: () => 0.5,
       isProjectileSegmentOpen: () => true,
+      getRevision: () => 0,
     },
   });
 
@@ -1003,6 +1073,8 @@ test('predictive auto-dodge prefers a broad safe corridor over an isolated direc
     environment: {
       canOccupy: (x, y) => x <= 5 || Math.abs(y - 5) < 1e-8,
       isProjectileSegmentOpen: () => true,
+      enemyClearance: () => Infinity,
+      getRevision: () => 0,
     },
   });
 
@@ -1044,6 +1116,88 @@ test('thrown AOE tracker learns a radius for later matching effects', () => {
   assert.equal(active.length, 1);
   assert.equal(active[0]?.radius, 3);
   assert.equal(active[0]?.landingTime, 500);
+});
+
+test('thrown AOE tracker learns a blast dwell duration and propagates it', () => {
+  const tracker = new ThrownAoeTracker();
+  // First throw of effectType=456 lands at t=100ms; recordAoe teaches us that
+  // this effect stays dangerous for 500ms after landing. Second throw at
+  // t=1000ms should inherit the learned dwell.
+  tracker.track(456, { x: 2, y: 2 }, 0.1, 0);
+  tracker.recordAoe({ x: 2, y: 2 }, 2, 150, 0.5);
+  tracker.track(456, { x: 8, y: 8 }, 0.1, 1000);
+
+  const secondThrowLandingMs = 1100;
+  const preActive = tracker.getActive(secondThrowLandingMs - 50);
+  assert.equal(preActive.length, 1);
+  assert.equal(preActive[0]?.blastDurationMs, 500);
+});
+
+test('thrown AOE tracker keeps during-dwell throws in getActive', () => {
+  const tracker = new ThrownAoeTracker();
+  // Throw lands at t=100ms with 500ms dwell -> dangerous through t=600ms.
+  tracker.track(789, { x: 5, y: 5 }, 0.1, 0, 0.5);
+
+  const preLanding = tracker.getActive(50);
+  assert.equal(preLanding.length, 1);
+  assert.equal(preLanding[0]?.blastDurationMs, 500);
+
+  const duringDwell = tracker.getActive(300);
+  assert.equal(duringDwell.length, 1, 'during-dwell throws must remain active');
+
+  const postDwellButPreExpiry = tracker.getActive(700);
+  assert.equal(postDwellButPreExpiry.length, 0,
+    'past landing+dwell (600ms), the throw should no longer appear as active');
+});
+
+test('AutoDodgeState.plannerMetrics excludes wall-clock fields for replay determinism', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  const state = controller.evaluate({
+    time: 300,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    moveSpeed: 0.0096,
+    intentVelocity: { x: 0, y: 0 },
+    movementLeadMs: 16,
+    projectiles: [hostileProjectile()],
+    aoes: [],
+    environment: openEnvironment,
+  });
+  const metrics = state.plannerMetrics as Record<string, unknown>;
+  assert.equal(metrics.planningDurationMs, undefined,
+    'planningDurationMs is wall-clock; must not appear on AutoDodgeState');
+  assert.equal(metrics.averagePlanningDurationMs, undefined,
+    'averagePlanningDurationMs is wall-clock-derived; must not appear on AutoDodgeState');
+  assert.equal(metrics.worstPlanningDurationMs, undefined,
+    'worstPlanningDurationMs is wall-clock-derived; must not appear on AutoDodgeState');
+  assert.ok(typeof state.plannerMetrics.candidatesRejectedByProjectiles === 'number',
+    'deterministic counter fields must still be present');
+  assert.ok(typeof state.plannerMetrics.totalPlans === 'number');
+});
+
+test('two independent controllers produce byte-identical AutoDodgeState on identical input', () => {
+  const buildEval = () => {
+    const controller = new PredictiveAutoDodgeController();
+    controller.setEnabled(true);
+    return controller.evaluate({
+      time: 300,
+      playerId: 10,
+      position: { x: 5, y: 5 },
+      moveSpeed: 0.0096,
+      intentVelocity: { x: 0, y: 0 },
+      movementLeadMs: 16,
+      projectiles: [hostileProjectile()],
+      aoes: [],
+      environment: openEnvironment,
+    });
+  };
+  const stateA = buildEval();
+  const stateB = buildEval();
+  // Byte-identical replay across two independent controller instances. Pre-
+  // P5 this failed on `planningDurationMs` differing between runs even for
+  // byte-identical inputs. The `getDeterministicMetrics` split makes it pass.
+  assert.deepStrictEqual(stateB, stateA);
 });
 
 test('dodge collision world rejects damaging and occupied tiles', () => {
@@ -1176,6 +1330,131 @@ test('dodge collision world stops non-passing projectiles at cover', () => {
   assert.equal(world.isProjectileSegmentOpen(3.5, 5.5, 5.5, 5.5, projectile), false);
   const passing = { ...projectile, definition: { ...definition, passesCover: true } };
   assert.equal(world.isProjectileSegmentOpen(3.5, 5.5, 5.5, 5.5, passing), true);
+});
+
+test('predictive auto-dodge commits a controlled stop on movementLocked or moveSpeed<=0', () => {
+  const controller = new PredictiveAutoDodgeController();
+  controller.setEnabled(true);
+  // First: commit a trajectory under normal conditions.
+  const first = controller.evaluate({
+    time: 0,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    goal: { x: 10, y: 5 },
+    moveSpeed: 0.004,
+    intentVelocity: { x: 0.004, y: 0 },
+    movementLeadMs: 0,
+    projectiles: [],
+    aoes: [],
+    environment: openEnvironment,
+  });
+  const invalidationsBefore = first.plannerMetrics.trajectoryInvalidations;
+  assert.notEqual(first.decision, 'movement_locked');
+
+  // Second: same snapshot with movementLocked=true forces the controlled stop.
+  const locked = controller.evaluate({
+    time: 50,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    goal: { x: 10, y: 5 },
+    moveSpeed: 0.004,
+    intentVelocity: { x: 0.004, y: 0 },
+    movementLeadMs: 0,
+    movementLocked: true,
+    projectiles: [],
+    aoes: [{ x: 6, y: 5, radius: 0.5, landingTime: 200 }],
+    environment: openEnvironment,
+  });
+  assert.equal(locked.velocity.x, 0);
+  assert.equal(locked.velocity.y, 0);
+  assert.equal(locked.target, null);
+  assert.equal(locked.trajectory, null);
+  assert.equal(locked.overrideActive, false);
+  assert.equal(locked.decision, 'movement_locked');
+  // threatCount = projectiles.length + aoes.length = 0 + 1
+  assert.equal(locked.threatCount, 1);
+  // Committed trajectory from the first frame gets invalidated.
+  assert.equal(
+    locked.plannerMetrics.trajectoryInvalidations,
+    invalidationsBefore + 1,
+    'movement_locked path must recordTrajectoryInvalidation() on any committed plan',
+  );
+
+  // Third: moveSpeed=0 fires the same branch.
+  const zeroSpeed = controller.evaluate({
+    time: 100,
+    playerId: 10,
+    position: { x: 5, y: 5 },
+    goal: { x: 10, y: 5 },
+    moveSpeed: 0,
+    intentVelocity: { x: 0.004, y: 0 },
+    movementLeadMs: 0,
+    projectiles: [],
+    aoes: [],
+    environment: openEnvironment,
+  });
+  assert.equal(zeroSpeed.decision, 'movement_locked');
+  assert.equal(zeroSpeed.velocity.x, 0);
+  assert.equal(zeroSpeed.velocity.y, 0);
+});
+
+test('ThrownAoeTracker.clear resets throws, learned radii, and next id', () => {
+  const tracker = new ThrownAoeTracker();
+  // Set up learned state: track then recordAoe teaches radius=3 for effect 42
+  // (and splices the matched throw from the queue).
+  tracker.track(42, { x: 5, y: 5 }, 0.1, 0);
+  tracker.recordAoe({ x: 5, y: 5 }, 3, 100);
+
+  // Sanity: a NEW track for effect 42 now inherits the learned radius=3.
+  tracker.track(42, { x: 8, y: 8 }, 0.1, 200);
+  const beforeClear = tracker.getActive(250);
+  assert.equal(beforeClear.length, 1);
+  assert.equal(beforeClear[0]?.radius, 3,
+    'sanity: pre-clear, learned radius must propagate to new throws');
+
+  // clear() must flush throws + learnedRadius. A fresh track of the same
+  // effect returns radius=1 (default), and no residual throws remain active.
+  tracker.clear();
+  assert.equal(tracker.getActive(250).length, 0);
+  tracker.track(42, { x: 0, y: 0 }, 0.1, 300);
+  const afterClear = tracker.getActive(350);
+  assert.equal(afterClear.length, 1);
+  assert.equal(afterClear[0]?.radius, 1,
+    'clear() must flush the learnedRadius map');
+});
+
+test('ThrownAoeTracker.recordAoe outside +/-150/+750ms window does not learn', () => {
+  // Throw lands at t=100ms; matching window is [-50, 850].
+  // recordAoe at t=-100 (100 < landing-150 = -50) is OUTSIDE the window.
+  // recordAoe at t=900 (900 > landing+750 = 850) is OUTSIDE the window.
+  // Both should NOT teach the tracker anything about this effectType.
+  const outside = new ThrownAoeTracker();
+  outside.track(99, { x: 5, y: 5 }, 0.1, 0);
+  outside.recordAoe({ x: 5, y: 5 }, 3, -100);
+  outside.recordAoe({ x: 5, y: 5 }, 3, 900);
+  outside.track(99, { x: 2, y: 2 }, 0.1, 1000);
+  const stillDefault = outside.getActive(1050);
+  assert.equal(stillDefault[0]?.radius, 1,
+    'recordAoe outside +/-150/+750ms window must not populate learnedRadius');
+
+  // Positive control: same fixture but with recordAoe inside the window
+  // (t=200 for a throw landing at t=100) correctly teaches radius=3.
+  const inside = new ThrownAoeTracker();
+  inside.track(99, { x: 5, y: 5 }, 0.1, 0);
+  inside.recordAoe({ x: 5, y: 5 }, 3, 200);
+  inside.track(99, { x: 2, y: 2 }, 0.1, 1000);
+  const learned = inside.getActive(1050);
+  assert.equal(learned[0]?.radius, 3,
+    'recordAoe inside window IS the reference — this pair proves the window is checked');
+});
+
+test('ThrownAoeTracker unknown effect type reports default radius=1', () => {
+  const tracker = new ThrownAoeTracker();
+  tracker.track(0xdead, { x: 0, y: 0 }, 0.1, 0);
+  const active = tracker.getActive(50);
+  assert.equal(active.length, 1);
+  assert.equal(active[0]?.radius, 1,
+    'unknown effect type without a prior recordAoe should default to radius=1');
 });
 
 function hostileProjectile(): CombatProjectileSnapshot {

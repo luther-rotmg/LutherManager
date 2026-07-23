@@ -74,6 +74,21 @@ test('getCharAndServers returns metadata for every account character', async () 
       equipment: [2504, 2667, -1, -1],
     });
     assert.equal(result.characters[1].charId, 7);
+    assert.equal(result.tutorialDone, false);
+  } finally {
+    axios.post = original;
+  }
+});
+
+test('getCharAndServers detects TDone in the character-list response', async () => {
+  const original = axios.post;
+  axios.post = (async () => ({
+    status: 200,
+    data: '<Chars nextCharId="2" maxNumChars="1"><TDone>true</TDone></Chars>',
+  })) as typeof axios.post;
+  try {
+    const result = await getCharAndServers('test-token');
+    assert.equal(result.tutorialDone, true);
   } finally {
     axios.post = original;
   }

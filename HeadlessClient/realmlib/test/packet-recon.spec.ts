@@ -15,6 +15,7 @@ import {
   UpdatePacket,
   QuestObjectIdPacket,
   ReskinUnlockPacket,
+  TradeItem,
   TradeStartPacket,
   UseItemPacket,
   InvDropPacket,
@@ -241,15 +242,28 @@ describe('RealmShark-reconciled packet round trips', () => {
     expect(out.unlockId).to.equal(987654);
   });
 
-  it('TradeStartPacket (trailing objectId + byte)', () => {
+  it('TradeStartPacket (enchantments + trailing objectId + byte)', () => {
     const p = new TradeStartPacket();
-    p.clientItems = [];
+    const clientItem = new TradeItem();
+    clientItem.item = 2591;
+    clientItem.slotType = 10;
+    clientItem.tradeable = true;
+    clientItem.included = false;
+    clientItem.enchantment = '{"id":"attack"}';
+    const partnerItem = new TradeItem();
+    partnerItem.item = -1;
+    partnerItem.slotType = 0;
+    partnerItem.enchantment = '';
+    p.clientItems = [clientItem];
     p.partnerName = 'partner';
-    p.partnerItems = [];
+    p.partnerItems = [partnerItem];
     p.objectId = 55555;
     p.unknownByte = 3;
     const out = roundTrip(p, new TradeStartPacket());
     expect(out.partnerName).to.equal('partner');
+    expect(out.clientItems[0].item).to.equal(2591);
+    expect(out.clientItems[0].enchantment).to.equal('{"id":"attack"}');
+    expect(out.partnerItems[0].enchantment).to.equal('');
     expect(out.objectId).to.equal(55555);
     expect(out.unknownByte).to.equal(3);
   });

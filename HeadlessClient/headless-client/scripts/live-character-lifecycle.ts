@@ -51,6 +51,7 @@ async function main(): Promise<void> {
       clientToken: credentials.clientToken,
       charId: createdId,
       needsNewChar: true,
+      tutorialDone: before.tutorialDone,
       host: server.address,
       servers: before.servers,
       createClassType: CLASS_TYPE,

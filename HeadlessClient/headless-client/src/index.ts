@@ -303,7 +303,7 @@ async function main(): Promise<void> {
     }
     console.log(`[${alias}] logging in...`);
     const { accessToken, clientToken } = await login(acc);
-    const { char: defaultChar, characters, servers } = await getCharAndServers(accessToken);
+    const { char: defaultChar, characters, servers, tutorialDone } = await getCharAndServers(accessToken);
     let char = defaultChar;
     if (process.env.LIVE_CONTAINER_SWAP_TEST === '1' && characters.length > 0) {
       const preferred = !liveSeasonalAssigned
@@ -334,6 +334,7 @@ async function main(): Promise<void> {
       clientToken,
       charId: char.charId,
       needsNewChar: char.needsNewChar,
+      tutorialDone,
       host: server.address,
       servers,
       autoEnterVault: acc.enterVault,
